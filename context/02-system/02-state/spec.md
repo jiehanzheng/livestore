@@ -52,7 +52,12 @@ two *coordinated* transactions — begun in lockstep and committed state-first
 inside one uninterruptible Effect with a joint rollback on failure
 (`LeaderPersistence.ts:184-224`). This protects against errors and fiber
 interruption, but is **not** atomic across the two databases under process
-crash; divergence heals via rebuild on next boot (state is derived). Batch
+crash. A separately committed state-consistency marker is invalidated before
+either transaction and restored only after both succeed. Its absence forces
+rebuild from the complete retained eventlog, including pending events, before
+boot exposes state. Failed persistence closes the live Store. This assumes real
+eventlog transactions; the Cloudflare adapter currently suppresses SQL transaction
+control and is not qualified by this guarantee. Batch
 mechanics live in `../03-sync/02-processors/`.
 
 ### Error classification

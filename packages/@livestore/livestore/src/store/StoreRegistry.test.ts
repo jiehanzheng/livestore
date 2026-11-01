@@ -77,7 +77,7 @@ describe('StoreRegistry', () => {
     // Create an adapter that fails asynchronously (after yielding to the event loop)
     const failingAdapter = () =>
       Effect.gen(function* () {
-        yield* Effect.sleep(0) // Force async execution
+        yield* Effect.yieldNow // Force async execution
         return yield* UnknownError.make({ cause: new Error('Async failure') })
       })
     const badOptions = testStoreOptions({
@@ -97,7 +97,7 @@ describe('StoreRegistry', () => {
     // Create an adapter that fails asynchronously
     const failingAdapter = () =>
       Effect.gen(function* () {
-        yield* Effect.sleep(0) // Force async execution
+        yield* Effect.yieldNow // Force async execution
         return yield* UnknownError.make({ cause: new Error('Async failure') })
       })
 

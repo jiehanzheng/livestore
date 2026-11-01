@@ -60,5 +60,11 @@ export const makeRebuildSchema = ({
             },
     },
   })
-  return { schema: makeSchema({ events, state }), events, todos, attemptedEvents, attemptedHooks }
+  return {
+    schema: makeSchema({ projectionRevision: 'test-fixture-v1', events, state }),
+    events,
+    todos,
+    attemptedEvents,
+    attemptedHooks,
+  }
 }

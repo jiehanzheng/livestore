@@ -64,7 +64,7 @@ export const tables = { todos, appConfig }
 
 const state = State.SQLite.makeState({ tables, materializers })
 
-export const schema = makeSchema({ state, events })
+export const schema = makeSchema({ projectionRevision: 'test-fixture-v1', state, events })
 
 /** Provides the role-specific SQLite handles plus the state services derived from them, as adapters do. */
 export const makeSqliteServicesLayer = ({ dbState, dbEventlog }: { dbState: SqliteDb; dbEventlog: SqliteDb }) => {

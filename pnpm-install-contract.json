@@ -23,19 +23,24 @@
           "@parcel/watcher": "^2.5.6"
         }
       },
-      "starlight-auto-sidebar": {
-        "dependencies": {
-          "astro": ">=6.0.0"
+      "@vue/language-core@3.3.14": {
+        "peerDependencies": {
+          "typescript": ">=5 <7"
         }
       },
-      "starlight-links-validator": {
-        "dependencies": {
-          "astro": ">=6.0.0"
+      "starlight-auto-sidebar@0.4.1": {
+        "peerDependencies": {
+          "astro": "^7.0.0"
         }
       },
-      "starlight-sidebar-topics": {
-        "dependencies": {
-          "astro": ">=6.0.0"
+      "starlight-links-validator@0.27.0": {
+        "peerDependencies": {
+          "astro": "^7.0.0"
+        }
+      },
+      "starlight-sidebar-topics@0.9.0": {
+        "peerDependencies": {
+          "astro": "^7.0.0"
         }
       },
       "typedoc": {
@@ -46,7 +51,7 @@
     },
     "packageManager": {
       "name": "pnpm",
-      "version": "12.4.1"
+      "version": "12.16.0"
     }
   },
   "dependencyMaterializationProfile": {
@@ -95,15 +100,19 @@
       "@effect/vitest",
       "@effect/opentelemetry",
       "@effect/atom-react",
-      "effect@4.0.3",
-      "@effect/ai-openai@4.0.3",
-      "@effect/opentelemetry@4.0.3",
-      "@effect/platform-browser@4.0.3",
-      "@effect/platform-bun@4.0.3",
-      "@effect/platform-node@4.0.3",
-      "@effect/platform-node-shared@4.0.3",
-      "@effect/sql-sqlite-node@4.0.3",
-      "@effect/vitest@4.0.3"
+      "effect@4.1.0",
+      "@effect/ai-openai@4.1.0",
+      "@effect/opentelemetry@4.1.0",
+      "@effect/platform-browser@4.1.0",
+      "@effect/platform-bun@4.1.0",
+      "@effect/platform-node@4.1.0",
+      "@effect/platform-node-shared@4.1.0",
+      "@effect/sql-sqlite-node@4.1.0",
+      "@effect/vitest@4.1.0",
+      "miniflare@5.20261023.3-beta",
+      "wrangler@4.156.0",
+      "@cloudflare/workers-types@5.20261030.1",
+      "@vue/language-core@3.3.14"
     ],
     "optimisticRepeatInstall": false,
     "packageImportMethod": {
@@ -126,7 +135,7 @@
     },
     "pmOnFail": "ignore",
     "sideEffectsCache": false,
-    "strictPeerDependencies": false,
+    "strictPeerDependencies": true,
     "strictStorePkgContentCheck": true,
     "supportedArchitectures": {
       "cpu": ["x64", "arm64"],
@@ -153,7 +162,7 @@
   },
   "packageManager": {
     "name": "pnpm",
-    "version": "12.4.1"
+    "version": "12.16.0"
   },
   "schemaVersion": 2,
   "storeContract": {
@@ -181,8 +190,11 @@
     "packages": [
       "docs",
       "docs/src/content/_assets/code",
+      "docs/src/content/_assets/code/native",
       "examples/*",
       "packages/@livestore/adapter-cloudflare",
+      "packages/@livestore/adapter-expo",
+      "packages/@livestore/adapter-node",
       "packages/@livestore/adapter-web",
       "packages/@livestore/common",
       "packages/@livestore/common-cf",

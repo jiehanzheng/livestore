@@ -3,6 +3,7 @@ import { Effect, Schema, type Stream, type Subscribable } from '@livestore/utils
 import type { StorageMode } from './adapter-types.ts'
 import type { MigrationsReport } from './defs.ts'
 import type * as Devtools from './devtools/mod.ts'
+import type { AdapterError } from './errors.ts'
 import type { RejectedPushError } from './leader-thread/RejectedPushError.ts'
 import type { StreamEventsOptions } from './leader-thread/types.ts'
 import * as EventSequenceNumber from './schema/EventSequenceNumber/mod.ts'
@@ -23,11 +24,11 @@ export const PullItem = Schema.Struct({
 
 export interface ClientSessionLeaderThreadProxy {
   events: {
-    pull: (args: { cursor: EventSequenceNumber.Client.Composite }) => Stream.Stream<typeof PullItem.Type>
+    pull: (args: { cursor: EventSequenceNumber.Client.Composite }) => Stream.Stream<typeof PullItem.Type, AdapterError>
     /** It's important that a client session doesn't call `push` concurrently. */
-    push(batch: ReadonlyArray<LiveStoreEvent.Client.Encoded>): Effect.Effect<void, RejectedPushError>
+    push(batch: ReadonlyArray<LiveStoreEvent.Client.Encoded>): Effect.Effect<void, RejectedPushError | AdapterError>
     /** Stream events with filtering */
-    stream(options: StreamEventsOptions): Stream.Stream<LiveStoreEvent.Client.Encoded>
+    stream(options: StreamEventsOptions): Stream.Stream<LiveStoreEvent.Client.Encoded, AdapterError>
   }
   /** The initial state after the leader thread has booted */
   readonly initialState: {
@@ -42,16 +43,16 @@ export interface ClientSessionLeaderThreadProxy {
      */
     readonly storageMode: StorageMode
   }
-  export: Effect.Effect<Uint8Array<ArrayBuffer>>
-  getEventlogData: Effect.Effect<Uint8Array<ArrayBuffer>>
-  syncState: Subscribable.Subscribable<SyncState>
+  export: Effect.Effect<Uint8Array<ArrayBuffer>, AdapterError>
+  getEventlogData: Effect.Effect<Uint8Array<ArrayBuffer>, AdapterError>
+  syncState: Subscribable.Subscribable<SyncState, AdapterError>
   /** For debugging purposes it can be useful to manually trigger devtools messages (e.g. to reset the database) */
-  sendDevtoolsMessage: (message: Devtools.Leader.MessageToApp) => Effect.Effect<void>
+  sendDevtoolsMessage: (message: Devtools.Leader.MessageToApp) => Effect.Effect<void, AdapterError>
   /**
    * Reactive stream describing the connectivity between the leader and its upstream sync backend.
    * Includes raw connection state, last transition timestamp, and devtools overrides (latch state).
    */
-  networkStatus: Subscribable.Subscribable<SyncBackend.NetworkStatus>
+  networkStatus: Subscribable.Subscribable<SyncBackend.NetworkStatus, AdapterError>
 }
 
 export const of = (

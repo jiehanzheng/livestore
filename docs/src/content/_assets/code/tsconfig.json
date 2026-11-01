@@ -8,6 +8,7 @@
       "DOM"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -38,8 +39,211 @@
           "preferSchemaOverJson": "warning"
         },
         "allowedDuplicatedPackages": [
-          "@livestore/utils",
-          "@effect/platform"
+          "@livestore/utils"
+        ],
+        "allowedUnstableApis": [],
+        "overrides": [
+          {
+            "include": [
+              "reference/mcp/history.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/derived-example/derived.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/Atom#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/optimistic-example/optimistic.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/Atom#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/store-setup/queries.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/Atom#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/store-setup/query-atom.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/Atom#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/store-setup/user-list.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/atom-react/Hooks#useAtomValue"
+              ]
+            }
+          },
+          {
+            "include": [
+              "patterns/effect/store-setup/utils.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/Atom#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "recipes/query-atom.test.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/reactivity/AtomRegistry#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/cli/sync-events-node.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/cli/sync-events-runtime.spec.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/coach.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/ai-openai/OpenAiClient#layer",
+                "@effect/ai-openai/OpenAiLanguageModel#layer",
+                "effect/ai/LanguageModel#LanguageModel",
+                "effect/http/FetchHttpClient#layer"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/node-server.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/platform-node/NodeRuntime#runMain"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/readonly-query.test.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/platform-node/NodeFileSystem#layer"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/readonly-query.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/platform-node/NodeFileSystem#layer"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/runtime.test.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/server.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/platform-node/NodeStdio#layer",
+                "effect/ai/McpProtocol#v2024_11_05",
+                "effect/ai/McpProtocol#v2025_03_26",
+                "effect/ai/McpProtocol#v2025_06_18",
+                "effect/ai/McpProtocol#v2025_11_25",
+                "effect/ai/McpProtocol#v2026_07_28",
+                "effect/ai/McpServer#layerStdio",
+                "effect/ai/McpServer#resource",
+                "effect/ai/McpServer#toolkit",
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/mcp/toolkit.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/ai/Tool#EmptyParams",
+                "effect/ai/Tool#Readonly",
+                "effect/ai/Tool#make",
+                "effect/ai/Toolkit#make"
+              ]
+            }
+          },
+          {
+            "include": [
+              "reference/platform-adapters/node-adapter/worker-sync.spec.ts"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/http/FetchHttpClient#layer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          }
         ]
       }
     ],
@@ -63,19 +267,18 @@
     "./node_modules",
     "./dist",
     "**/*.genie.ts",
-    "./getting-started/expo/**",
-    "./getting-started/node/**",
-    "./reference/framework-integrations/solid/**",
-    "./reference/framework-integrations/svelte/**",
-    "./reference/platform-adapters/expo-adapter/**",
-    "./reference/platform-adapters/node-adapter/**",
-    "./reference/store/create-store.ts",
-    "./reference/store/effect/**",
-    "./reference/syncing/s2/**",
-    "./reference/syncing/server-side-clients/**",
-    "./reference/syncing/sync-provider/electricsql/**"
+    "./native/**"
   ],
   "references": [
+    {
+      "path": "../../../../../packages/@livestore/sqlite-wasm"
+    },
+    {
+      "path": "../../../../../packages/@livestore/adapter-node"
+    },
+    {
+      "path": "./native"
+    },
     {
       "path": "../../../../../packages/@livestore/adapter-cloudflare"
     },

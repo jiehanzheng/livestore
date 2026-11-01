@@ -13,12 +13,12 @@ describe('SQLite storage fingerprints', () => {
   test('pins the final fingerprint output', () => {
     expect(fingerprint(makePhysicalTable().ast)).toBe('UnLwYzVBhwzPCK5q7TrPU3q2N0dTe8m_98bud8HsAs8')
     expect(fingerprint(makeJsonTable('documents', representativeJsonSchema).ast)).toBe(
-      'kUzaurzV2rcXYLljHOZ64TDR9c_RebqD7y5ZUM_nPBE',
+      '18SQzA-08UOzI-p9WNK8oQz50zqymshOYLwqKeGVeBg',
     )
     expect(fingerprint(makeJsonTable('documents', normalizedCheckIdsJsonSchema).ast)).toBe(
-      'I0XYuOUSYqWwG5Opxbc1u-TNNE3pFQCHzpBZ_ChYGaA',
+      'tA1_h6nFi4wusnzAgRlXJ3oVfeUePliN82fy65DzPnk',
     )
-    expect(makeState({ tables: [], materializers: {} }).sqlite.hash).toBe('1_2x-8RoI45JYrfY63I7lNiHj4ptli9Ong1XNS1gA10')
+    expect(makeState({ tables: [], materializers: {} }).sqlite.hash).toBe('gQriGSq2uU-8WsDZaLVHp3FdgNb1d7pzowXCPYaPChQ')
   })
 
   test('isolates pre-completion-marker state databases without changing the hash algorithm', () => {
@@ -31,8 +31,36 @@ describe('SQLite storage fingerprints', () => {
     expect(state.sqlite.hash).not.toBe(legacyHash)
   })
 
+  test('isolates completed legacy snapshots that lack the persistence fence', () => {
+    const state = makeState({ tables: [], materializers: {} })
+    const tables = [...state.sqlite.tables.values()].map(({ sqliteDef: { ast } }) =>
+      ast.name === REBUILD_META_TABLE
+        ? SqliteDsl.table('__livestore_rebuild', { id: SqliteDsl.integer({ primaryKey: true }) }).ast
+        : ast,
+    )
+    const legacyHash = fingerprint({ _tag: 'dbSchema', tables })
+    expect(legacyHash).toBe('1_2x-8RoI45JYrfY63I7lNiHj4ptli9Ong1XNS1gA10')
+    expect(state.sqlite.hash).not.toBe(legacyHash)
+  })
+
   test('matches the standard SHA-256 vector', () => {
     expect(digestToFingerprint(new TextEncoder().encode('abc'))).toBe('ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0')
+  })
+
+  test('isolates prior completion proofs without source and projection identity', () => {
+    const state = makeState({ tables: [], materializers: {} })
+    const tables = [...state.sqlite.tables.values()].map(({ sqliteDef: { ast } }) =>
+      ast.name === REBUILD_META_TABLE
+        ? SqliteDsl.table(REBUILD_META_TABLE, {
+            id: SqliteDsl.integer({ primaryKey: true }),
+            ownerId: SqliteDsl.text({ nullable: true }),
+            transitionId: SqliteDsl.text({ nullable: true }),
+          }).ast
+        : ast,
+    )
+    const legacyHash = fingerprint({ _tag: 'dbSchema', tables })
+    expect(legacyHash).toBe('b5lfQXwXnEOIvfnMKGgrWU3PEFnp-1Ky8EwAejczjZg')
+    expect(state.sqlite.hash).not.toBe(legacyHash)
   })
 
   test('keeps the full digest inside the Cloudflare VFS filename limit', () => {
@@ -92,6 +120,36 @@ describe('SQLite storage fingerprints', () => {
     const string = makeJsonTable('documents', Schema.Struct({ value: Schema.String }))
 
     expect(fingerprint(date.ast)).not.toBe(fingerprint(string.ast))
+  })
+
+  test('distinguishes JSON numbers from numbers encoded as strings despite equal decoded types', () => {
+    const number = Schema.Struct({ value: Schema.Number })
+    const stringEncodedNumber = Schema.Struct({ value: Schema.NumberFromString })
+    expect(Schema.encodeSync(Schema.fromJsonString(number))({ value: 42 })).toBe('{"value":42}')
+    expect(Schema.encodeSync(Schema.fromJsonString(stringEncodedNumber))({ value: 42 })).toBe('{"value":"42"}')
+    expect(fingerprint(makeJsonTable('documents', number).ast)).not.toBe(
+      fingerprint(makeJsonTable('documents', stringEncodedNumber).ast),
+    )
+    expect(fingerprint(makeJsonTable('documents', Schema.Array(Schema.Number)).ast)).not.toBe(
+      fingerprint(makeJsonTable('documents', Schema.Array(Schema.NumberFromString)).ast),
+    )
+  })
+
+  test('distinguishes string and numeric date encodings with the same decoded Date type', () => {
+    expect(fingerprint(makeJsonTable('documents', Schema.DateFromString).ast)).not.toBe(
+      fingerprint(makeJsonTable('documents', Schema.DateFromMillis).ast),
+    )
+  })
+
+  test('fails closed on an unknown structural representation without treating payload tags as structure', () => {
+    // Model an unsupported future node; a valid current AST cannot express this boundary case.
+    // @ts-expect-error unsupported future AST tag is deliberate
+    const future = Schema.make<Schema.String>({ ...Schema.String.ast, _tag: 'FutureRepresentation' })
+    expect(() => fingerprint(makeJsonTable('documents', future).ast)).toThrow(/Unsupported schema representation/)
+    const declared = Schema.declare<string>((value): value is string => typeof value === 'string', {
+      representation: { id: 'example/opaque', payload: { _tag: 'ApplicationOwnedTag', content: 'retained' } },
+    })
+    expect(() => fingerprint(makeJsonTable('documents', declared).ast)).not.toThrow()
   })
 
   test('handles recursive JSON schemas deterministically', () => {

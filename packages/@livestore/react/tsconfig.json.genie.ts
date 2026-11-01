@@ -1,5 +1,6 @@
 import {
   baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
   domLib,
   packageTsconfigCompilerOptions,
   packageTsconfigExclude,
@@ -11,6 +12,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@livestore/react')],
     ...packageTsconfigCompilerOptions,
     lib: domLib, // Need DOM for test files using testing-library
     ...reactJsx,

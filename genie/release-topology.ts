@@ -14,7 +14,7 @@ const publishableLivestorePackages = rootWorkspacePackages
 const ignoredLivestorePackages = rootWorkspacePackages
   .filter((pkg) => isLivestorePackageName(pkg.data.name) && pkg.data.private === true)
   .map((pkg) => pkg.data.name)
-  .toSorted()
+  .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0))
 
 export const publishableLivestorePackageDescriptors = publishableLivestorePackages
 export const publishableLivestorePackageJsonNames = publishableLivestorePackages.map((pkg) => pkg.name)

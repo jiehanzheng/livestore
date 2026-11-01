@@ -1,3 +1,4 @@
+// @genie-bootstrap
 import { baseOxfmtIgnorePatterns, baseOxfmtOptions, oxfmtConfig } from './genie/repo.ts'
 
 export default oxfmtConfig({

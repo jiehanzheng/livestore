@@ -45,8 +45,15 @@ import {
   type WorkspacePackageLike,
 } from '#mr/effect-utils/genie/external.ts'
 import { baseOxfmtIgnorePatterns, baseOxfmtOptions } from '#mr/effect-utils/genie/oxfmt-base.ts'
+import { tsconfigJsonForNodeModules } from '#mr/effect-utils/packages/@overeng/genie/src/runtime/mod.ts'
 
-import { effectV4Catalog, livestoreOnlyCatalog, livestoreWorkspaceCatalog } from './external.ts'
+import { docsEffectApiPolicy } from './docs-effect-api-policy.ts'
+import {
+  effectV4Catalog,
+  livestoreOnlyCatalog,
+  livestoreWorkspaceCatalog,
+  nativeExpoQualificationCatalog,
+} from './external.ts'
 import { livestoreCurrentPackageNames, type LivestorePackageName } from './repo-topology.ts'
 
 export { baseTsconfigCompilerOptions, reactJsx }
@@ -66,6 +73,7 @@ export {
   pnpmWorkspaceYaml,
   projectionArtifact,
   tsconfigJson,
+  tsconfigJsonForNodeModules,
 }
 export type {
   PackageJsonData,
@@ -90,11 +98,11 @@ const {
   esModuleInterop: _esModuleInterop,
   allowSyntheticDefaultImports: _allowSyntheticDefaultImports,
   forceConsistentCasingInFileNames: _forceConsistentCasingInFileNames,
-  moduleResolution: _moduleResolution,
   strict: _strict,
   ...baseTsconfigCompilerOptionsWithoutDefaults
 } = effectUtilsBaseTsconfigCompilerOptions
 
+// Astro's language-service host changes module defaults; retain explicit NodeNext resolution for SDK package exports.
 const baseTsconfigCompilerOptions = {
   ...baseTsconfigCompilerOptionsWithoutDefaults,
   // Full-strict Effect-LSP gate (#811 capstone): LiveStore inherits effect-utils' effectDiagnosticsGate
@@ -109,6 +117,193 @@ const baseTsconfigCompilerOptions = {
     },
   ],
 } as const
+
+/**
+ * Explicit unstable APIs exercised by this SDK against the selected Effect
+ * release. Keep capabilities package-local; test-only APIs are admitted only
+ * by test files (or by the dedicated test projects), so runtime sources cannot
+ * inherit their allowance.
+ */
+const effectUnstableApiPolicy = {
+  'docs/src/content/_assets/code': docsEffectApiPolicy,
+  'packages/@livestore/adapter-expo': {
+    runtime: ['effect/http/FetchHttpClient#layer'],
+  },
+  'packages/@livestore/adapter-node': {
+    runtime: ['effect/http/FetchHttpClient#layer', '@effect/platform-node/NodeFileSystem#layer'],
+  },
+  'packages/@livestore/adapter-cloudflare': {
+    runtime: ['effect/http/FetchHttpClient#layer'],
+  },
+  'packages/@livestore/adapter-web': {
+    runtime: [
+      'effect/rpc',
+      'effect/http/FetchHttpClient#layer',
+      'effect/workers/Transferable',
+      '@effect/platform-browser/BrowserWorker',
+      '@effect/platform-browser/BrowserWorkerRunner',
+      '@effect/opentelemetry/OtelTracer',
+    ],
+    tests: ['@effect/vitest', 'effect/workers/Worker#WorkerPlatform'],
+  },
+  'packages/@livestore/common': {
+    runtime: [
+      'effect/workers/WorkerError',
+      'effect/workers/Transferable#Uint8Array',
+      'effect/http/HttpClient#HttpClient',
+      'effect/persistence/KeyValueStore',
+      '@effect/opentelemetry/OtelTracer',
+      'effect/Graph',
+    ],
+    tests: ['@effect/vitest', 'effect/testing/TestSchema'],
+    diagnosticOverrides: [
+      {
+        // SyncState and merge results are exported structural DTOs; callers
+        // pass plain values with the same fields through sync boundaries.
+        include: ['src/sync/syncstate.ts'],
+        options: { diagnosticSeverity: { schemaClassMissingBrand: 'off' } },
+      },
+      {
+        // This regression pins JSON Number and NumberFromString to distinct encodings.
+        include: ['src/schema/state/sqlite/db-schema/ast/fingerprint.test.ts'],
+        options: { diagnosticSeverity: { schemaNumber: 'off' } },
+      },
+    ],
+  },
+  'packages/@livestore/common-cf': {
+    runtime: ['effect/rpc', 'effect/http', 'effect/socket'],
+    tests: ['@effect/vitest', '@effect/platform-node/NodeServices#layer'],
+  },
+  'packages/@livestore/effect-playwright': {
+    runtime: [],
+  },
+  'packages/@livestore/framework-toolkit': {
+    runtime: [],
+  },
+  'packages/@livestore/livestore': {
+    runtime: ['@effect/opentelemetry/OtelTracer'],
+    tests: ['@effect/vitest', '@effect/platform-node/NodeFileSystem#layer', 'effect/http/FetchHttpClient#layer'],
+  },
+  'packages/@livestore/react': {
+    runtime: [],
+    tests: ['@effect/vitest'],
+  },
+  'packages/@livestore/sqlite-wasm': {
+    runtime: ['effect/FileSystem#FileSystem'],
+  },
+  'packages/@livestore/sync-cf': {
+    runtime: ['effect/rpc', 'effect/http', 'effect/socket', 'effect/observability/Otlp#layerJson'],
+    tests: ['@effect/vitest', '@effect/opentelemetry/OtelTracer', 'effect/persistence/KeyValueStore#layerMemory'],
+  },
+  'packages/@livestore/utils': {
+    runtime: [
+      'effect/FileSystem#WatchBackend',
+      'effect/Graph',
+      '@effect/opentelemetry/OtelTracer',
+      'effect/rpc',
+      'effect/socket',
+      'effect/workers/Transferable',
+      'effect/http/HttpClient#HttpClient',
+      '@effect/platform-node/NodeFileSystem#layer',
+    ],
+    tests: ['@effect/vitest', 'effect/FileSystem#FileSystem', 'effect/http/FetchHttpClient#layer'],
+  },
+  'packages/@livestore/utils-dev': {
+    runtime: [
+      '@effect/opentelemetry/OtelTracer',
+      'effect/PlatformError',
+      'effect/process/ChildProcessSpawner',
+      'effect/process/ChildProcess',
+      'effect/Logger#toFile',
+      '@effect/platform-node/NodeFileSystem#layer',
+      'effect/observability/Otlp#layerJson',
+      'effect/http/FetchHttpClient#layer',
+      'effect/FileSystem#FileSystem',
+      'effect/http/HttpClient#HttpClient',
+    ],
+    tests: ['@effect/vitest', '@effect/platform-node/NodeServices#layer'],
+  },
+  'packages/@livestore/wa-sqlite': {
+    runtime: [],
+  },
+  'packages/@livestore/webmesh': {
+    runtime: [
+      'effect/TxQueue',
+      'effect/workers/Transferable#MessagePort',
+      'effect/encoding/SchemaBinary#toCodec',
+      'effect/http/HttpClient#HttpClient',
+      'effect/socket',
+    ],
+    tests: ['@effect/vitest'],
+  },
+  'tests/integration': {
+    testProject: true,
+    tests: [
+      'effect/FileSystem#FileSystem',
+      'effect/cli',
+      'effect/http',
+      '@effect/platform-node/NodeServices#layer',
+      '@effect/platform-node/NodeRuntime#runMain',
+      '@effect/opentelemetry/OtelTracer',
+      '@effect/vitest',
+    ],
+  },
+  'tests/package-common': {
+    testProject: true,
+    tests: [
+      '@effect/vitest',
+      '@effect/platform-node/NodeFileSystem#layer',
+      'effect/http/FetchHttpClient#layer',
+      '@effect/opentelemetry/OtelTracer',
+      'effect/FileSystem#FileSystem',
+      'effect/persistence/KeyValueStore',
+    ],
+    diagnosticOverrides: [
+      {
+        // These tests intentionally call sync commit APIs from Effect callbacks
+        // to assert the synchronous commit boundary and its exit value.
+        include: ['src/client-session/ClientSessionReconciliation.test.ts'],
+        options: { diagnosticSeverity: { runEffectInsideEffect: 'off' } },
+      },
+      {
+        include: ['src/client-session/ClientSessionSyncProcessor.test.ts'],
+        options: { diagnosticSeverity: { runEffectInsideEffect: 'off' } },
+      },
+    ],
+  },
+} as const
+
+type EffectUnstableApiProject = keyof typeof effectUnstableApiPolicy
+
+/** Builds a project-scoped tsgo plugin config without relaxing its diagnostics. */
+export const effectTsgoPluginFor = (project: EffectUnstableApiProject) => {
+  const policy = effectUnstableApiPolicy[project]
+  const basePlugin = baseTsconfigCompilerOptions.plugins[0]
+  const runtime = 'runtime' in policy ? policy.runtime : []
+  const tests = 'tests' in policy ? policy.tests : []
+  const testProject = 'testProject' in policy && policy.testProject === true
+  const baseOverrides =
+    'overrides' in basePlugin && Array.isArray(basePlugin.overrides) === true ? basePlugin.overrides : []
+  const diagnosticOverrides = 'diagnosticOverrides' in policy ? policy.diagnosticOverrides : []
+  const testApiOverrides =
+    testProject === false && tests.length > 0
+      ? [
+          {
+            // tsgo overrides replace the base API list, so preserve runtime
+            // capabilities while adding test APIs only to test source files.
+            include: ['src/**/*.test.ts', 'src/**/*.spec.ts', 'src/**/*.test.tsx', 'src/**/*.spec.tsx'],
+            options: { allowedUnstableApis: [...runtime, ...tests] },
+          },
+        ]
+      : []
+  const overrides = [...baseOverrides, ...testApiOverrides, ...diagnosticOverrides]
+
+  return {
+    ...basePlugin,
+    allowedUnstableApis: testProject === true ? [...runtime, ...tests] : [...runtime],
+    ...(overrides.length > baseOverrides.length ? { overrides } : {}),
+  }
+}
 
 /**
  * Package tsconfig compiler options for livestore.
@@ -145,6 +340,9 @@ export const catalog = defineCatalog({
   ...livestoreOnlyCatalog,
 })
 
+// compose installs inherited workspace peers from its catalog, so the native consumer must select its own cohort here.
+export const nativeExpoCatalog = defineCatalog({ ...catalog, ...nativeExpoQualificationCatalog })
+
 const WORKSPACE_REPO_NAME = 'livestore'
 
 export const workspaceMember = (
@@ -174,15 +372,39 @@ export const repoPnpmOnlyBuiltDependencies = Object.entries(repoPnpmAllowBuilds)
 
 /** Repo-specific pnpm packageExtensions for starlight/typedoc peer resolution */
 export const repoPackageExtensions = {
+  // The Vue compiler imports the host TS API but omits its peer; match Volar's supported pre-7 host.
+  // Remove this exact-version completion when upstream declares the TypeScript peer.
+  '@vue/language-core@3.3.14': {
+    peerDependencies: {
+      typescript: '>=5 <7',
+    },
+  },
   '@livestore/devtools-vite': {
     dependencies: {
       '@parcel/watcher': '^2.5.6',
     },
   },
-  'starlight-auto-sidebar': { dependencies: { astro: '>=5.0.0' } },
-  'starlight-links-validator': { dependencies: { astro: '>=5.0.0' } },
-  'starlight-sidebar-topics': { dependencies: { astro: '>=5.0.0' } },
-  typedoc: { dependencies: { 'typedoc-plugin-markdown': '^4.8.1' } },
+  // These plugins import Astro's schema/loader APIs and must share the host's nominal types.
+  'starlight-auto-sidebar@0.4.1': {
+    peerDependencies: {
+      astro: '^7.0.0',
+    },
+  },
+  'starlight-links-validator@0.27.0': {
+    peerDependencies: {
+      astro: '^7.0.0',
+    },
+  },
+  'starlight-sidebar-topics@0.9.0': {
+    peerDependencies: {
+      astro: '^7.0.0',
+    },
+  },
+  typedoc: {
+    dependencies: {
+      'typedoc-plugin-markdown': '^4.8.1',
+    },
+  },
 } as const
 
 // =============================================================================

@@ -4,9 +4,11 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": [
-      "ES2024"
+      "ES2024",
+      "DOM"
     ],
     "module": "ESNext",
+    "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -41,9 +43,12 @@
         ]
       }
     ],
+    "types": [
+      "astro/client",
+      "node"
+    ],
     "rootDir": "./src",
     "composite": false,
-    "moduleResolution": "Bundler",
     "jsx": "preserve",
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
@@ -57,36 +62,5 @@
     "**/*.genie.ts",
     "src/content/_assets/code/**/*"
   ],
-  "references": [
-    {
-      "path": "../packages/@livestore/adapter-cloudflare"
-    },
-    {
-      "path": "../packages/@livestore/adapter-web"
-    },
-    {
-      "path": "../packages/@livestore/common"
-    },
-    {
-      "path": "../packages/@livestore/livestore"
-    },
-    {
-      "path": "../packages/@livestore/react"
-    },
-    {
-      "path": "../packages/@livestore/sync-cf"
-    },
-    {
-      "path": "../packages/@livestore/utils"
-    },
-    {
-      "path": "../packages/@local/astro-tldraw"
-    },
-    {
-      "path": "../packages/@local/astro-twoslash-code"
-    },
-    {
-      "path": "../packages/@local/shared"
-    }
-  ]
+  "references": []
 }

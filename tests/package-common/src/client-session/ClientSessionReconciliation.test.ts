@@ -447,6 +447,7 @@ const counterEvents = {
   multiply: Events.synced({ name: 'multiply', schema: Schema.Struct({ factor: Schema.Finite }) }),
 }
 const counterSchema = makeSchema({
+  projectionRevision: 'test-fixture-v1',
   events: counterEvents,
   state: State.SQLite.makeState({
     tables: { counter },

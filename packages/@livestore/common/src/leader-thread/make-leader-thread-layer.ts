@@ -18,6 +18,8 @@ import {
 
 import {
   type BootStatus,
+  type AdapterError,
+  mapToAdapterError,
   type MakeSqliteDb,
   type MaterializerHashMismatchError,
   type SqliteDb,
@@ -29,11 +31,13 @@ import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import type * as MaterializationJournal from '../MaterializationJournal.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables } from '../schema/mod.ts'
+import * as SourceIdentity from '../SourceIdentity.ts'
 import type * as StateHead from '../StateHead.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
 import type { SyncBackend, SyncOptions } from '../sync/sync.ts'
 import { SyncState } from '../sync/syncstate.ts'
 import { sql } from '../util.ts'
+import { makeBackendIdKeyValueStore } from './backend-id-kv.ts'
 import { configureConnection } from './connection.ts'
 import * as Eventlog from './eventlog.ts'
 import { bootDevtools } from './leader-worker-devtools.ts'
@@ -52,6 +56,8 @@ import type {
 import { LeaderThreadCtx } from './types.ts'
 
 export interface MakeLeaderThreadLayerParams {
+  /** SDK-owned source phase must complete before constructing the derived database. */
+  initializedSource: SourceIdentity.InitializedSource
   storeId: string
   syncPayloadSchema: Schema.Decoder<Schema.Json> | undefined
   syncPayloadEncoded: Schema.Json | undefined
@@ -84,6 +90,7 @@ export interface MakeLeaderThreadLayerParams {
 }
 
 export const makeLeaderThreadLayer = ({
+  initializedSource,
   schema,
   storeId,
   clientId,
@@ -98,7 +105,7 @@ export const makeLeaderThreadLayer = ({
   testing,
 }: MakeLeaderThreadLayerParams): Layer.Layer<
   LeaderThreadCtx,
-  UnknownError,
+  AdapterError,
   | EventlogSqliteDb.EventlogSqliteDb
   | HttpClient.HttpClient
   | MaterializationJournal.MaterializationJournal
@@ -121,7 +128,12 @@ export const makeLeaderThreadLayer = ({
 
     const dbEventlogMissing = !hasEventlogTables(dbEventlog)
 
-    const stateNeedsRebuild = !hasCompletedState(dbState)
+    const sourceIdentity = yield* Effect.sync(() => SourceIdentity.assertInitialized(dbEventlog, initializedSource))
+    const stateNeedsRebuild = !hasCompletedState(dbState, {
+      schema,
+      sourceIdentity,
+      sourceHead: Eventlog.getClientHeadFromDb(dbEventlog),
+    })
 
     if (stateNeedsRebuild === true) {
       // Import also clears hook-created objects while preserving the open connection.
@@ -136,46 +148,12 @@ export const makeLeaderThreadLayer = ({
       )
     }
 
-    yield* Eventlog.initEventlogDb(dbEventlog)
-
     const syncBackend =
       syncOptions?.backend === undefined
         ? undefined
-        : yield* syncOptions.backend({ storeId, clientId, payload: syncPayloadDecoded }).pipe(
-            Effect.provide(
-              Layer.succeed(
-                KeyValueStore.KeyValueStore,
-                KeyValueStore.makeStringOnly({
-                  get: (_key) =>
-                    Effect.sync(() => Eventlog.getBackendIdFromDb(dbEventlog)).pipe(
-                      Effect.map(Option.getOrUndefined),
-                      Effect.catchDefect(
-                        (cause) =>
-                          new KeyValueStore.KeyValueStoreError({
-                            method: 'getBackendIdFromDb',
-                            message: 'Failed to get backendId',
-                            cause,
-                          }),
-                      ),
-                    ),
-                  set: (_key, value) =>
-                    Effect.sync(() => Eventlog.updateBackendId(dbEventlog, value)).pipe(
-                      Effect.catchDefect(
-                        (cause) =>
-                          new KeyValueStore.KeyValueStoreError({
-                            method: 'updateBackendId',
-                            message: 'Failed to update backendId',
-                            cause,
-                          }),
-                      ),
-                    ),
-                  clear: Effect.die(new Error(`Not implemented. Should never be used.`)),
-                  remove: () => Effect.die(new Error(`Not implemented. Should never be used.`)),
-                  size: Effect.die(new Error(`Not implemented. Should never be used.`)),
-                }),
-              ),
-            ),
-          )
+        : yield* syncOptions
+            .backend({ storeId, clientId, payload: syncPayloadDecoded })
+            .pipe(Effect.provide(Layer.succeed(KeyValueStore.KeyValueStore, makeBackendIdKeyValueStore(dbEventlog))))
 
     if (syncBackend !== undefined) {
       // We're already connecting to the sync backend concurrently
@@ -211,7 +189,7 @@ export const makeLeaderThreadLayer = ({
         : { enabled: false as const }
 
     const span = yield* Effect.currentSpan.pipe(Effect.option, Effect.map(Option.getOrUndefined))
-    const persistence = yield* LeaderPersistence.make({ materializeEvent })
+    const persistence = yield* LeaderPersistence.make({ materializeEvent, schema })
 
     const syncProcessor = yield* LeaderSyncProcessor.make({
       schema,
@@ -255,6 +233,7 @@ export const makeLeaderThreadLayer = ({
       shutdownChannel,
       syncBackend,
       syncProcessor,
+      exportSnapshot: persistence.exportSnapshot,
       materializeEvent,
       extraIncomingMessagesQueue,
       devtools: devtoolsContext,
@@ -278,7 +257,7 @@ export const makeLeaderThreadLayer = ({
   }).pipe(
     Effect.withSpan('@livestore/common:leader-thread:boot'),
     Effect.withSpanScoped('@livestore/common:leader-thread'),
-    UnknownError.mapToUnknownError,
+    mapToAdapterError,
     Effect.tapCauseLogPretty,
     Layer.unwrap,
   )

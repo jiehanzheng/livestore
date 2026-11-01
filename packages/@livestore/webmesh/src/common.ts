@@ -23,9 +23,10 @@ export type ChannelKey = `target:${MeshNodeName}, channelName:${ChannelName}`
 //   '~@livestore/webmesh/NoConnectionRouteSignal',
 // )('NoConnectionRouteSignal', {}) {}
 
-export class EdgeAlreadyExistsError extends Schema.TaggedError<EdgeAlreadyExistsError>(
-  '~@livestore/webmesh/EdgeAlreadyExistsError',
-)('EdgeAlreadyExistsError', {
+export class EdgeAlreadyExistsError extends Schema.TaggedError<
+  EdgeAlreadyExistsError,
+  { readonly brand: unique symbol }
+>('~@livestore/webmesh/EdgeAlreadyExistsError')('EdgeAlreadyExistsError', {
   target: Schema.String,
 }) {}
 

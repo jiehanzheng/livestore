@@ -1,5 +1,6 @@
 import {
   baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
   packageTsconfigCompilerOptions,
   packageTsconfigExclude,
   refs,
@@ -13,6 +14,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@livestore/sqlite-wasm')],
     ...packageTsconfigCompilerOptions,
     allowJs: true,
   },

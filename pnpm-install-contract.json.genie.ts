@@ -1,4 +1,6 @@
+// @genie-bootstrap
 import { pnpmInstallStorageContractV2 as storage } from '#mr/effect-utils/genie/external.ts'
+
 import { projectionArtifact } from './genie/repo.ts'
 import rootPackageJson from './package.json.genie.ts'
 import rootPnpmWorkspaceYaml from './pnpm-workspace.yaml.genie.ts'
@@ -16,7 +18,7 @@ import rootPnpmWorkspaceYaml from './pnpm-workspace.yaml.genie.ts'
  * omitted because LiveStore ships no pnpm patches.
  */
 const packageManager = rootPackageJson.data.packageManager ?? 'pnpm@unknown'
-const pnpmVersion = packageManager.startsWith('pnpm@') ? packageManager.slice('pnpm@'.length) : packageManager
+const pnpmVersion = packageManager.startsWith('pnpm@') === true ? packageManager.slice('pnpm@'.length) : packageManager
 const workspaceData = rootPnpmWorkspaceYaml.data
 
 export default projectionArtifact.json({

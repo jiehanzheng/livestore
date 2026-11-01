@@ -8,6 +8,7 @@
       "DOM"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -39,7 +40,8 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
-        ]
+        ],
+        "allowedUnstableApis": []
       }
     ],
     "composite": true,

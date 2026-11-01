@@ -24,18 +24,23 @@ class CloudflarePreparedStatement implements PreparedStatement {
 
   execute = (bindValues?: PreparedBindValues, options?: { onRowsChanged?: (count: number) => void }) => {
     try {
-      if (isTransactionControlStatement(this.sql) === true) return
+      if (isTransactionControlStatement(this.sql) === true) {
+        throw new SqliteError({
+          cause: 'Native Durable Object SQL transaction controls require the shared transaction host',
+          query: { sql: this.sql, bindValues: bindValues ?? {} },
+        })
+      }
 
       const cursor = this.sqlStorage.exec(this.sql, ...(bindValues !== undefined ? Object.values(bindValues) : []))
 
-      // Count affected rows by iterating through cursor
-      let changedCount = 0
+      // CF rowsWritten includes index maintenance; changes() counts affected logical rows.
       for (const _row of cursor) {
-        changedCount++
+        // A lazy RETURNING cursor must finish before SQLite can report the final DML count.
       }
 
       if (options?.onRowsChanged !== undefined) {
-        options.onRowsChanged(changedCount)
+        const { changed } = this.sqlStorage.exec<{ changed: number }>('SELECT changes() AS changed').one()
+        options.onRowsChanged(changed)
       }
     } catch (e) {
       throw new SqliteError({
@@ -253,31 +258,7 @@ export const makeSqliteDb_ = <
   return sqliteDb
 }
 
-/**
- * CF DO SQLite rejects SQL-level transaction control and requires `storage.transactionSync()` instead.
- * The current adapter only detects and suppresses those SQL statements. It does not yet translate the
- * caller's transaction intent into a shared Durable Object storage transaction.
- *
- * ## Consistency implications
- *
- * `LeaderSyncProcessor.materializeEventsBatch()` wraps both `dbState` and `dbEventlog` in
- * `BEGIN`/`COMMIT` to keep them consistent. Because this adapter drops those statements,
- * eventlog INSERTs are auto-committed individually while `dbState` (VFS-backed) still has
- * real transaction boundaries. If a batch partially fails, earlier eventlog rows survive
- * while `dbState` rolls back.
- *
- * This is safe because:
- * - The eventlog is append-only and idempotent — replaying already-inserted events is a no-op.
- * - State is always rebuildable from the eventlog on cold start (`recreateDb`).
- * - A Durable Object is single-threaded, so no concurrent reader can observe the
- *   intermediate inconsistency.
- *
- * Uses prefix matching to cover all SQLite variants:
- * - `BEGIN [DEFERRED | IMMEDIATE | EXCLUSIVE] [TRANSACTION]`
- * - `COMMIT [TRANSACTION]` / `END [TRANSACTION]`
- * - `ROLLBACK [TRANSACTION] [TO [SAVEPOINT] name]`
- * - `SAVEPOINT name` / `RELEASE [SAVEPOINT] name`
- */
+/** Native controls cannot be translated per statement: only the shared host owns the source/state transaction. */
 const isTransactionControlStatement = (sql: string): boolean => {
   const upper = sql.trim().toUpperCase()
   return (

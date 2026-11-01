@@ -1,3 +1,4 @@
+// @genie-bootstrap
 import { baseTsconfigCompilerOptions, tsconfigJson } from './genie/repo.ts'
 
 /**

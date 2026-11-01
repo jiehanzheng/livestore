@@ -23,6 +23,7 @@ Vitest.describe('SessionIdSymbol', () => {
 
       const store = yield* createStore({
         schema: makeSchema({
+          projectionRevision: 'test-fixture-v1',
           state: State.SQLite.makeState({ tables: { uiState }, materializers: {} }),
           events: { UiStateSet: uiState.set },
         }),

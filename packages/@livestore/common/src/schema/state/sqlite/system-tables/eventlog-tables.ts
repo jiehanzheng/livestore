@@ -61,4 +61,16 @@ export const syncStatusTable = table({
 
 export type SyncStatusRow = typeof syncStatusTable.Type
 
-export const eventlogSystemTables = [eventlogMetaTable, syncStatusTable] as const
+export const SOURCE_IDENTITY_TABLE = '__livestore_source_identity'
+
+/** Stable across normal writes; replacement rotates the incarnation under the source owner. */
+export const sourceIdentityTable = table({
+  name: SOURCE_IDENTITY_TABLE,
+  columns: {
+    id: SqliteDsl.integer({ primaryKey: true }),
+    formatVersion: SqliteDsl.integer({ nullable: false }),
+    incarnation: SqliteDsl.text({ nullable: false }),
+  },
+})
+
+export const eventlogSystemTables = [eventlogMetaTable, syncStatusTable, sourceIdentityTable] as const

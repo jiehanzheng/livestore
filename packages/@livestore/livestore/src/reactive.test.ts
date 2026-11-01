@@ -574,3 +574,60 @@ describe('bug fix: node corruption protection', () => {
     expect(() => effect.doEffect()).toThrow('LiveStore Error: Attempted to compute destroyed')
   })
 })
+
+describe('subscription disposal during refresh', () => {
+  for (const deferred of [false, true]) {
+    it(`skips effects destroyed by an earlier callback (${deferred === true ? 'deferred' : 'immediate'})`, () => {
+      const graph = new ReactiveGraph()
+      graph.context = {}
+      const source = graph.makeRef(0)
+      const disposedQuery = graph.makeThunk((get) => get(source) * 2)
+      const seen: string[] = []
+      let armed = false
+      const first = graph.makeEffect((get) => {
+        const value = get(source)
+        seen.push(`first:${value}`)
+        if (armed === true) {
+          graph.destroyNode(first)
+          graph.destroyNode(second)
+          graph.destroyNode(disposedQuery)
+          const replacement = graph.makeEffect((get) => seen.push(`replacement:${get(source)}`))
+          replacement.doEffect()
+        }
+      })
+      const second = graph.makeEffect((get) => seen.push(`second:${get(disposedQuery)}`))
+      const survivor = graph.makeEffect((get) => seen.push(`survivor:${get(source)}`))
+      first.doEffect()
+      second.doEffect()
+      survivor.doEffect()
+      seen.length = 0
+      armed = true
+
+      graph.setRef(source, 1, { skipRefresh: deferred })
+      if (deferred === true) graph.runDeferredEffects()
+
+      expect(seen).toEqual(['first:1', 'replacement:1', 'survivor:1'])
+      seen.length = 0
+      graph.setRef(source, 2)
+      expect(seen).toEqual(['survivor:2', 'replacement:2'])
+    })
+  }
+
+  it('checks disposal when the effects wrapper dispatches the batch', () => {
+    const batches: (() => void)[] = []
+    const graph = new ReactiveGraph()
+    graph.context = { effectsWrapper: (runEffects: () => void) => batches.push(runEffects) }
+    const source = graph.makeRef(0)
+    const query = graph.makeThunk((get) => get(source))
+    const seen: number[] = []
+    const effect = graph.makeEffect((get) => seen.push(get(query)))
+    effect.doEffect()
+    graph.setRef(source, 1)
+    graph.destroyNode(effect)
+    graph.destroyNode(query)
+
+    for (const run of batches) run()
+
+    expect(seen).toEqual([0])
+  })
+})

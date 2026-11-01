@@ -7,6 +7,7 @@
       "ES2024"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -38,6 +39,36 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "@effect/vitest",
+          "@effect/platform-node/NodeFileSystem#layer",
+          "effect/http/FetchHttpClient#layer",
+          "@effect/opentelemetry/OtelTracer",
+          "effect/FileSystem#FileSystem",
+          "effect/persistence/KeyValueStore"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/client-session/ClientSessionReconciliation.test.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "runEffectInsideEffect": "off"
+              }
+            }
+          },
+          {
+            "include": [
+              "src/client-session/ClientSessionSyncProcessor.test.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "runEffectInsideEffect": "off"
+              }
+            }
+          }
         ]
       }
     ],

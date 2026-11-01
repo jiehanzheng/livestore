@@ -14,7 +14,7 @@ import {
   Stream,
 } from '@livestore/utils/effect'
 
-export class DockerComposeError extends Schema.TaggedError<DockerComposeError>(
+export class DockerComposeError extends Schema.TaggedError<DockerComposeError, { readonly brand: unique symbol }>(
   '~@livestore/utils-dev/DockerComposeError',
 )('DockerComposeError', {
   cause: Schema.Defect(),

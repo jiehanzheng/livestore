@@ -1,7 +1,12 @@
+// @genie-bootstrap
 import docsPkg from './docs/package.json.genie.ts'
+import docsNativeCodePkg from './docs/src/content/_assets/code/native/package.json.genie.ts'
 import docsCodeSnippetsPkg from './docs/src/content/_assets/code/package.json.genie.ts'
+import { effectV4Catalog } from './genie/external.ts'
 import { catalog, packageJson } from './genie/repo.ts'
 import adapterCloudflarePkg from './packages/@livestore/adapter-cloudflare/package.json.genie.ts'
+import adapterExpoPkg from './packages/@livestore/adapter-expo/package.json.genie.ts'
+import adapterNodePkg from './packages/@livestore/adapter-node/package.json.genie.ts'
 import adapterWebPkg from './packages/@livestore/adapter-web/package.json.genie.ts'
 import commonCfPkg from './packages/@livestore/common-cf/package.json.genie.ts'
 import commonPkg from './packages/@livestore/common/package.json.genie.ts'
@@ -31,7 +36,10 @@ import testsWaSqlitePkg from './tests/wa-sqlite/package.json.genie.ts'
 export const rootWorkspacePackages = [
   docsPkg,
   docsCodeSnippetsPkg,
+  docsNativeCodePkg,
   adapterCloudflarePkg,
+  adapterExpoPkg,
+  adapterNodePkg,
   adapterWebPkg,
   commonCfPkg,
   commonPkg,
@@ -67,14 +75,26 @@ const rootWorkspaceBase = packageJson.aggregateFromPackages({
 })
 
 const rootWorkspaceExtraFields = {
+  // pnpm 12.15+ fixes injected consumers retaining the wrong workspace peer context (#17057).
+  packageManager: 'pnpm@12.16.0',
   scripts: {
     changeset: 'changeset',
     'changeset:status': 'changeset status',
     'changeset:version': 'changeset version',
+    'fork:bootstrap': 'node scripts/fork-qualification/bootstrap.mjs',
+    'fork:check': 'node scripts/fork-qualification/check.mjs',
+    'fork:check:fix': 'node scripts/fork-qualification/check.mjs --fix',
+    'fork:commit-check': 'node scripts/fork-qualification/check.mjs --commit',
   },
   devDependencies: {
+    // The qualification root materializes all nine maintained cohort members for identity checks.
+    ...effectV4Catalog,
     '@changesets/cli': '^2.31.0',
-    ...catalog.pick('@types/node', 'typescript', 'vitest'),
+    '@effect/tsgo': '0.63.0',
+    oxfmt: '0.61.0',
+    oxlint: '1.82.0',
+    ...catalog.pick('@types/node', 'typescript'),
+    ...catalog.pick('vitest', 'vite', '@opentelemetry/api', '@standard-schema/spec'),
   },
 } as const
 
@@ -89,6 +109,7 @@ const rootWorkspace = {
     return `${JSON.stringify(
       {
         ...generated,
+        ...rootWorkspaceExtraFields,
         scripts: {
           ...generated.scripts,
           ...rootWorkspaceExtraFields.scripts,

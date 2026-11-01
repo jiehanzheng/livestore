@@ -1,5 +1,6 @@
 import {
   baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
   packageTsconfigCompilerOptions,
   packageTsconfigExclude,
   refs,
@@ -9,6 +10,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@livestore/effect-playwright')],
     ...packageTsconfigCompilerOptions,
     lib: ['ES2024', 'DOM'],
     types: ['node'],

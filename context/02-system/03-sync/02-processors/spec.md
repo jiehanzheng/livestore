@@ -233,7 +233,7 @@ suffix (`:902-919`).
 
 ## LeaderPersistence: the Durable Seam
 
-`leader-thread/LeaderPersistence.ts` (`:59-66`) has two methods,
+`leader-thread/LeaderPersistence.ts` has two persistence methods,
 `persistLocal` (`:90-110`) and `persistUpstream` (`:112-170`). Together they
 perform rollback, materialization (which also writes eventlog rows), journal
 maintenance, sync-metadata updates for confirmed events, state and backend
@@ -256,8 +256,20 @@ commits state first, then the eventlog, inside an uninterruptible region with a
 joint rollback finalizer (`withCoordinatedTransactions`, `:184-224`). This
 protects against errors and interruption but is **not crash-atomic across the
 two databases**: a process death between the two COMMITs can leave state ahead
-of the eventlog (LS.SYS.STATE-DQ2; healed only by state rebuild, see
-`../../02-state/01-sqlite/`).
+of the eventlog. Before either transaction begins, a separate state autocommit
+invalidates `__livestore_state_consistency`; after both commits succeed, another
+autocommit restores it. A failed transition permanently fences this owner,
+notifies every session regardless of `onError`, and publishes no receipt. Boot
+rebuilds an incomplete state/journal from the full retained eventlog before
+serving queries (see `../../02-state/01-sqlite/02-schema-management/`).
+
+`exportSnapshot` uses the same semaphore as persistence, so a concurrent
+snapshot waits for the complete transition and fails if its owner failed.
+The fence adds two state autocommits per transition, not per event. It does not
+make the two databases atomic together (LS.SYS.STATE-DQ2), extend platform
+power-loss durability, or repair an adapter that suppresses transaction control.
+In particular, Cloudflare's direct eventlog wrapper still has that limitation;
+its partial-source behavior is not qualified here.
 
 ## Client Session Sync Processor
 
@@ -429,8 +441,22 @@ leader's hash, and the session materializer compares it with its own
 
 ### Observability and test hooks
 
-`syncState.changes` streams a queue the owner offers to on every state change;
-it is for debugging and observability only (`:91`, `:829-832`). With
+`syncState.changes` broadcasts completed status snapshots through a scoped
+PubSub. Every stream run owns a separate subscription, beginning with the
+latest published status and receiving every subsequent publication. With no
+listeners, only one replay snapshot is retained. The synchronous model remains
+the authority for `syncState.get`; publications occur only at the existing
+post-materialization outbox points after the owner releases. A failed owner
+body drops its publications, so rollback cannot announce false progress.
+Processor shutdown closes the PubSub before reporting completion; scope cleanup
+also releases it. Subscriber interruption removes only that subscription.
+
+`Store.syncStatusStream()` consumes this current-plus-updates stream directly,
+without a separate get/subscribe gap. A callback may synchronously commit during
+its initial delivery without losing that update. `subscribeSyncStatus` stops
+callback delivery immediately on unsubscribe and interrupts the actual scoped
+listener, not its bootstrap fiber. It is an observability surface, not another
+owner or a mutation barrier. With
 `confirmUnsavedChanges`, a `beforeunload` handler warns while pending events
 exist (`:790-804`). Deterministic `rebaseBarriers` pause the runner (never the
 owner) at two labeled points around push cancellation and the end of a rebasing

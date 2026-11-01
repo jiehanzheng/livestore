@@ -1,3 +1,4 @@
+import { mapToAdapterError } from '@livestore/common'
 import {
   type Adapter,
   type AdapterArgs,
@@ -7,11 +8,11 @@ import {
   type LockStatus,
   makeClientSession,
   MaterializationJournal,
-  migrateDb,
+  LiveDatabaseImportRefusedError,
   StateSqliteDb,
   StateHead,
   type SyncOptions,
-  UnknownError,
+  type UnknownError,
 } from '@livestore/common'
 import type { DevtoolsOptions, LeaderSqliteDb } from '@livestore/common/leader-thread'
 import {
@@ -19,7 +20,6 @@ import {
   Eventlog,
   LeaderThreadCtx,
   makeLeaderThreadLayer,
-  markStateAsCompleted,
   streamEventsWithSyncState,
 } from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
@@ -54,6 +54,7 @@ import { makeSharedWorkerNodeName } from '../web-worker/common/webmesh-node-name
 import * as WorkerSchema from '../web-worker/common/worker-schema.ts'
 
 export interface InMemoryAdapterOptions {
+  /** @deprecated State-only bytes cannot establish authoritative event history; import is refused. */
   importSnapshot?: Uint8Array<ArrayBuffer>
   sync?: SyncOptions
   /**
@@ -113,103 +114,105 @@ export interface InMemoryAdapterOptions {
  * })
  * ```
  *
- * @example
- * ```ts
- * // Pre-populate with existing data
- * const adapter = makeInMemoryAdapter({
- *   importSnapshot: existingDbSnapshot,
- * })
- * ```
+
  */
 export const makeInMemoryAdapter =
   (options: InMemoryAdapterOptions = {}): Adapter =>
   (adapterArgs) =>
-    Effect.gen(function* () {
-      const { schema, shutdown, syncPayloadEncoded, syncPayloadSchema, storeId, devtoolsEnabled } = adapterArgs
-      const sqlite3 = yield* Effect.promise(() => loadSqlite3())
-
-      const sqliteDb = yield* sqliteDbFactory({ sqlite3 })({ _tag: 'in-memory' })
-
-      const clientId = options.clientId ?? nanoid(6)
-      const sessionId = options.sessionId ?? nanoid(6)
-
-      const sharedWebWorker =
-        options.devtools?.sharedWorker !== undefined
-          ? tryAsFunctionAndNew(options.devtools.sharedWorker, {
-              name: `livestore-shared-worker-${storeId}`,
-            })
-          : undefined
-
-      const sharedWorkerClient =
-        sharedWebWorker !== undefined
-          ? yield* RpcClient.make(WorkerSchema.SharedWorkerRpcs).pipe(
-              Effect.provide(
-                Layer.provideMerge(
-                  RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }),
-                  BrowserWorker.layer(() => sharedWebWorker),
-                ),
-              ),
-              Effect.tapCauseLogPretty,
-              UnknownError.mapToUnknownError,
-            )
-          : undefined
-
-      const { leaderThread, initialSnapshot } = yield* makeLeaderThread({
-        schema,
-        storeId,
-        clientId,
-        makeSqliteDb: sqliteDbFactory({ sqlite3 }),
-        syncOptions: options.sync,
-        syncPayloadEncoded,
-        syncPayloadSchema,
-        params: adapterArgs.params,
-        importSnapshot: options.importSnapshot,
-        devtoolsEnabled,
-        sharedWorker: sharedWorkerClient === undefined ? undefined : makeWebmeshWorkerProxy(sharedWorkerClient),
-      })
-
-      sqliteDb.import(initialSnapshot)
-
-      const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
-
-      const clientSession = yield* makeClientSession({
-        ...adapterArgs,
-        sqliteDb,
-        clientId,
-        sessionId,
-        isLeader: true,
-        leaderThread,
-        lockStatus,
-        shutdown,
-        webmeshMode: 'direct',
-        // Can be undefined in Node.js
-        origin: globalThis.location?.origin,
-        connectWebmeshNode: ({ sessionInfo, webmeshNode }) =>
-          Effect.gen(function* () {
-            if (sharedWorkerClient === undefined || devtoolsEnabled === false) {
-              return
-            }
-
-            yield* connectWebmeshNodeClientSession({
-              webmeshNode,
-              sessionInfo,
-              sharedWorker: makeWebmeshWorkerProxy(sharedWorkerClient),
-              devtoolsEnabled,
-              schema,
-            })
+    options.importSnapshot !== undefined
+      ? Effect.fail(
+          new LiveDatabaseImportRefusedError({
+            reason:
+              'State-only snapshots cannot establish authoritative event history; initialize through normal events or sync',
           }),
-        registerBeforeUnload: (onBeforeUnload) => {
-          if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-            window.addEventListener('beforeunload', onBeforeUnload)
-            return () => window.removeEventListener('beforeunload', onBeforeUnload)
-          }
+        )
+      : Effect.gen(function* () {
+          const { schema, shutdown, syncPayloadEncoded, syncPayloadSchema, storeId, devtoolsEnabled } = adapterArgs
+          const sqlite3 = yield* Effect.promise(() => loadSqlite3())
 
-          return () => {}
-        },
-      })
+          const sqliteDb = yield* Effect.acquireRelease(sqliteDbFactory({ sqlite3 })({ _tag: 'in-memory' }), (db) =>
+            Effect.sync(() => db.close()),
+          )
 
-      return clientSession
-    }).pipe(UnknownError.mapToUnknownError, Effect.provide(FetchHttpClient.layer))
+          const clientId = options.clientId ?? nanoid(6)
+          const sessionId = options.sessionId ?? nanoid(6)
+
+          const sharedWebWorker =
+            options.devtools?.sharedWorker !== undefined
+              ? tryAsFunctionAndNew(options.devtools.sharedWorker, {
+                  name: `livestore-shared-worker-${storeId}`,
+                })
+              : undefined
+
+          const sharedWorkerClient =
+            sharedWebWorker !== undefined
+              ? yield* RpcClient.make(WorkerSchema.SharedWorkerRpcs).pipe(
+                  Effect.provide(
+                    Layer.provideMerge(
+                      RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }),
+                      BrowserWorker.layer(() => sharedWebWorker),
+                    ),
+                  ),
+                  Effect.tapCauseLogPretty,
+                  mapToAdapterError,
+                )
+              : undefined
+
+          const { leaderThread, initialSnapshot } = yield* makeLeaderThread({
+            schema,
+            storeId,
+            clientId,
+            makeSqliteDb: sqliteDbFactory({ sqlite3 }),
+            syncOptions: options.sync,
+            syncPayloadEncoded,
+            syncPayloadSchema,
+            params: adapterArgs.params,
+            devtoolsEnabled,
+            sharedWorker: sharedWorkerClient === undefined ? undefined : makeWebmeshWorkerProxy(sharedWorkerClient),
+          })
+
+          sqliteDb.import(initialSnapshot)
+
+          const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
+
+          const clientSession = yield* makeClientSession({
+            ...adapterArgs,
+            sqliteDb,
+            clientId,
+            sessionId,
+            isLeader: true,
+            leaderThread,
+            lockStatus,
+            shutdown,
+            webmeshMode: 'direct',
+            // Can be undefined in Node.js
+            origin: globalThis.location?.origin,
+            connectWebmeshNode: ({ sessionInfo, webmeshNode }) =>
+              Effect.gen(function* () {
+                if (sharedWorkerClient === undefined || devtoolsEnabled === false) {
+                  return
+                }
+
+                yield* connectWebmeshNodeClientSession({
+                  webmeshNode,
+                  sessionInfo,
+                  sharedWorker: makeWebmeshWorkerProxy(sharedWorkerClient),
+                  devtoolsEnabled,
+                  schema,
+                })
+              }),
+            registerBeforeUnload: (onBeforeUnload) => {
+              if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+                window.addEventListener('beforeunload', onBeforeUnload)
+                return () => window.removeEventListener('beforeunload', onBeforeUnload)
+              }
+
+              return () => {}
+            },
+          })
+
+          return clientSession
+        }).pipe(mapToAdapterError, Effect.provide(FetchHttpClient.layer))
 
 export interface MakeLeaderThreadArgs {
   schema: LiveStoreSchema
@@ -219,7 +222,6 @@ export interface MakeLeaderThreadArgs {
   syncOptions: SyncOptions | undefined
   syncPayloadEncoded: Schema.Json | undefined
   syncPayloadSchema: Schema.Top | undefined
-  importSnapshot: Uint8Array<ArrayBuffer> | undefined
   devtoolsEnabled: boolean
   sharedWorker: WebmeshWorkerProxy | undefined
   params: AdapterArgs['params']
@@ -233,7 +235,6 @@ const makeLeaderThread = ({
   syncOptions,
   syncPayloadEncoded,
   syncPayloadSchema,
-  importSnapshot,
   devtoolsEnabled,
   sharedWorker,
   params,
@@ -250,15 +251,9 @@ const makeLeaderThread = ({
 
     const shutdownChannel = yield* makeShutdownChannel(storeId)
 
-    // Might involve some async work, so we're running them concurrently
-    const [dbState, dbEventlog] = yield* Effect.all([makeDb('state'), makeDb('eventlog')], { concurrency: 2 })
-
-    if (importSnapshot !== undefined) {
-      dbState.import(importSnapshot)
-
-      const _migrationsReport = yield* migrateDb({ db: dbState, schema })
-      yield* markStateAsCompleted(dbState)
-    }
+    const dbEventlog = yield* Effect.acquireRelease(makeDb('eventlog'), (db) => Effect.sync(() => db.close()))
+    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+    const dbState = yield* Effect.acquireRelease(makeDb('state'), (db) => Effect.sync(() => db.close()))
 
     const devtoolsOptions = yield* makeDevtoolsOptions({
       devtoolsEnabled,
@@ -277,6 +272,7 @@ const makeLeaderThread = ({
     const layer = yield* Layer.build(
       makeLeaderThreadLayer({
         schema,
+        initializedSource,
         storeId,
         clientId,
         makeSqliteDb,
@@ -290,7 +286,8 @@ const makeLeaderThread = ({
     )
 
     return yield* Effect.gen(function* () {
-      const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus } = yield* LeaderThreadCtx
+      const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
+        yield* LeaderThreadCtx
 
       const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
 
@@ -310,14 +307,14 @@ const makeLeaderThread = ({
           migrationsReport: initialState.migrationsReport,
           storageMode: 'in-memory',
         },
-        export: Effect.sync(() => dbState.export()),
+        export: exportSnapshot,
         getEventlogData: Effect.sync(() => dbEventlog.export()),
         syncState: syncProcessor.syncState,
         sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
         networkStatus,
       })
 
-      const initialSnapshot = dbState.export()
+      const initialSnapshot = yield* exportSnapshot
 
       return { leaderThread, initialSnapshot }
     }).pipe(Effect.provide(layer))

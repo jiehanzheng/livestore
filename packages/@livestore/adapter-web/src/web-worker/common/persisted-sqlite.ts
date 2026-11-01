@@ -1,8 +1,13 @@
-import { liveStoreStorageFormatVersion, type MakeSqliteDb } from '@livestore/common'
-import { hasCompletedState } from '@livestore/common/leader-thread'
+import {
+  LegacyStorageFormatError,
+  liveStoreStorageFormatVersion,
+  StateSnapshot,
+  type MakeSqliteDb,
+} from '@livestore/common'
 import { getStateDbBaseName, type LiveStoreSchema } from '@livestore/common/schema'
 import {
   decodeAccessHandlePoolFilename,
+  decodeAccessHandlePoolFilenameStrict,
   HEADER_OFFSET_DATA,
   type WebDatabaseMetadataOpfs,
 } from '@livestore/sqlite-wasm/browser'
@@ -21,7 +26,7 @@ import { Opfs, type WebError } from '@livestore/utils/effect/browser'
 
 import type * as WorkerSchema from './worker-schema.ts'
 
-export class PersistedSqliteError extends Schema.TaggedError<PersistedSqliteError>(
+export class PersistedSqliteError extends Schema.TaggedError<PersistedSqliteError, { readonly brand: unique symbol }>(
   '~@livestore/adapter-web/PersistedSqliteError',
 )('PersistedSqliteError', {
   message: Schema.String,
@@ -42,6 +47,7 @@ export const readPersistedStateDbFromClientSession = Effect.fn(
     schema: LiveStoreSchema
     makeSqliteDb: (input: { _tag: 'in-memory' }) => ReturnType<MakeSqliteDb>
   }) {
+    yield* discoverPersistedSource({ storageOptions, storeId })
     const accessHandlePoolDirString = yield* sanitizeOpfsDir(storageOptions.directory, storeId)
 
     const accessHandlePoolDirHandle = yield* Opfs.getDirectoryHandleByPath(accessHandlePoolDirString)
@@ -91,7 +97,12 @@ export const readPersistedStateDbFromClientSession = Effect.fn(
           Effect.try({
             try: () => {
               db.import(snapshot)
-              return hasCompletedState(db)
+              // Cache bytes have no source authority; the leader validates them during admission.
+              const provenance = StateSnapshot.readProvenance(db)
+              return (
+                provenance !== undefined &&
+                StateSnapshot.isSameProjection(provenance.projection, StateSnapshot.getProjectionIdentity(schema))
+              )
             },
             catch: (cause) => new PersistedSqliteError({ message: 'Could not load persisted state snapshot', cause }),
           }).pipe(
@@ -149,6 +160,76 @@ export const sanitizeOpfsDir = Effect.fn('@livestore/adapter-web:sanitizeOpfsDir
   }
 
   return `${directory}@${liveStoreStorageFormatVersion}`
+})
+
+/** Discover before opening either database: pool creation would erase the distinction between absent and empty source. */
+export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discoverPersistedSource')(function* ({
+  storageOptions,
+  storeId,
+}: {
+  storageOptions: WorkerSchema.StorageType
+  storeId: string
+}) {
+  const directory = yield* sanitizeOpfsDir(storageOptions.directory, storeId)
+  const storageBase = directory.slice(0, directory.lastIndexOf('@'))
+  const unreadableStorage = () =>
+    new LegacyStorageFormatError({
+      expectedFormatVersion: liveStoreStorageFormatVersion,
+      storageBase,
+      reason: 'Cannot prove source origin from unreadable OPFS storage',
+    })
+  const opfs = yield* Opfs.Opfs
+  const root = yield* opfs.getRootDirectoryHandle.pipe(Effect.mapError(unreadableStorage))
+  const entries = yield* opfs.values(root).pipe(Stream.runCollect, Effect.mapError(unreadableStorage))
+  // Refuse mixed roots too: an empty new root must not hide retained legacy source.
+  if (entries.some((entry) => entry.name === `${storageBase}@6`) === true) {
+    return yield* new LegacyStorageFormatError({
+      expectedFormatVersion: liveStoreStorageFormatVersion,
+      actualFormatVersion: 6,
+      storageBase,
+      reason: 'Legacy OPFS storage requires explicit migration before opening this store',
+    })
+  }
+  if (entries.some((entry) => entry.kind === 'directory' && entry.name === directory) === false) {
+    return { sourceIsNew: true }
+  }
+  const current = yield* opfs.getDirectoryHandle(root, directory).pipe(Effect.mapError(unreadableStorage))
+  const filenames = yield* opfs.values(current).pipe(
+    Stream.filter((handle): handle is FileSystemFileHandle => handle.kind === 'file'),
+    Stream.mapEffect((handle) =>
+      opfs.getFile(handle).pipe(
+        Effect.flatMap((file) =>
+          Effect.tryPromise({
+            try: () => decodeAccessHandlePoolFilenameStrict(file),
+            catch: () =>
+              new LegacyStorageFormatError({
+                expectedFormatVersion: liveStoreStorageFormatVersion,
+                storageBase,
+                reason: 'Cannot prove source origin from unreadable OPFS pool metadata',
+              }),
+          }),
+        ),
+      ),
+    ),
+    Stream.runCollect,
+    Effect.mapError(
+      (cause) =>
+        new LegacyStorageFormatError({
+          expectedFormatVersion: liveStoreStorageFormatVersion,
+          storageBase,
+          reason: `Cannot prove source origin from OPFS pool metadata: ${cause._tag}`,
+        }),
+    ),
+  )
+  const sourceIsNew = !filenames.includes('/eventlog.db')
+  if (sourceIsNew === true && filenames.some((name) => name !== '') === true) {
+    return yield* new LegacyStorageFormatError({
+      expectedFormatVersion: liveStoreStorageFormatVersion,
+      storageBase,
+      reason: 'Retained database associations exist without the authoritative eventlog',
+    })
+  }
+  return { sourceIsNew }
 })
 
 export const getStateDbFileName = (schema: LiveStoreSchema) => `${getStateDbBaseName(schema)}.db`

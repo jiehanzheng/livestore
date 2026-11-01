@@ -21,9 +21,10 @@ export const RejectedPushErrorTypeId = '~@livestore/common/RejectedPushError' as
  * This is a defensive check — callers are expected to construct monotonic event batches.
  * The client should rebase and retry.
  */
-export class NonMonotonicBatchError extends Schema.TaggedError<NonMonotonicBatchError>(
-  `${RejectedPushErrorTypeId}/NonMonotonicBatchError`,
-)('NonMonotonicBatchError', {
+export class NonMonotonicBatchError extends Schema.TaggedError<
+  NonMonotonicBatchError,
+  { readonly brand: unique symbol }
+>(`${RejectedPushErrorTypeId}/NonMonotonicBatchError`)('NonMonotonicBatchError', {
   /** The sequence number that broke the monotonic invariant (i.e. the one that is >= the next). */
   precedingSeqNum: EventSequenceNumber.Client.Composite,
   /** The sequence number that was expected to be greater than `precedingSeqNum`. */
@@ -41,9 +42,10 @@ export class NonMonotonicBatchError extends Schema.TaggedError<NonMonotonicBatch
 }
 
 /** A pushed batch skips an event required to connect it to the leader's admitted push prefix. */
-export class NonContiguousBatchError extends Schema.TaggedError<NonContiguousBatchError>(
-  `${RejectedPushErrorTypeId}/NonContiguousBatchError`,
-)('NonContiguousBatchError', {
+export class NonContiguousBatchError extends Schema.TaggedError<
+  NonContiguousBatchError,
+  { readonly brand: unique symbol }
+>(`${RejectedPushErrorTypeId}/NonContiguousBatchError`)('NonContiguousBatchError', {
   expectedSeqNum: EventSequenceNumber.Client.Composite,
   providedSeqNum: EventSequenceNumber.Client.Composite,
   expectedParentSeqNum: EventSequenceNumber.Client.Composite,
@@ -65,9 +67,10 @@ export class NonContiguousBatchError extends Schema.TaggedError<NonContiguousBat
  *
  * This happens when events were enqueued before a backend-pull-triggered rebase incremented the generation.
  */
-export class StaleRebaseGenerationError extends Schema.TaggedError<StaleRebaseGenerationError>(
-  `${RejectedPushErrorTypeId}/StaleRebaseGenerationError`,
-)('StaleRebaseGenerationError', {
+export class StaleRebaseGenerationError extends Schema.TaggedError<
+  StaleRebaseGenerationError,
+  { readonly brand: unique symbol }
+>(`${RejectedPushErrorTypeId}/StaleRebaseGenerationError`)('StaleRebaseGenerationError', {
   /** The leader's current rebase generation. */
   currentRebaseGeneration: Schema.Finite,
   /** The rebase generation carried by the dropped events. */
@@ -91,7 +94,7 @@ export class StaleRebaseGenerationError extends Schema.TaggedError<StaleRebaseGe
  * This occurs when another client session (or a backend pull) has pushed events that the current
  * session hasn't seen yet.
  */
-export class LeaderAheadError extends Schema.TaggedError<LeaderAheadError>(
+export class LeaderAheadError extends Schema.TaggedError<LeaderAheadError, { readonly brand: unique symbol }>(
   `${RejectedPushErrorTypeId}/LeaderAheadError`,
 )('LeaderAheadError', {
   minimumExpectedNum: EventSequenceNumber.Client.Composite,

@@ -6,13 +6,7 @@ const runtimeDeps = catalog.compose({
   workspace: workspaceMember('packages/@local/astro-twoslash-code/example'),
   dependencies: {
     workspace: [astroTwoslashCodePkg, utilsPkg],
-    external: catalog.pick(
-      '@astrojs/starlight',
-      'astro',
-      'astro-expressive-code',
-      'expressive-code-twoslash',
-      'expressive-code',
-    ),
+    external: catalog.pick('@astrojs/starlight', 'astro'),
   },
   devDependencies: {
     external: effectDevDeps('@playwright/test', '@tailwindcss/vite', '@types/node', 'tailwindcss', 'typescript'),

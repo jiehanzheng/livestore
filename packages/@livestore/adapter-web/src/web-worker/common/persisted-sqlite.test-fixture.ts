@@ -16,7 +16,11 @@ const run = Effect.gen(function* () {
   const storeId = `rebuild-snapshot-${crypto.randomUUID()}`
   const storageOptions = { type: 'opfs' as const }
   const todos = State.SQLite.table({ name: 'todos', columns: { id: State.SQLite.text({ primaryKey: true }) } })
-  const schema = makeSchema({ events: [], state: State.SQLite.makeState({ tables: { todos }, materializers: {} }) })
+  const schema = makeSchema({
+    projectionRevision: 'persisted-sqlite-fixture-v1',
+    events: [],
+    state: State.SQLite.makeState({ tables: { todos }, materializers: {} }),
+  })
   const persisted = yield* Effect.acquireRelease(
     makeSqliteDb({
       _tag: 'opfs',

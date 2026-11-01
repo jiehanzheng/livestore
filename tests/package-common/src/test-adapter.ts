@@ -1,3 +1,4 @@
+import { mapToAdapterError, type AdapterError, type SourceIdentity } from '@livestore/common'
 import {
   type Adapter,
   type AdapterArgs,
@@ -7,6 +8,10 @@ import {
   makeClientSession,
   migrateDb,
   type SqliteDb,
+  type SqliteError,
+  StateHead,
+  StateSnapshot,
+  StateSqliteDb,
   type SyncOptions,
   UnknownError,
 } from '@livestore/common'
@@ -51,8 +56,10 @@ export type TestingOverrides = {
     {
       dbEventlog: SqliteDb
       dbState: SqliteDb
+      initializedSource: SourceIdentity.InitializedSource
     },
-    UnknownError
+    AdapterError | SqliteError,
+    Scope.Scope
   >
 }
 
@@ -67,7 +74,7 @@ export const makeTestAdapter = ({
   sessionId?: string
   sync?: SyncOptions
   importSnapshot?: Uint8Array<ArrayBuffer>
-  testing?: { overrides?: TestingOverrides }
+  testing?: { overrides?: TestingOverrides; snapshotAdmission?: boolean }
 } = {}): Adapter =>
   ((adapterArgs) =>
     Effect.gen(function* () {
@@ -88,7 +95,11 @@ export const makeTestAdapter = ({
       const syncInMemoryDb = yield* makeSqliteDb({ _tag: 'in-memory' }).pipe(Effect.orDie)
       const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
 
-      const { leaderThread, initialSnapshot } = yield* makeLocalLeaderThread({
+      const {
+        leaderThread: originalLeaderThread,
+        initialSnapshot,
+        openSession,
+      } = yield* makeLocalLeaderThread({
         storeId,
         clientId,
         schema,
@@ -99,11 +110,33 @@ export const makeTestAdapter = ({
         params,
         testing,
         shutdownChannel,
-      }).pipe(UnknownError.mapToUnknownError)
+      }).pipe(mapToAdapterError)
 
+      let leaderThread = originalLeaderThread
       syncInMemoryDb.import(importSnapshot ?? initialSnapshot)
       if (importSnapshot !== undefined) {
         yield* migrateDb({ db: syncInMemoryDb, schema })
+      }
+      if (testing?.snapshotAdmission === true) {
+        // Exercise the browser's atomic owner admission without changing explicit manual-seed test semantics.
+        const { admission, queue } = yield* openSession({
+          expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+          candidate: StateSnapshot.readProvenance(syncInMemoryDb),
+        })
+        if (admission._tag === 'StaleSnapshot') syncInMemoryDb.import(admission.snapshot)
+        const stateHead = yield* StateHead.make.pipe(Effect.provideService(StateSqliteDb.StateSqliteDb, syncInMemoryDb))
+        leaderThread = {
+          ...leaderThread,
+          initialState: {
+            ...leaderThread.initialState,
+            leaderHead: yield* stateHead.get.pipe(mapToAdapterError),
+          },
+          events: {
+            ...leaderThread.events,
+            pull: () =>
+              Stream.fromQueue(queue).pipe(Stream.concat(Stream.die(new Error('Admitted test leader ended')))),
+          },
+        }
       }
       syncInMemoryDb.debug.head = leaderThread.initialState.leaderHead
 
@@ -145,30 +178,32 @@ const makeLocalLeaderThread = ({
   syncPayloadEncoded: Schema.Json | undefined
   syncPayloadSchema: Schema.Decoder<Schema.Json> | undefined
   params: AdapterArgs['params']
-  testing?: { overrides?: TestingOverrides }
+  testing?: { overrides?: TestingOverrides; snapshotAdmission?: boolean }
   shutdownChannel: ShutdownChannel.ShutdownChannel
 }) =>
   Effect.gen(function* () {
     const services = yield* Effect.context()
 
-    const makeDb = (kind: 'state' | 'eventlog') => {
-      if (testing?.overrides?.makeLeaderThread !== undefined) {
-        return testing.overrides
-          .makeLeaderThread(makeSqliteDb)
-          .pipe(Effect.map(({ dbEventlog, dbState }) => (kind === 'state' ? dbState : dbEventlog)))
-      }
-
-      return makeSqliteDb({
-        _tag: 'in-memory',
-        configureDb: (db: SqliteDb) =>
-          configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
-      })
-    }
-
-    const [dbState, dbEventlog] = yield* Effect.all([makeDb('state'), makeDb('eventlog')], { concurrency: 2 })
+    const databases =
+      testing?.overrides?.makeLeaderThread !== undefined
+        ? yield* testing.overrides.makeLeaderThread(makeSqliteDb)
+        : yield* Effect.gen(function* () {
+            const makeDb = () =>
+              makeSqliteDb({
+                _tag: 'in-memory',
+                configureDb: (db: SqliteDb) =>
+                  configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
+              })
+            const dbEventlog = yield* makeDb()
+            const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+            const dbState = yield* makeDb()
+            return { dbState, dbEventlog, initializedSource }
+          })
+    const { dbState, dbEventlog, initializedSource } = databases
 
     const layer = yield* Layer.build(
       makeLeaderThreadLayer({
+        initializedSource,
         schema,
         storeId,
         clientId,
@@ -183,7 +218,8 @@ const makeLocalLeaderThread = ({
     )
 
     return yield* Effect.gen(function* () {
-      const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus } = yield* LeaderThreadCtx
+      const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
+        yield* LeaderThreadCtx
 
       const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
 
@@ -204,7 +240,7 @@ const makeLocalLeaderThread = ({
             migrationsReport: initialState.migrationsReport,
             storageMode: 'in-memory',
           },
-          export: Effect.sync(() => dbState.export()),
+          export: exportSnapshot,
           getEventlogData: Effect.sync(() => dbEventlog.export()),
           syncState: syncProcessor.syncState,
           sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
@@ -213,7 +249,7 @@ const makeLocalLeaderThread = ({
         { ...omitUndefineds({ overrides: testing?.overrides?.clientSession?.leaderThreadProxy }) },
       )
 
-      return { leaderThread, initialSnapshot: dbState.export() }
+      return { leaderThread, initialSnapshot: dbState.export(), openSession: syncProcessor.openSession }
     }).pipe(Effect.provide(layer))
   })
 

@@ -20,34 +20,36 @@
     "./vite": "./src/vite/vite-plugin-snippet.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.3",
+    "@effect/platform-node": "4.1.0",
     "@livestore/utils": "workspace:^",
-    "astro-expressive-code": "0.43.1",
-    "expressive-code": "0.43.1",
-    "expressive-code-twoslash": "0.5.3",
-    "hast": "1.0.0",
+    "@shikijs/twoslash": "4.5.0",
+    "@volar/typescript": "2.4.30",
+    "@vue/language-core": "3.3.14",
     "hast-util-to-html": "9.0.4",
+    "shiki": "4.5.0",
+    "twoslash-vue": "0.3.9",
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@astrojs/starlight": "0.40.0",
-    "@effect/opentelemetry": "4.0.3",
-    "@effect/platform-browser": "4.0.3",
-    "@effect/platform-bun": "4.0.3",
-    "@effect/platform-node": "4.0.3",
-    "@effect/platform-node-shared": "4.0.3",
-    "@effect/vitest": "4.0.3",
+    "@astrojs/starlight": "0.42.7",
+    "@effect/opentelemetry": "4.1.0",
+    "@effect/platform-browser": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/platform-node": "4.1.0",
+    "@effect/platform-node-shared": "4.1.0",
+    "@effect/vitest": "4.1.0",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/resources": "2.2.0",
     "@standard-schema/spec": "1.1.0",
     "@types/hast": "3.0.4",
     "@types/node": "25.3.3",
-    "astro": "6.4.6",
-    "effect": "4.0.3",
-    "vitest": "4.1.9"
+    "astro": "7.4.4",
+    "effect": "4.1.0",
+    "vitest": "5.0.5",
+    "vue": "3.5.44"
   },
   "peerDependencies": {
-    "@astrojs/starlight": "^0.35 || ^0.40",
-    "astro": "^5 || ^6"
+    "@astrojs/starlight": "^0.42",
+    "astro": "^7"
   }
 }

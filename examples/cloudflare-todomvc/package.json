@@ -4,22 +4,30 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@cloudflare/workers-types": "4.20251118.0",
+    "@cloudflare/workers-types": "5.20261030.1",
     "@livestore/adapter-cloudflare": "0.5.0",
     "@livestore/livestore": "0.5.0",
     "@livestore/peer-deps": "0.5.0",
     "@livestore/sync-cf": "0.5.0"
   },
   "devDependencies": {
-    "wrangler": "4.42.2"
+    "wrangler": "4.156.0",
+    "typescript": "7.0.2",
+    "esbuild": "0.28.0",
+    "miniflare": "5.20261023.3-beta",
+    "vitest": "5.0.5",
+    "@livestore/common": "0.5.0",
+    "@livestore/utils": "0.5.0"
   },
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "wrangler build",
+    "build": "wrangler deploy --dry-run --outdir dist",
     "dev": "wrangler dev",
-    "wrangler:deploy": "wrangler deploy"
+    "wrangler:deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -34,19 +42,6 @@
       "sharp",
       "unix-dgram",
       "workerd"
-    ],
-    "overrides": {
-      "@effect/opentelemetry": "4.0.3",
-      "@effect/platform-browser": "4.0.3",
-      "@effect/platform-bun": "4.0.3",
-      "@effect/platform-node": "4.0.3",
-      "@effect/vitest": "4.0.3",
-      "@opentelemetry/api": "1.9.0",
-      "@opentelemetry/resources": "2.2.0",
-      "@standard-schema/spec": "1.0.0",
-      "effect": "4.0.3",
-      "@cloudflare/workers-types": "4.20251118.0",
-      "@effect/platform-node-shared": "4.0.3"
-    }
+    ]
   }
 }

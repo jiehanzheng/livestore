@@ -42,24 +42,66 @@ risk is contracted at the parent level (`LS.SYS.RT-R16`,
 
 ## Fast-Path Snapshot Read
 
-Unless disabled or OPFS is unavailable, a booting session reads the
-persisted state DB directly from OPFS
-(`readPersistedStateDbFromClientSession`) instead of requesting a
-`GetRecreateSnapshot` from the leader, and derives its initial leader head
-from `__livestore_state_head` rather than the eventlog. Both shared-worker and
-single-tab sessions import the snapshot into their in-memory database and require
-all state system tables plus the rebuild-completion row before using it. A read,
-import or completeness failure falls back to `GetRecreateSnapshot`, so partial
-rebuild state cannot become queryable through the fast path. The successful import
-is reused rather than copied into another database. See the
-[rebuild contract](../../../02-state/01-sqlite/02-schema-management/spec.md).
+Unless disabled or OPFS is unavailable, a booting session reads the state DB
+from OPFS (`readPersistedStateDbFromClientSession`). It requires the state system
+tables and a completion row. An incomplete capture is discarded. A completed
+capture is only a candidate: its owner/transition provenance must still be
+admitted by the serving leader before application queries become available.
 
-Rejected snapshot databases close before waiting for leader recovery. Accepted
-snapshot databases and leader fallback databases belong to the session scope.
+Both persisted web variants use one `OpenSession` streaming RPC. A serialized
+`LeaderSyncProcessor` mailbox turn validates the completed provenance under the
+persistence semaphore, returns `Accepted` or `StaleSnapshot` with current bytes,
+and attaches a fresh live queue before resolving admission. The first stream
+frame contains that admission and migrations report; subsequent frames carry
+complete pull items. A stale or absent candidate receives the current projection,
+including retained pending work. `openSnapshotSession` waits for this first frame
+and completes local SQLite import before either adapter creates its ClientSession.
+The returned database supplies its own StateHead cursor. Head equality is not a
+source-identity check.
 
-The completion check does not compare the snapshot's head or identity with the
-leader. That broader validation remains open under `LS.SYS.RT-R15` and
-[../../.delta/DELTA-001-fast-path-unvalidated.md](../../.delta/DELTA-001-fast-path-unvalidated.md).
+The completion row carries an opaque owner incarnation and completed transition
+identity. Construction of a serving persistence owner changes the incarnation;
+each completed persistence transition changes the transition identity. The row
+is deleted before either database transaction and restored only after both
+commits. Dirty captures therefore fail the completeness check, and delayed
+completed captures fail provenance admission. Recovery reconstructs from the
+complete eventlog before admitting clients; source records are unchanged.
+
+No transition can fall between validation and queue attachment: they occupy one
+owner turn, after earlier persistence/publication and before later transitions.
+The new session starts at the exact admitted projection and consumes all later
+live changes. It does not depend on the legacy sequence-filtered pull cache,
+which cannot identify generation-only or confirmation-only transitions.
+
+The live admission queue holds at most 128 pull items. A consumer that exceeds
+that limit fails explicitly and detaches; it never silently drops an item or
+blocks other sessions. Client frame buffering holds one frame with backpressure.
+These limits count items, not payload bytes. Ownership loss or premature stream
+completion fails the opener/session; when a terminal failure is available the
+stream retains the same originating error as the shutdown notification, so
+transport arrival order cannot hide a persistence/constraint cause. No-error
+owner loss retains a terminal fallback. It does not silently reopen the stream
+against another owner. Callers can create a new Store after normal teardown.
+Normal stream completion after successful admission raises the public
+`AdmittedOwnerEndedError` defect from `@livestore/common`, with the existing
+message “Admitted leader ended; reopen the Store”. Store shutdown preserves this
+cause so a caller can distinguish it without matching text. Existing stream
+failures and interruptions retain their original causes; materializer and
+invariant failures are not relabeled. The error is local to the admitted frame
+wrapper, so RPC schemas are unchanged. A caller that chooses continuity must
+join the old Store's teardown and create a new Store with fresh admission;
+this error never resumes an old snapshot.
+
+No queries are exposed before admission/import. Cancellation and import failure
+close the request scope, detach the queue and join the stream producer.
+
+Candidate databases and leader fallback databases belong to the session scope.
+The worker stream remains bound to the admitted worker context. OPFS `jSync`
+calls `syncFlush`; this protocol relies on SQLite autocommit and the VFS contract,
+not a new power-loss guarantee. The retained-file delayed-image regression and
+real OPFS/adapter RPC evidence are recorded in
+[../../.delta/DELTA-001-fast-path-unvalidated.md](../../.delta/DELTA-001-fast-path-unvalidated.md)
+and `contributor-docs/fork-browser-proof.md`.
 
 ## Identity Keys
 
@@ -78,3 +120,16 @@ Both persisted variants derive identity via `getPersistedId`
 intentional shutdown (`adapter-reset`) first
 (LS.SYS.RT.WEB.PERSIST-R03); it is skipped with a warning when storage is
 unavailable (`persisted-adapter.ts:221-230`).
+
+
+## Close observation
+
+Leader-worker state and eventlog database finalizers retain synchronous close
+failures in the owner's scoped exit rather than suppressing them. Every
+registered release is attempted even when another fails. SQLite connection
+closure and OPFS pool-handle release are separate: `createSyncAccessHandle`
+owns each exclusive handle through its acquisition scope. A completed local
+Store teardown does not close a shared leader retained by another session.
+A worker completion receipt is useful only after its full scope has exited
+without cleanup failure; exclusive file availability still needs an independent
+OPFS access-handle probe while new writer admission is prevented.

@@ -1,5 +1,6 @@
 import { assert, expect } from 'vitest'
 
+import type { AdapterError } from '@livestore/common'
 import type { LockStatus, MockSyncBackend } from '@livestore/common'
 import {
   type BootStatus,
@@ -608,7 +609,7 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
           Effect.gen(function* () {
             const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
 
-            yield* Eventlog.initEventlogDb(dbEventlog)
+            const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
 
             yield* Eventlog.insertIntoEventlog(
               LiveStoreEvent.Client.Encoded.make({
@@ -631,7 +632,7 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
             const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(servicesLayer))
             yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(servicesLayer))
 
-            return { dbEventlog, dbState }
+            return { dbEventlog, dbState, initializedSource }
           }).pipe(Effect.orDie),
       })
 
@@ -871,9 +872,13 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
       // Concurrently admit a new push while the rebase is parked (models a synchronous `store.commit()`).
       yield* pushIds(['concurrent'])
 
-      // Discard both synchronous admission notifications. The next change must be the completed pull publication.
-      yield* processor.syncState.changes.pipe(Stream.take(2), Stream.runDrain)
-      const publishedFiber = yield* processor.syncState.changes.pipe(Stream.take(1), Stream.runHead, Effect.forkChild)
+      // Replay is per observer; select the completed upstream transition rather
+      // than consuming another observer's historical admission notifications.
+      const publishedFiber = yield* processor.syncState.changes.pipe(
+        Stream.filter((state) => state.upstreamHead.global === 1),
+        Stream.runHead,
+        Effect.forkChild,
+      )
 
       // Resume the rebase: it must re-read the live pending suffix and preserve 'concurrent'.
       yield* cancelBarrier.release
@@ -1126,13 +1131,17 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
       })
 
       yield* pushIds(['still-pending'])
-      // Drain the local-push notification so the next observed change belongs to the explicit upstream payload.
-      yield* processor.syncState.changes.pipe(Stream.take(1), Stream.runDrain)
       yield* Deferred.await(pushReturned)
       yield* processor.debug.awaitRejection
+      const beforePull = yield* processor.syncState.get
 
       yield* Queue.offer(pullQueue, SyncState.PayloadUpstreamAdvance.make({ newEvents: [] }))
-      yield* processor.syncState.changes.pipe(Stream.take(1), Stream.runDrain)
+      // An empty upstream advance still publishes a new immutable status. Wait
+      // for it rather than mistaking the initial replay for pull completion.
+      yield* processor.syncState.changes.pipe(
+        Stream.filter((state) => state !== beforePull),
+        Stream.runHead,
+      )
 
       const closeExit = yield* close().pipe(Effect.exit)
 
@@ -1243,11 +1252,11 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
       yield* pushIds(['newer-admitted'])
       yield* Effect.yieldNow
       expect(yield* Deferred.isDone(secondPushAccepted)).toBe(false)
-      // Drain both local notifications so the next one proves the upstream confirmation was processed.
-      yield* processor.syncState.changes.pipe(Stream.take(2), Stream.runDrain)
-
       yield* Queue.offer(pullQueue, SyncState.PayloadUpstreamAdvance.make({ newEvents: [rejectedEvent!] }))
-      yield* processor.syncState.changes.pipe(Stream.take(1), Stream.runDrain)
+      yield* processor.syncState.changes.pipe(
+        Stream.filter((state) => EventSequenceNumber.Client.isEqual(state.upstreamHead, rejectedEvent!.seqNum)),
+        Stream.runHead,
+      )
       yield* Deferred.await(secondPushAccepted)
 
       const closeExit = yield* close().pipe(Effect.exit)
@@ -1731,7 +1740,7 @@ class TestContext extends Context.Service<
           }
         }
       }
-    }) => Effect.Effect<Store, UnknownError, Scope.Scope | OtelTracer.OtelTracer>
+    }) => Effect.Effect<Store, AdapterError, Scope.Scope | OtelTracer.OtelTracer>
     mockSyncBackend: MockSyncBackend
     shutdownDeferred: ShutdownDeferred
   }

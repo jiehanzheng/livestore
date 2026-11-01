@@ -17,9 +17,12 @@ declare global {
 }
 
 /** The dev server did not become reachable within the readiness retry budget. */
-class DevServerNotReadyError extends Schema.TaggedError<DevServerNotReadyError>()('DevServerNotReadyError', {
-  cause: Schema.Defect(),
-}) {}
+class DevServerNotReadyError extends Schema.TaggedError<DevServerNotReadyError, { readonly brand: unique symbol }>()(
+  'DevServerNotReadyError',
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const integrationRoot = path.resolve(testDir, '../../..')
@@ -147,7 +150,7 @@ Vitest.describe('adapter-web', { timeout: testTimeout }, () => {
           try: () => page.waitForSelector('text=Adapter Web Test App', { state: 'visible', timeout: 15000 }),
           catch: () => false,
         }).pipe(
-          Effect.map(() => true),
+          Effect.as(true),
           Effect.orElseSucceed(() => false),
         )
 
@@ -271,7 +274,7 @@ Vitest.describe('adapter-web', { timeout: testTimeout }, () => {
         try: () => page.waitForSelector('text=Adapter Web Test App', { state: 'visible', timeout: 15000 }),
         catch: () => false,
       }).pipe(
-        Effect.map(() => true),
+        Effect.as(true),
         Effect.orElseSucceed(() => false),
       )
 

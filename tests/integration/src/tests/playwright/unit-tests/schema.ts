@@ -11,4 +11,4 @@ const todos = State.SQLite.table({
 
 const state = State.SQLite.makeState({ tables: { todos }, materializers: {} })
 
-export const schema = makeSchema({ state, events: {} })
+export const schema = makeSchema({ projectionRevision: 'test-fixture-v1', state, events: {} })

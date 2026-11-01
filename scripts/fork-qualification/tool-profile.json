@@ -1,0 +1,39 @@
+{
+  "platform": "darwin-arm64",
+  "nodeMajor": 24,
+  "pnpm": "12.16.0",
+  "effectUtilsRevision": "cb061694ebb79e56dda019fc438e22370b694fe9",
+  "packages": {
+    "pnpm": "12.16.0",
+    "@oven/bun-darwin-aarch64": "1.4.2",
+    "@effect/tsgo": "0.63.0",
+    "typescript": "7.0.2",
+    "oxfmt": "0.61.0",
+    "oxlint": "1.82.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "@opentui/core-darwin-arm64": "0.5.11"
+  },
+  "artifacts": [
+    {
+      "name": "genie",
+      "file": "genie.js",
+      "url": "https://github.com/overengineeringstudio/effect-utils/releases/download/buck2-product-v3-genie-4ed783edfee6d12fc68e38734e76685fe552753dbcf032033b5c44a9ea9f3136/4ed783edfee6d12fc68e38734e76685fe552753dbcf032033b5c44a9ea9f3136-genie.js",
+      "sha256": "4ed783edfee6d12fc68e38734e76685fe552753dbcf032033b5c44a9ea9f3136",
+      "bytes": 6320554
+    },
+    {
+      "name": "typescript-api-server",
+      "file": "typescript-api-server-darwin-arm64.tar",
+      "url": "https://github.com/overengineeringstudio/effect-utils/releases/download/buck2-native-product-v1-typescript-api-server-darwin-aarch64-darwin-18266556a65203a394337282d388bc5286f20da2f2859362dcfbed22478fdaf8/18266556a65203a394337282d388bc5286f20da2f2859362dcfbed22478fdaf8-typescript-api-server-darwin-aarch64-darwin.tar",
+      "sha256": "18266556a65203a394337282d388bc5286f20da2f2859362dcfbed22478fdaf8",
+      "bytes": 27526144
+    },
+    {
+      "name": "oxc-config",
+      "file": "oxc-config.js",
+      "url": "https://github.com/overengineeringstudio/effect-utils/releases/download/buck2-product-v3-oxc-config-f300c5d6e2faf51f432895a0e74d87e6d76bca1140ad07b31efb887c5d2d78be/f300c5d6e2faf51f432895a0e74d87e6d76bca1140ad07b31efb887c5d2d78be-oxc-config.js",
+      "sha256": "f300c5d6e2faf51f432895a0e74d87e6d76bca1140ad07b31efb887c5d2d78be",
+      "bytes": 64568
+    }
+  ]
+}

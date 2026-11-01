@@ -14,7 +14,7 @@ Vitest.describe.concurrent('deleteEvents', () => {
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-      yield* Eventlog.initEventlogDb(dbEventlog)
+      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
 
       const makeEvent = (rebaseGeneration: number) =>
         LiveStoreEvent.Client.Encoded.make({

@@ -15,6 +15,16 @@ export type LivestorePackageTopologyEntry = {
  * generator helpers from this repository.
  */
 export const livestorePackageTopology = {
+  'adapter-expo': {
+    owner: 'core',
+    memberPath: 'packages/@livestore/adapter-expo',
+    reason: 'Maintained generic native adapter shared by apps and documentation',
+  },
+  'adapter-node': {
+    owner: 'core',
+    memberPath: 'packages/@livestore/adapter-node',
+    reason: 'Maintained generic Node adapter shared by apps and documentation',
+  },
   'adapter-cloudflare': {
     owner: 'core',
     memberPath: 'packages/@livestore/adapter-cloudflare',

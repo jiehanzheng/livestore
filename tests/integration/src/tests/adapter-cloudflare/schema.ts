@@ -22,4 +22,4 @@ const materializers = State.SQLite.materializers(events, {
 
 export const tables = { todos }
 const state = State.SQLite.makeState({ tables, materializers })
-export const schema = makeSchema({ state, events })
+export const schema = makeSchema({ projectionRevision: 'test-fixture-v1', state, events })

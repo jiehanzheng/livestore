@@ -25,6 +25,8 @@ export interface LiveStoreSchema<
   /** Only used on type-level */
   readonly _EventDefMapType: TEventsDefRecord
 
+  /** Stable semantic revision for materializers and rebuild hooks; never inferred from function text. */
+  readonly projectionRevision: string
   readonly state: InternalState
   readonly eventsDefsMap: Map<string, EventDef.AnyWithoutFn>
   readonly unknownEventHandling: UnknownEvents.HandlingConfig
@@ -58,12 +60,14 @@ export const isLiveStoreSchema = (value: unknown): value is LiveStoreSchema<any,
   const hasStateSqliteTables = v.state?.sqlite?.tables instanceof Map
   const hasStateMaterializers = v.state?.materializers instanceof Map
   const hasDevtoolsAlias = typeof v.devtools?.alias === 'string'
+  const hasProjectionRevision = typeof v.projectionRevision === 'string' && v.projectionRevision.trim().length > 0
 
   return (
     hasEventsMap === true &&
     hasStateSqliteTables === true &&
     hasStateMaterializers === true &&
-    hasDevtoolsAlias === true
+    hasDevtoolsAlias === true &&
+    hasProjectionRevision === true
   )
 }
 
@@ -79,6 +83,8 @@ export interface InternalState {
 }
 
 export interface InputSchema {
+  /** Change whenever materializer or rebuild-hook semantics change, even if table DDL does not. */
+  readonly projectionRevision: string
   readonly events: ReadonlyArray<EventDef.AnyWithoutFn> | Record<string, EventDef.AnyWithoutFn>
   readonly state: InternalState
   readonly devtools?: {
@@ -100,6 +106,9 @@ export const makeSchema = <TInputSchema extends InputSchema>(
   /** Note when using the object-notation for tables/events, the object keys are ignored and not used as table/mutation names */
   inputSchema: TInputSchema,
 ): FromInputSchema.DeriveSchema<TInputSchema> => {
+  if (typeof inputSchema.projectionRevision !== 'string' || inputSchema.projectionRevision.trim().length === 0) {
+    throw new TypeError('makeSchema requires a nonempty semantic projectionRevision')
+  }
   const state = inputSchema.state
   const tables = inputSchema.state.sqlite.tables
 
@@ -135,6 +144,7 @@ export const makeSchema = <TInputSchema extends InputSchema>(
     _DbSchemaType: Symbol.for('livestore.DbSchemaType') as any,
     _EventDefMapType: Symbol.for('livestore.EventDefMapType') as any,
     state,
+    projectionRevision: inputSchema.projectionRevision,
     eventsDefsMap,
     unknownEventHandling,
     devtools: {

@@ -17,6 +17,7 @@ export default packageJson(
     private: true,
     scripts: {
       test: 'vitest',
+      'test:performance': 'vitest run --config vitest.performance.config.ts',
     },
   },
   composition,

@@ -1,3 +1,4 @@
+// @genie-bootstrap
 import { baseOxlintCategories, baseOxlintIgnorePatterns, baseOxlintPlugins, oxlintConfig } from './genie/repo.ts'
 
 /**

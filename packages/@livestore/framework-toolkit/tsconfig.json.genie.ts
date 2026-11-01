@@ -1,5 +1,6 @@
 import {
   baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
   domLib,
   packageTsconfigCompilerOptions,
   packageTsconfigExclude,
@@ -10,6 +11,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@livestore/framework-toolkit')],
     ...packageTsconfigCompilerOptions,
     lib: [...domLib],
   },

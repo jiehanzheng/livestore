@@ -2,23 +2,26 @@ import * as otel from '@opentelemetry/api'
 
 import {
   type Adapter,
-  type BackendIdMismatchError,
+  type AdapterError,
   type BootStatus,
   type ClientSession,
   type ClientSessionDevtoolsChannel,
-  type IntentionalShutdownCause,
-  type MaterializationJournal,
-  type MaterializeError,
+  IntentionalShutdownCause,
   type MigrationsReport,
   provideOtel,
   type ServerAheadError,
   UnknownError,
   type LogConfig,
 } from '@livestore/common'
-import { STATE_REBUILD_BATCH_SIZE_DEFAULT, StateRebuildBatchSizeSchema } from '@livestore/common/leader-thread'
+import {
+  STATE_REBUILD_BATCH_SIZE_DEFAULT,
+  StateRebuildBatchSizeSchema,
+  ShutdownChannel,
+} from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
 import { isDevEnv, LS_DEV, omitUndefineds } from '@livestore/utils'
 import {
+  Cause,
   Context,
   Deferred,
   Effect,
@@ -31,6 +34,7 @@ import {
   References,
   Schema,
   Scope,
+  Semaphore,
   TaskTracing,
 } from '@livestore/utils/effect'
 import { nanoid } from '@livestore/utils/nanoid'
@@ -51,6 +55,25 @@ import { STORE_DEFAULT_PARAMS, Store } from './store.ts'
  * in-flight leader push is allowed to finish rather than being interrupted.
  */
 const SHUTDOWN_DRAIN_HARD_TIMEOUT_MS = 30_000
+
+type ShutdownExit = Parameters<ClientSession['shutdown']>[0]
+
+// Caller scopes may carry arbitrary values/errors. Preserve known shutdown failures and the cause tree;
+// normalize only foreign typed errors and successful scope values to the adapter's public shutdown contract.
+const normalizeShutdownExit = (exit: Exit.Exit<unknown, unknown>): ShutdownExit =>
+  Exit.isSuccess(exit) === true
+    ? Exit.succeed(
+        Schema.is(IntentionalShutdownCause)(exit.value) === true
+          ? exit.value
+          : IntentionalShutdownCause.make({ reason: 'manual' }),
+      )
+    : Exit.failCause(
+        Cause.map(exit.cause, (error) =>
+          Schema.is(ShutdownChannel.All)(error) === true && error._tag !== 'IntentionalShutdownCause'
+            ? error
+            : UnknownError.make({ cause: error }),
+        ),
+      )
 
 declare global {
   /** Store instances for console debugging */
@@ -88,7 +111,7 @@ export class LiveStoreContextRunning extends Context.Service<LiveStoreContextRun
  */
 export class DeferredStoreContext extends Context.Service<
   DeferredStoreContext,
-  Deferred.Deferred<LiveStoreContextRunning['Service'], UnknownError>
+  Deferred.Deferred<LiveStoreContextRunning['Service'], AdapterError>
 >()('@livestore/livestore/effect/DeferredStoreContext') {}
 
 export type LiveStoreContextProps<
@@ -195,6 +218,7 @@ export interface CreateStoreOptions<
    * @default 'auto'
    */
   disableDevtools?: boolean | 'auto'
+  /** Bounded shutdown-request notification; strict local teardown observers do not use this signal. */
   shutdownDeferred?: ShutdownDeferred
   /**
    * Currently only used in the web adapter:
@@ -309,7 +333,7 @@ export const createStore = <
   syncPayloadSchema,
 }: CreateStoreOptions<TSchema, TContext, TSyncPayloadSchema>): Effect.Effect<
   Store<TSchema, TContext>,
-  UnknownError,
+  AdapterError,
   Scope.Scope | OtelTracer.OtelTracer
 > =>
   Effect.gen(function* () {
@@ -333,9 +357,8 @@ export const createStore = <
     // there is nothing to drain and the lifetime scope is closed directly.
     yield* Effect.addFinalizer((exit) => {
       if (startTeardownRef === undefined) return Scope.close(lifetimeScope, exit)
-      // A teardown started earlier by `store.shutdown()` has already reported its outcome to that caller (and to
-      // `shutdownDeferred`). Only a drain started by this scope close is reported here, and never by failing the
-      // close itself.
+      // Request notification and the adapter hook belong to the shared request owner. Scope closure only joins
+      // its core, so it cannot recursively wait on an adapter hook which is itself waiting for that core.
       const startedByScopeClose = teardownFiber === undefined
       return startTeardownRef(exit).pipe(
         Effect.flatMap(awaitTeardownWithSoftBound),
@@ -376,7 +399,9 @@ export const createStore = <
         })
 
       const services = yield* Effect.context<Scope.Scope>()
+      let markStoreAsShutdown: (() => void) | undefined
       let shutdownSyncProcessor: ((exit: Exit.Exit<unknown, unknown>) => Effect.Effect<void>) | undefined
+      const adapterShutdown = yield* Deferred.make<ClientSession['shutdown'] | undefined>()
 
       /**
        * Drains the session sync processor (for a successful exit) and then closes the lifetime scope, detached so the
@@ -390,13 +415,11 @@ export const createStore = <
         Effect.suspend(() => {
           if (teardownFiber !== undefined) return Effect.succeed(teardownFiber)
           return (shutdownSyncProcessor?.(exit) ?? Effect.void).pipe(
-            Effect.timeoutOrElse({
-              duration: SHUTDOWN_DRAIN_HARD_TIMEOUT_MS,
-              orElse: () =>
-                Effect.logError(
-                  `@livestore/livestore:shutdown: drain exceeded hard bound of ${SHUTDOWN_DRAIN_HARD_TIMEOUT_MS}ms; forcing scope close`,
-                ),
-            }),
+            // Forced local cleanup still runs, but an incomplete drain is not successful teardown.
+            Effect.timeoutOrDieMessage(
+              SHUTDOWN_DRAIN_HARD_TIMEOUT_MS,
+              `Local teardown drain exceeded ${SHUTDOWN_DRAIN_HARD_TIMEOUT_MS}ms; closing local scope`,
+            ),
             Effect.ensuring(Scope.close(lifetimeScope, exit)),
             Effect.provide(services),
             Effect.forkDetach,
@@ -407,31 +430,63 @@ export const createStore = <
             ),
           )
         })
-      startTeardownRef = startTeardown
-
-      const shutdown = (
-        exit: Exit.Exit<
-          IntentionalShutdownCause,
-          UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError | BackendIdMismatchError
-        >,
-      ) =>
+      let request:
+        | { exit: ShutdownExit; core: Fiber.Fiber<void>; hook: Fiber.Fiber<void>; completion: Fiber.Fiber<void> }
+        | undefined
+      const requestLock = yield* Semaphore.make(1)
+      const requestShutdown = (exit: ShutdownExit) =>
         Effect.gen(function* () {
-          yield* awaitTeardownWithSoftBound(yield* startTeardown(exit))
-
-          if (shutdownDeferred !== undefined) {
-            yield* Deferred.done(shutdownDeferred, exit)
-          }
-
-          yield* Effect.logDebug('LiveStore shutdown complete')
+          if (request !== undefined) return request
+          // Notification observers can immediately query cached state. Fence the Store before publishing
+          // acceptance, including adapter-initiated requests which never pass through a public Store method.
+          markStoreAsShutdown?.()
+          // This Deferred reports the first accepted request, not teardown completion. A stalled/failed hook or
+          // finalizer must neither suppress notification nor replace its cause with a later caller's request.
+          if (shutdownDeferred !== undefined) yield* Deferred.done(shutdownDeferred, exit)
+          const core = yield* startTeardown(exit)
+          // Adapter work cannot gate starting the core. In particular a hook may never delegate to args.shutdown.
+          const hook = yield* Deferred.await(adapterShutdown).pipe(
+            Effect.flatMap((shutdown) => shutdown?.(exit) ?? Effect.void),
+            Effect.provide(services),
+            Effect.forkDetach,
+          )
+          const completion = yield* Effect.all([Fiber.join(core), Fiber.join(hook)], {
+            concurrency: 'unbounded',
+            discard: true,
+          }).pipe(Effect.forkDetach)
+          // The parallel join fails as soon as either owner fails, even if the other is stalled. Interrupting
+          // its joiners never cancels the independently owned core/hook; repeated observers retain this outcome.
+          // Keep both owners reachable even after a failed completion stops joining the other owner.
+          request = { exit, core, hook, completion }
+          return request
         }).pipe(
-          Effect.withSpan('@livestore/livestore:shutdown'),
-          Effect.provide(services),
-          Effect.tapCauseLogPretty,
-          // Given that the shutdown flow might also interrupt the effect that is calling the shutdown,
-          // we want to detach the shutdown effect so it's not interrupted by itself
-          Effect.runFork,
-          Fiber.join,
+          // Publish the request and both owners before another starter or observer cancellation can intervene.
+          requestLock.withPermits(1),
+          Effect.uninterruptible,
         )
+
+      startTeardownRef = (exit) =>
+        exit.pipe(
+          normalizeShutdownExit,
+          requestShutdown,
+          Effect.map((request) => request.core),
+        )
+      const shutdownAndWait: ClientSession['shutdown'] = (exit) =>
+        requestShutdown(exit).pipe(Effect.flatMap((request) => Fiber.join(request.completion)))
+      const shutdownRequest: ClientSession['shutdown'] = (exit) =>
+        requestShutdown(exit).pipe(Effect.flatMap((request) => awaitTeardownWithSoftBound(request.completion)))
+      // A hook normally delegates back here. Joining the outer request would wait on that same hook forever.
+      const shutdown: ClientSession['shutdown'] = (exit) =>
+        requestShutdown(exit).pipe(Effect.flatMap((request) => awaitTeardownWithSoftBound(request.core)))
+      const rejectShutdownAdmission = Effect.suspend(() => {
+        if (request === undefined) return Effect.void
+        const cause = Exit.isFailure(request.exit) === true ? Cause.squash(request.exit.cause) : request.exit.value
+        return Effect.fail(
+          Schema.is(UnknownError)(cause) === true
+            ? cause
+            : UnknownError.make({ cause, note: 'Store shut down during acquisition' }),
+        )
+      })
 
       const syncPayloadEncoded =
         syncPayload === undefined
@@ -449,7 +504,22 @@ export const createStore = <
         debugInstanceId,
         syncPayloadSchema: resolvedSyncPayloadSchema,
         syncPayloadEncoded,
-      }).pipe(Effect.withPerformanceMeasure('livestore:makeAdapter'), Effect.withSpan('createStore:makeAdapter'))
+      }).pipe(
+        Effect.withPerformanceMeasure('livestore:makeAdapter'),
+        Effect.withSpan('createStore:makeAdapter'),
+        Effect.catchCause((cause) =>
+          request === undefined
+            ? Effect.failCause(cause)
+            : rejectShutdownAdmission.pipe(Effect.andThen(Effect.failCause(cause))),
+        ),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) === true ? Deferred.succeed(adapterShutdown, undefined) : Effect.void,
+        ),
+      )
+      // A shutdown can arrive before acquisition returns a session. Register its hook exactly once, then
+      // reject admission before constructing a Store over resources the core may already have closed.
+      yield* Deferred.succeed(adapterShutdown, clientSession.shutdown)
+      yield* rejectShutdownAdmission
 
       if (LS_DEV === true && clientSession.leaderThread.initialState.migrationsReport.migrations.length > 0) {
         yield* Effect.logDebug(
@@ -464,6 +534,8 @@ export const createStore = <
 
       const store = new Store<TSchema, TContext>({
         clientSession,
+        shutdown: shutdownRequest,
+        shutdownAndWait,
         schema,
         context,
         otelOptions: { tracer: otelTracer, rootSpanContext: otelRootSpanContext },
@@ -481,6 +553,9 @@ export const createStore = <
           eventQueryBatchSize: params?.eventQueryBatchSize ?? STORE_DEFAULT_PARAMS.eventQueryBatchSize,
         },
       })
+      markStoreAsShutdown = () => {
+        store[StoreInternalsSymbol].isShutdown = true
+      }
       shutdownSyncProcessor = store[StoreInternalsSymbol].syncProcessor.shutdown
 
       // Starts background fibers (syncing, event processing, etc) for store
@@ -511,6 +586,7 @@ export const createStore = <
         store[StoreInternalsSymbol].reactivityGraph.context!.effectsWrapper = batchUpdates
       }
 
+      yield* rejectShutdownAdmission
       yield* Deferred.succeed(storeDeferred, store as any as Store)
 
       // Expose store on globalThis for console debugging

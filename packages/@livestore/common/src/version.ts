@@ -21,7 +21,7 @@ export const isDevtoolsProtocolVersionSupported = (
 /**
  * CRITICAL: Increment this version whenever you modify client-side EVENTLOG table schemas.
  *
- * Used to generate database file names (e.g., `eventlog@6.db`, `state@6.db`) across all client adapters.
+ * Used to generate database namespaces across all client adapters.
  *
  * Bump required when:
  * - Modifying eventlog system tables (eventlogMetaTable, syncStatusTable) in schema/state/sqlite/system-tables/eventlog-tables.ts
@@ -33,6 +33,7 @@ export const isDevtoolsProtocolVersionSupported = (
  *
  * ⚠️  CRITICAL: Eventlog changes without bumping this version cause permanent data loss!
  *
- * Impact: Version changes trigger a "soft reset" - old data becomes inaccessible but remains on disk.
+ * Retained legacy namespaces are refused before opening databases. A version bump
+ * never grants permission to hide, migrate, or reset authoritative source data.
  */
-export const liveStoreStorageFormatVersion = 6
+export const liveStoreStorageFormatVersion = 7

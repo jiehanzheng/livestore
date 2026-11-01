@@ -314,6 +314,13 @@ interface SQLiteAPI {
   changes(db: number): number
 
   /**
+   * Deserialize a private copy of the first `szDb` bytes, with `szBuf` allocated capacity.
+   * The caller's Uint8Array is unchanged. The hidden WASM buffer always uses FREEONCLOSE
+   * because its pointer is never exposed to the caller; READONLY and RESIZEABLE retain
+   * their native meanings. SQLite releases that copy on native failure or database close.
+   * Sizes must be nonnegative safe integers, `szDb <= pData.byteLength`, and
+   * `szDb <= szBuf <= 0x7fffffff` (the signed-i32 sqlite3_malloc limit).
+   * Invalid arguments throw SQLITE_MISUSE; allocation failure returns SQLITE_NOMEM.
    * https://www.sqlite.org/c3ref/deserialize.html
    * int sqlite3_deserialize(
    *   sqlite3 *db,            The database connection
@@ -775,7 +782,9 @@ interface SQLiteAPI {
    * {@link finalize} should *not* be called on a statement provided by
    * the iterator unless the `unscoped` option is set to `true` (that
    * option is provided for applications that wish to manage statement
-   * lifetimes manually).
+   * lifetimes manually). With `unscoped: true`, preparation is eager and
+   * returns an array. Ownership transfers only when all preparation succeeds;
+   * a preparation failure releases every previously prepared statement.
    *
    * If using the iterator manually, i.e. by calling its `next`
    * method, be sure to call the `return` method if iteration
@@ -787,8 +796,9 @@ interface SQLiteAPI {
    * @param sql
    * @param options
    */
-  // statements(db: number, sql: string, options?: SQLitePrepareOptions): AsyncIterable<number>;
-  statements(db: number, sql: string, options?: SQLitePrepareOptions): ReadonlyArray<number>
+  statements(db: number, sql: string, options: SQLitePrepareOptions & { unscoped: true }): ReadonlyArray<number>
+  statements(db: number, sql: string, options?: SQLitePrepareOptions & { unscoped?: false }): IterableIterator<number>
+  statements(db: number, sql: string, options: SQLitePrepareOptions): ReadonlyArray<number> | IterableIterator<number>
 
   /**
    * Evaluate an SQL statement

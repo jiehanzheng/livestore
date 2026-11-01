@@ -1,13 +1,15 @@
-import { baseTsconfigCompilerOptions, packageTsconfigExclude, tsconfigJson } from '../genie/repo.ts'
+import { baseTsconfigCompilerOptions, domLib, packageTsconfigExclude, tsconfigJsonForNodeModules } from '../genie/repo.ts'
 
 /**
  * Astro docs site tsconfig.
  * Uses bundler resolution for Astro compatibility.
  * @see https://github.com/withastro/astro/blob/main/packages/astro/tsconfigs/base.json
  */
-export default tsconfigJson({
+export default tsconfigJsonForNodeModules({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    lib: [...domLib],
+    types: ['astro/client', 'node'],
     outDir: './dist',
     rootDir: './src',
     resolveJsonModule: true,
@@ -27,16 +29,8 @@ export default tsconfigJson({
   },
   include: ['src'],
   exclude: [...packageTsconfigExclude, 'src/content/_assets/code/**/*'],
-  references: [
-    { path: '../packages/@livestore/adapter-cloudflare' },
-    { path: '../packages/@livestore/adapter-web' },
-    { path: '../packages/@livestore/common' },
-    { path: '../packages/@livestore/livestore' },
-    { path: '../packages/@livestore/react' },
-    { path: '../packages/@livestore/sync-cf' },
-    { path: '../packages/@livestore/utils' },
-    { path: '../packages/@local/astro-tldraw' },
-    { path: '../packages/@local/astro-twoslash-code' },
-    { path: '../packages/@local/shared' },
-  ],
+  // Astro forces ESNext onto referenced projects, invalidating SDK NodeNext test hosts.
+  // This consumer checks docs and imported APIs; SDK tests and executable web/native
+  // snippets retain their separate, required compiler projects.
+  references: [],
 })

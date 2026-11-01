@@ -1,4 +1,4 @@
-import type { UnknownError } from '@livestore/common'
+import type { AdapterError } from '@livestore/common'
 import type { LiveStoreEvent, LiveStoreSchema } from '@livestore/common/schema'
 import { omitUndefineds } from '@livestore/utils'
 import type { Schema } from '@livestore/utils/effect'
@@ -37,7 +37,7 @@ export const makeLiveStoreContext = <
   params,
 }: LiveStoreContextProps<TSchema, TContext, TSyncPayloadSchema>): Effect.Effect<
   LiveStoreContextRunning['Service'],
-  UnknownError | Cause.TimeoutError,
+  AdapterError | Cause.TimeoutError,
   DeferredStoreContext | Scope.Scope | OtelTracer.OtelTracer
 > =>
   pipe(
@@ -79,7 +79,7 @@ export const LiveStoreContextLayer = <
   TSyncPayloadSchema extends Schema.Codec<Schema.Json, Schema.Json> = typeof Schema.Json,
 >(
   props: LiveStoreContextProps<TSchema, TContext, TSyncPayloadSchema>,
-): Layer.Layer<LiveStoreContextRunning, UnknownError | Cause.TimeoutError, OtelTracer.OtelTracer> =>
+): Layer.Layer<LiveStoreContextRunning, AdapterError | Cause.TimeoutError, OtelTracer.OtelTracer> =>
   Layer.effect(LiveStoreContextRunning, makeLiveStoreContext(props)).pipe(
     Layer.withSpan('LiveStore'),
     Layer.provide(LiveStoreContextDeferred),
@@ -90,7 +90,7 @@ export const LiveStoreContextLayer = <
  */
 export const LiveStoreContextDeferred = Layer.effect(
   DeferredStoreContext,
-  Deferred.make<LiveStoreContextRunning['Service'], UnknownError>(),
+  Deferred.make<LiveStoreContextRunning['Service'], AdapterError>(),
 )
 
 // =============================================================================
@@ -159,19 +159,19 @@ export interface StoreTagClass<TSchema extends LiveStoreSchema, TStoreId extends
   /** Creates a layer that initializes the store */
   layer<TContext, TSyncPayloadSchema extends Schema.Codec<Schema.Json, Schema.Json> = typeof Schema.Json>(
     props: StoreLayerProps<TSchema, TContext, TSyncPayloadSchema>,
-  ): Layer.Layer<StoreTagClass<TSchema, TStoreId>, UnknownError | Cause.TimeoutError, OtelTracer.OtelTracer>
+  ): Layer.Layer<StoreTagClass<TSchema, TStoreId>, AdapterError | Cause.TimeoutError, OtelTracer.OtelTracer>
 
   /** Deferred store tag for async initialization patterns */
   readonly Deferred: Context.Key<
     DeferredContextId<TStoreId>,
-    Deferred.Deferred<LiveStoreContextRunningType<TSchema>, UnknownError>
+    Deferred.Deferred<LiveStoreContextRunningType<TSchema>, AdapterError>
   >
 
   /** Layer that provides the Deferred tag */
   readonly DeferredLayer: Layer.Layer<DeferredContextId<TStoreId>>
 
   /** Layer that waits for Deferred and provides the running store */
-  readonly fromDeferred: Layer.Layer<StoreTagClass<TSchema, TStoreId>, UnknownError, DeferredContextId<TStoreId>>
+  readonly fromDeferred: Layer.Layer<StoreTagClass<TSchema, TStoreId>, AdapterError, DeferredContextId<TStoreId>>
 
   /** Query the store. Returns an Effect that yields the query result. */
   query<TResult>(query: Queryable<TResult>): Effect.Effect<TResult, never, StoreTagClass<TSchema, TStoreId>>
@@ -243,14 +243,14 @@ const makeStoreTag = <TSchema extends LiveStoreSchema, TStoreId extends string>(
   storeId: TStoreId,
 ): StoreTagClass<TSchema, TStoreId> => {
   type RunningType = LiveStoreContextRunningType<TSchema>
-  type DeferredType = Deferred.Deferred<RunningType, UnknownError>
+  type DeferredType = Deferred.Deferred<RunningType, AdapterError>
 
   // Create the deferred tag and layers upfront
   const _DeferredTag = Context.Service<DeferredContextId<TStoreId>, DeferredType>(
     `@livestore/store-deferred/${storeId}`,
   )
 
-  const _DeferredLayer = Layer.effect(_DeferredTag, Deferred.make<RunningType, UnknownError>())
+  const _DeferredLayer = Layer.effect(_DeferredTag, Deferred.make<RunningType, AdapterError>())
 
   class Tag extends Context.Service<Tag, RunningType>()(`@livestore/store/${storeId}`) {
     static readonly schema: TSchema = schema
@@ -366,16 +366,16 @@ export interface StoreContext<TSchema extends LiveStoreSchema, TStoreId extends 
   readonly Tag: Context.Key<StoreContextId<TSchema, TStoreId>, LiveStoreContextRunningType<TSchema>>
   readonly DeferredTag: Context.Key<
     DeferredContextId<TStoreId>,
-    Deferred.Deferred<LiveStoreContextRunningType<TSchema>, UnknownError>
+    Deferred.Deferred<LiveStoreContextRunningType<TSchema>, AdapterError>
   >
   readonly Layer: <
     TContext = {},
     TSyncPayloadSchema extends Schema.Codec<Schema.Json, Schema.Json> = typeof Schema.Json,
   >(
     props: Omit<LiveStoreContextProps<TSchema, TContext, TSyncPayloadSchema>, 'storeId'>,
-  ) => Layer.Layer<StoreContextId<TSchema, TStoreId>, UnknownError | Cause.TimeoutError, OtelTracer.OtelTracer>
+  ) => Layer.Layer<StoreContextId<TSchema, TStoreId>, AdapterError | Cause.TimeoutError, OtelTracer.OtelTracer>
   readonly DeferredLayer: Layer.Layer<DeferredContextId<TStoreId>>
-  readonly fromDeferred: Layer.Layer<StoreContextId<TSchema, TStoreId>, UnknownError, DeferredContextId<TStoreId>>
+  readonly fromDeferred: Layer.Layer<StoreContextId<TSchema, TStoreId>, AdapterError, DeferredContextId<TStoreId>>
 }
 
 /**
@@ -394,7 +394,7 @@ export const makeStoreContext =
   <TSchema extends LiveStoreSchema>() =>
   <TStoreId extends string>(storeId: TStoreId): StoreContext<TSchema, TStoreId> => {
     type RunningType = LiveStoreContextRunningType<TSchema>
-    type DeferredType = Deferred.Deferred<RunningType, UnknownError>
+    type DeferredType = Deferred.Deferred<RunningType, AdapterError>
 
     const Tag = Context.Service<StoreContextId<TSchema, TStoreId>, RunningType>(`@livestore/store/${storeId}`)
 
@@ -402,14 +402,14 @@ export const makeStoreContext =
       `@livestore/store-deferred/${storeId}`,
     )
 
-    const DeferredLayer = Layer.effect(DeferredTag, Deferred.make<RunningType, UnknownError>())
+    const DeferredLayer = Layer.effect(DeferredTag, Deferred.make<RunningType, AdapterError>())
 
     const makeLayer = <
       TContext = {},
       TSyncPayloadSchema extends Schema.Codec<Schema.Json, Schema.Json> = typeof Schema.Json,
     >(
       props: Omit<LiveStoreContextProps<TSchema, TContext, TSyncPayloadSchema>, 'storeId'>,
-    ): Layer.Layer<StoreContextId<TSchema, TStoreId>, UnknownError | Cause.TimeoutError, OtelTracer.OtelTracer> =>
+    ): Layer.Layer<StoreContextId<TSchema, TStoreId>, AdapterError | Cause.TimeoutError, OtelTracer.OtelTracer> =>
       pipe(
         Effect.gen(function* () {
           const store = yield* createStore({
@@ -446,7 +446,7 @@ export const makeStoreContext =
 
     const fromDeferred: Layer.Layer<
       StoreContextId<TSchema, TStoreId>,
-      UnknownError,
+      AdapterError,
       DeferredContextId<TStoreId>
     > = pipe(
       Effect.gen(function* () {

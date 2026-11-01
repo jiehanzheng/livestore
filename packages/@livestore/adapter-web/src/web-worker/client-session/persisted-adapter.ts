@@ -1,3 +1,5 @@
+import { mapToAdapterError } from '@livestore/common'
+import { openSnapshotSession, StateSnapshot } from '@livestore/common'
 import type { Adapter, BootWarningReason, ClientSession, LockStatus } from '@livestore/common'
 import {
   IntentionalShutdownCause,
@@ -46,6 +48,7 @@ import { makeShutdownChannel } from '../common/shutdown-channel.ts'
 import { DedicatedWorkerDisconnectBroadcast, makeWorkerDisconnectChannel } from '../common/worker-disconnect-channel.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
 import { connectWebmeshNodeClientSession } from './client-session-devtools.ts'
+import { makeLeaderElectionLock } from './leader-election-lock.ts'
 import { loadSqlite3 } from './sqlite-loader.ts'
 
 /**
@@ -66,7 +69,14 @@ if (isDevEnv() === true) {
 }
 
 export type WebAdapterOptions = {
-  worker: ((options: { name: string }) => globalThis.Worker) | (new (options: { name: string }) => globalThis.Worker)
+  /**
+   * A factory may return a dedicated Worker or an application-owned MessagePort.
+   * For a MessagePort, configure the worker runner with the paired transport port;
+   * the application owns and terminates the underlying Worker after joining cleanup.
+   */
+  worker:
+    | ((options: { name: string }) => globalThis.Worker | MessagePort)
+    | (new (options: { name: string }) => globalThis.Worker)
   /**
    * This is mostly an implementation detail and needed to be exposed into app code
    * due to a current Vite limitation (https://github.com/vitejs/vite/issues/8427).
@@ -283,17 +293,17 @@ export const makePersistedAdapter =
       const sharedWorker = yield* RpcClient.make(WorkerSchema.SharedWorkerRpcs).pipe(
         Effect.provide(sharedWorkerContext),
         Effect.tapCauseLogPretty,
-        UnknownError.mapToUnknownError,
+        mapToAdapterError,
         Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
         Effect.withSpan('@livestore/adapter-web:client-session:setupSharedWorker'),
       )
 
-      const lockDeferred = yield* Deferred.make<void>()
+      const electionLock = yield* makeLeaderElectionLock(LIVESTORE_TAB_LOCK)
       // It's important that we resolve the leader election in a blocking way, so there's always a leader.
       // Otherwise events could end up being dropped.
       //
       // Sorry for this pun ...
-      let gotLocky = yield* WebLock.tryGetDeferredLock(lockDeferred, LIVESTORE_TAB_LOCK)
+      let gotLocky = yield* electionLock.tryAcquire
       const lockStatus = yield* SubscriptionRef.make<LockStatus>(gotLocky === true ? 'has-lock' : 'no-lock')
 
       // Ideally we can come up with a simpler implementation that doesn't require this
@@ -333,7 +343,7 @@ export const makePersistedAdapter =
         )
         yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(
           Effect.provide(outerWorkerContext),
-          UnknownError.mapToUnknownError,
+          mapToAdapterError,
           Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
           Effect.withSpan('@livestore/adapter-web:client-session:setupDedicatedWorker'),
           Effect.tapCauseLogPretty,
@@ -356,7 +366,7 @@ export const makePersistedAdapter =
             },
           })
           .pipe(
-            UnknownError.mapToUnknownError,
+            mapToAdapterError,
             Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
           )
 
@@ -372,7 +382,7 @@ export const makePersistedAdapter =
         )
 
         // TODO find a cleaner implementation for the lock handling as we don't make use of the deferred properly right now
-        yield* WebLock.waitForDeferredLock(lockDeferred, LIVESTORE_TAB_LOCK).pipe(
+        yield* electionLock.wait.pipe(
           Effect.andThen(() => {
             gotLocky = true
             return runLocked
@@ -435,20 +445,12 @@ export const makePersistedAdapter =
 
       // TODO maybe bring back transfering the initially created in-memory db snapshot instead of
       // re-exporting the db
-      const { sqliteDb, snapshotByteLength, migrationsReport } =
-        dataFromFile === undefined
-          ? yield* Effect.gen(function* () {
-              const { snapshot, migrationsReport } = yield* runInWorker(
-                'GetRecreateSnapshot',
-                sharedWorker.GetRecreateSnapshot({}),
-              )
-              const sqliteDb = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-                Effect.sync(() => db.close()),
-              )
-              sqliteDb.import(snapshot)
-              return { sqliteDb, snapshotByteLength: snapshot.byteLength, migrationsReport }
-            })
-          : { ...dataFromFile, migrationsReport: { migrations: [] } }
+      const { sqliteDb, snapshotByteLength, migrationsReport, pull } = yield* openSnapshotSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: dataFromFile,
+        makeSqliteDb,
+        open: (request) => runInWorkerStream('OpenSession', sharedWorker.OpenSession(request)),
+      })
 
       const numberOfTables =
         sqliteDb.select<{ count: number }>(`select count(*) as count from sqlite_master`)[0]?.count ?? 0
@@ -483,10 +485,6 @@ export const makePersistedAdapter =
           } else {
             yield* Effect.logDebug('[@livestore/adapter-web:client-session] client-session shutdown', gotLocky, ex)
           }
-
-          if (gotLocky === true) {
-            yield* Deferred.succeed(lockDeferred, undefined)
-          }
         }).pipe(Effect.tapCauseLogPretty, Effect.orDie),
       )
 
@@ -497,7 +495,7 @@ export const makePersistedAdapter =
         ),
 
         events: {
-          pull: ({ cursor }) => runInWorkerStream('PullStream', sharedWorker.PullStream({ cursor })).pipe(Stream.orDie),
+          pull: () => pull,
           push: (batch) =>
             runInWorker('PushToLeader', sharedWorker.PushToLeader({ batch })).pipe(
               Effect.withSpan('@livestore/adapter-web:client-session:pushToLeader', {
@@ -569,7 +567,7 @@ export const makePersistedAdapter =
       })
 
       return clientSession
-    }).pipe(Effect.provide(Opfs.layer), UnknownError.mapToUnknownError)
+    }).pipe(Effect.provide(Opfs.layer), mapToAdapterError)
 
 // NOTE for `local` storage we could also use the eventlog db to store the data
 const getPersistedId = (key: string, storageType: 'session' | 'local') => {

@@ -100,18 +100,21 @@ export const makeMaterializeEvent = ({
         // console.group('[@livestore/common:leader-thread:materializeEvent]', { eventName })
 
         yield* Effect.gen(function* () {
-          const session = dbState.session()
-
-          for (const { statementSql, bindValues } of execArgsArr) {
-            // console.debug(eventName, statementSql, bindValues)
-            // TODO use cached prepared statements instead of exec
-            yield* execSqlPrepared(dbState, statementSql, bindValues)
-          }
-
-          dbState.debug.head = eventEncoded.seqNum
-
-          const changeset = session.changeset()
-          session.finish()
+          // SQL rollback does not delete SQLite's native session object. Release it on every exit,
+          // including statement or changeset extraction failure, before a failed owner closes its DB.
+          const changeset = yield* Effect.acquireUseRelease(
+            Effect.sync(() => dbState.session()),
+            (session) =>
+              Effect.gen(function* () {
+                for (const { statementSql, bindValues } of execArgsArr) {
+                  // TODO use cached prepared statements instead of exec
+                  yield* execSqlPrepared(dbState, statementSql, bindValues)
+                }
+                dbState.debug.head = eventEncoded.seqNum
+                return session.changeset()
+              }),
+            (session) => Effect.sync(() => session.finish()),
+          )
 
           yield* materializationJournal.record({ key: eventEncoded.seqNum, changeset })
           yield* stateHead.set(eventEncoded.seqNum)

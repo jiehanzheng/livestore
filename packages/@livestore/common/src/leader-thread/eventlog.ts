@@ -2,6 +2,7 @@ import { LS_DEV, shouldNeverHappen } from '@livestore/utils'
 import { Effect, Option, ReadonlyArray, Schema } from '@livestore/utils/effect'
 
 import type { SqliteDb } from '../adapter-types.ts'
+import { mapToAdapterError } from '../errors.ts'
 import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import { migrateTable } from '../schema-management/migrations.ts'
 import * as EventSequenceNumber from '../schema/EventSequenceNumber/mod.ts'
@@ -12,34 +13,53 @@ import {
   eventlogSystemTables,
   SYNC_STATUS_TABLE,
 } from '../schema/state/sqlite/system-tables/eventlog-tables.ts'
+import { bindInitializedSource } from '../source-initialization-context.ts'
+import * as SourceIdentity from '../SourceIdentity.ts'
 import { insertRow, updateRows } from '../sql-queries/sql-queries.ts'
 import * as SqliteDbHelper from '../sqlite-db-helper.ts'
 import type { PreparedBindValues } from '../util.ts'
-import { sql } from '../util.ts'
+import { prepareBindValues, sql } from '../util.ts'
 import { execSql } from './connection.ts'
 import type { InitialSyncInfo, StreamEventsOptions } from './types.ts'
 import { STREAM_EVENTS_BATCH_SIZE_DEFAULT } from './types.ts'
 
-export const initEventlogDb = (dbEventlog: SqliteDb) =>
+export const initEventlogDb = (dbEventlog: SqliteDb, { sourceIsNew }: { sourceIsNew: boolean }) =>
   Effect.gen(function* () {
-    for (const tableDef of eventlogSystemTables) {
-      yield* migrateTable({
-        db: dbEventlog,
-        behaviour: 'create-if-not-exists',
-        tableAst: tableDef.sqliteDef.ast,
-        skipMetaTable: true,
-      })
+    if (sourceIsNew !== true) {
+      return yield* Effect.sync(() => SourceIdentity.read(dbEventlog))
     }
-
-    // Create sync status row if it doesn't exist
-    yield* execSql(
-      dbEventlog,
-      sql`INSERT INTO ${SYNC_STATUS_TABLE} (head)
-          SELECT ${EventSequenceNumber.Client.ROOT.global}
-          WHERE NOT EXISTS (SELECT 1 FROM ${SYNC_STATUS_TABLE})`,
-      {},
+    yield* Effect.sync(() => SourceIdentity.assertFresh(dbEventlog, sourceIsNew))
+    const initialize = Effect.gen(function* () {
+      for (const tableDef of eventlogSystemTables) {
+        yield* migrateTable({
+          db: dbEventlog,
+          behaviour: 'create-if-not-exists',
+          tableAst: tableDef.sqliteDef.ast,
+          skipMetaTable: true,
+        })
+      }
+      yield* execSql(
+        dbEventlog,
+        sql`INSERT INTO ${SYNC_STATUS_TABLE} (head) VALUES (${EventSequenceNumber.Client.ROOT.global})`,
+        {},
+      )
+      return yield* Effect.sync(() => SourceIdentity.initializeWithinTransaction(dbEventlog))
+    })
+    if (dbEventlog.transactionHost !== undefined) {
+      return yield* dbEventlog.transactionHost.runTransaction(initialize)
+    }
+    return yield* Effect.acquireUseRelease(
+      Effect.sync(() => dbEventlog.execute('BEGIN IMMEDIATE')),
+      () => initialize.pipe(Effect.tap(() => Effect.sync(() => dbEventlog.execute('COMMIT')))),
+      (_, exit) => (exit._tag === 'Failure' ? Effect.sync(() => dbEventlog.execute('ROLLBACK')) : Effect.void),
     )
-  })
+  }).pipe(mapToAdapterError)
+
+/** Must finish under the physical owner before the derived database factory is called. */
+export const initializeSource = (dbEventlog: SqliteDb, options: { sourceIsNew: boolean }) =>
+  initEventlogDb(dbEventlog, options).pipe(
+    Effect.map((identity) => bindInitializedSource(dbEventlog, identity, options.sourceIsNew)),
+  )
 
 /**
  * Exclusive of the "since event"
@@ -104,7 +124,12 @@ export const deleteEvents = (dbEventlog: SqliteDb, eventNums: ReadonlyArray<Even
         bindValues,
       )
     }
-  }).pipe(SqliteDbHelper.withSavepoint(dbEventlog))
+  }).pipe((effect) =>
+    dbEventlog.transactionHost === undefined
+      ? SqliteDbHelper.withSavepoint(effect, dbEventlog)
+      : // Native host SQL has no savepoints. A failed nested operation poisons its enclosing host transaction.
+        dbEventlog.transactionHost.runTransaction(effect),
+  )
 
 export const getEventsFromEventlog = ({
   dbEventlog,
@@ -211,7 +236,7 @@ export const getBackendIdFromDb = (dbEventlog: SqliteDb): Option.Option<string> 
   )
 
 export const updateBackendId = (dbEventlog: SqliteDb, backendId: string) =>
-  dbEventlog.execute(sql`UPDATE ${SYNC_STATUS_TABLE} SET backendId = '${backendId}'`)
+  dbEventlog.execute(`UPDATE ${SYNC_STATUS_TABLE} SET backendId = ?`, prepareBindValues([backendId], ''))
 
 export const insertIntoEventlog = (
   eventEncoded: LiveStoreEvent.Client.Encoded,

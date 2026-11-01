@@ -7,6 +7,7 @@ import {
   Exit,
   FiberHandle,
   Option,
+  PubSub,
   Queue,
   References,
   Schema,
@@ -18,7 +19,8 @@ import {
 import type { ClientSession } from '../adapter-types.ts'
 import type { PullItem } from '../ClientSessionLeaderThreadProxy.ts'
 import { MaterializeError, MaterializerHashMismatchError, UnknownError } from '../errors.ts'
-import type { RejectedPushError } from '../leader-thread/RejectedPushError.ts'
+import type { AdapterError } from '../errors.ts'
+import { isRejectedPushError, type RejectedPushError } from '../leader-thread/RejectedPushError.ts'
 import * as MaterializationJournal from '../MaterializationJournal.ts'
 import * as EventSequenceNumber from '../schema/EventSequenceNumber/mod.ts'
 import * as LiveStoreEvent from '../schema/LiveStoreEvent/mod.ts'
@@ -35,7 +37,7 @@ export interface ClientSessionSyncProcessor {
   commit: (
     events: ReadonlyArray<LiveStoreEvent.Input.Decoded>,
   ) => Effect.Effect<{ writeTables: Set<string> }, ProcessorError>
-  /** Only used for debugging and observability. */
+  /** Current completed status and scoped, replaying broadcast changes for every observer. */
   syncState: Subscribable.Subscribable<SyncState.SyncState>
   debug: {
     awaitDrainStarted: Effect.Effect<void>
@@ -88,7 +90,6 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
   const dbState = yield* StateSqliteDb.StateSqliteDb
   const eventSchema = LiveStoreEvent.Client.makeSchemaMemo(schema)
   const jobs = yield* Queue.unbounded<RunnerJob>()
-  const syncStateUpdateQueue = yield* Queue.unbounded<SyncState.SyncState>()
   const shutdownDone = yield* Deferred.make<void>()
   const drainStartedSignal = yield* Deferred.make<void>()
   const rejectionObserved = yield* Deferred.make<void>()
@@ -99,6 +100,11 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
     push: { _tag: 'idle', queued: [] },
     nextOperationId: 1,
   }
+  // Each observer owns a subscription. Replay only the latest completed status so
+  // registration precedes the initial callback, which may synchronously commit.
+  const syncStateUpdates = yield* PubSub.unbounded<SyncState.SyncState>({ replay: 1 })
+  yield* PubSub.publish(syncStateUpdates, model.syncState)
+  yield* Effect.addFinalizer(() => PubSub.shutdown(syncStateUpdates))
   const debugInfo = { rebaseCount: 0, advanceCount: 0, rejectCount: 0 }
   /**
    * Development-only materializer hashes of this session's pending events. The leader confirms each event with its own
@@ -140,6 +146,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
           break
         case 'Stopped':
           model = { ...model, lifecycle: { _tag: 'stopped' } }
+          addToOutbox(PubSub.shutdown(syncStateUpdates))
           addToOutbox(Deferred.done(shutdownDone, message.exit))
           break
         default:
@@ -246,7 +253,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
             ? model.push
             : { ...model.push, queued: [...model.push.queued, ...result.newEvents] },
       }
-      addToOutbox(Queue.offer(syncStateUpdateQueue, model.syncState))
+      addToOutbox(PubSub.publish(syncStateUpdates, model.syncState))
       reserveNextPush()
       return { writeTables }
     })
@@ -305,7 +312,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
         push: result._tag === 'rebase' ? { _tag: 'idle', queued: result.newSyncState.pending } : model.push,
       }
       if (result._tag === 'rebase') setReconciliation({ ...reconciliation, rebased: true })
-      addToOutbox(Queue.offer(syncStateUpdateQueue, model.syncState))
+      addToOutbox(PubSub.publish(syncStateUpdates, model.syncState))
       return { _tag: 'applied', writeTables }
     })
 
@@ -717,7 +724,10 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
         pushHandle,
         Effect.suspend(() => clientSession.leaderThread.events.push(job.batch)).pipe(
           Effect.matchEffect({
-            onFailure: (error) => report({ _tag: 'PushRejected', operationId: job.operationId, error }),
+            onFailure: (error) =>
+              isRejectedPushError(error) === true
+                ? report({ _tag: 'PushRejected', operationId: job.operationId, error })
+                : reportFailure(Cause.fail(error)),
             onSuccess: () => report({ _tag: 'PushSucceeded', operationId: job.operationId }),
           }),
           Effect.catchCause((cause) =>
@@ -828,7 +838,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
     ),
     syncState: Subscribable.make({
       get: Effect.sync(() => model.syncState),
-      changes: Stream.fromQueue(syncStateUpdateQueue),
+      changes: Stream.fromPubSub(syncStateUpdates),
     }),
     debug: {
       awaitDrainStarted: Deferred.await(drainStartedSignal),
@@ -844,7 +854,7 @@ interface RunnerHandles {
   readonly pull: FiberHandle.FiberHandle<void, never>
   readonly shutdown: FiberHandle.FiberHandle<void, never>
 }
-type ProcessorError = MaterializeError | MaterializationJournal.MaterializationJournalError | UnknownError
+type ProcessorError = MaterializeError | MaterializationJournal.MaterializationJournalError | AdapterError
 type EventBatch = ReadonlyArray<LiveStoreEvent.Client.Encoded>
 type Pull = typeof PullItem.Type
 /** Messages that change the model without returning a result to their sender. */

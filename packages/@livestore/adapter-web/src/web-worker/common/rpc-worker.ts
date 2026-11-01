@@ -1,3 +1,4 @@
+import type { AdapterError } from '@livestore/common'
 import { Effect, RpcClientError, Schema, Stream } from '@livestore/utils/effect'
 import type * as WebmeshWorker from '@livestore/webmesh/worker'
 
@@ -10,7 +11,7 @@ export type WithoutRpcClientError<E> = E extends { readonly _tag: infer Tag }
 export type WebmeshWorkerRpcClient = {
   readonly ['WebmeshWorker.CreateConnection']: (
     request: typeof WebmeshWorker.Schema.CreateConnection.Type,
-  ) => Stream.Stream<{}, RpcClientError.RpcClientError>
+  ) => Stream.Stream<{}, RpcClientError.RpcClientError | AdapterError>
 }
 
 export const isRpcClientError = (error: unknown): error is RpcClientError.RpcClientError =>
@@ -35,5 +36,6 @@ export const dieOnRpcClientErrorStream = <A, E, R>(
   ) as Stream.Stream<A, WithoutRpcClientError<E>, R>
 
 export const makeWebmeshWorkerProxy = (client: WebmeshWorkerRpcClient): WebmeshWorkerProxy => ({
-  execute: (request) => dieOnRpcClientErrorStream(client['WebmeshWorker.CreateConnection'](request)),
+  // Webmesh channels have a terminal defect contract; boot/admission RPCs preserve their typed refusals separately.
+  execute: (request) => dieOnRpcClientErrorStream(client['WebmeshWorker.CreateConnection'](request)).pipe(Stream.orDie),
 })

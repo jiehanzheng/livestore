@@ -1,35 +1,73 @@
 import { Effect, Queue } from '@livestore/utils/effect'
+import { nanoid } from '@livestore/utils/nanoid'
 
 import type { MigrationsReport } from '../defs.ts'
-import type * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
+import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import {
   type BootStatus,
   type MaterializeError,
-  type MaterializationJournal,
   migrateDb,
   rematerializeFromEventlog,
   type SqliteDb,
-  type SqliteError,
+  SqliteError,
   UnknownError,
 } from '../index.ts'
+import * as MaterializationJournal from '../MaterializationJournal.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
-import { SystemTables } from '../schema/mod.ts'
+import { EventSequenceNumber, SystemTables } from '../schema/mod.ts'
+import * as SourceIdentity from '../SourceIdentity.ts'
+import * as StateHead from '../StateHead.ts'
+import * as StateSnapshot from '../StateSnapshot.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
 import { configureConnection, execSql } from './connection.ts'
+import * as Eventlog from './eventlog.ts'
 import type { MaterializeEvent } from './types.ts'
 import { STATE_REBUILD_BATCH_SIZE_DEFAULT } from './types.ts'
 
-export const hasCompletedState = (db: SqliteDb): boolean => {
-  const tableNames = new Set(db.select<{ name: string }>('SELECT name FROM sqlite_master').map((_) => _.name))
-  return (
-    SystemTables.stateSystemTables.every((table) => tableNames.has(table.sqliteDef.name)) &&
-    db.select(`SELECT id FROM ${SystemTables.REBUILD_META_TABLE} WHERE id = 1`).length === 1
-  )
+export const hasCompletedState = (
+  db: SqliteDb,
+  {
+    schema,
+    sourceIdentity,
+    sourceHead,
+  }: {
+    schema: LiveStoreSchema
+    sourceIdentity: SourceIdentity.SourceIdentity
+    sourceHead: EventSequenceNumber.Client.Composite
+  },
+): boolean => {
+  try {
+    const tableNames = new Set(db.select<{ name: string }>('SELECT name FROM sqlite_master').map((row) => row.name))
+    if (SystemTables.stateSystemTables.every((table) => tableNames.has(table.sqliteDef.name)) === false) return false
+    const provenance = StateSnapshot.readProvenance(db)
+    return (
+      provenance !== undefined &&
+      provenance.sourceIncarnation === sourceIdentity.incarnation &&
+      StateSnapshot.isSameProjection(provenance.projection, StateSnapshot.getProjectionIdentity(schema)) &&
+      EventSequenceNumber.Client.isEqual(StateHead.readFromDb(db), sourceHead)
+    )
+  } catch {
+    // Derived bytes are disposable: unreadable proof/head metadata requires replay from the validated source.
+    return false
+  }
 }
 
-/** Marks a successfully prepared state database as safe to use without rebuilding it. */
-export const markStateAsCompleted = (db: SqliteDb): Effect.Effect<void, SqliteError> =>
-  execSql(db, `INSERT OR IGNORE INTO ${SystemTables.REBUILD_META_TABLE} (id) VALUES (1)`, {})
+/** Reconstruction publishes only a source-bound projection after every hook has completed. */
+export const markStateAsCompleted = (
+  db: SqliteDb,
+  { schema, sourceIdentity }: { schema: LiveStoreSchema; sourceIdentity: SourceIdentity.SourceIdentity },
+): Effect.Effect<void, SqliteError> =>
+  Effect.try({
+    try: () =>
+      StateSnapshot.writeProvenance(db, {
+        proofVersion: StateSnapshot.PROOF_VERSION,
+        ownerId: nanoid(),
+        transitionId: nanoid(),
+        sourceIncarnation: sourceIdentity.incarnation,
+        projection: StateSnapshot.getProjectionIdentity(schema),
+      }),
+    catch: (cause) => new SqliteError({ cause }),
+  })
 
 export const recreateDb = ({
   schema,
@@ -79,11 +117,21 @@ export const recreateDb = ({
         Queue.offer(bootStatusQueue, { stage: 'rehydrating', progress: { done, total } }),
     })
 
+    // Replay includes confirmed source events, but only retained pending work needs rollback records.
+    const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
+    const journal = yield* MaterializationJournal.make
+    yield* journal.discardUpTo(
+      EventSequenceNumber.Client.Composite.make({ global: Eventlog.getBackendHeadFromDb(dbEventlog), client: 0 }),
+    )
+
     // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
     yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.post?.(dbState)).pipe(UnknownError.mapToUnknownError)
 
     // Keep this out of finalizers, which also run on failure and interruption.
-    yield* markStateAsCompleted(dbState)
+    yield* markStateAsCompleted(dbState, {
+      schema,
+      sourceIdentity: SourceIdentity.read(yield* EventlogSqliteDb.EventlogSqliteDb),
+    })
 
     return { migrationsReport }
   }).pipe(

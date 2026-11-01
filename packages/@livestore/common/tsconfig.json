@@ -7,6 +7,7 @@
       "ES2023"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -38,6 +39,56 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "effect/workers/WorkerError",
+          "effect/workers/Transferable#Uint8Array",
+          "effect/http/HttpClient#HttpClient",
+          "effect/persistence/KeyValueStore",
+          "@effect/opentelemetry/OtelTracer",
+          "effect/Graph"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/workers/WorkerError",
+                "effect/workers/Transferable#Uint8Array",
+                "effect/http/HttpClient#HttpClient",
+                "effect/persistence/KeyValueStore",
+                "@effect/opentelemetry/OtelTracer",
+                "effect/Graph",
+                "@effect/vitest",
+                "effect/testing/TestSchema"
+              ]
+            }
+          },
+          {
+            "include": [
+              "src/sync/syncstate.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "schemaClassMissingBrand": "off"
+              }
+            }
+          },
+          {
+            "include": [
+              "src/schema/state/sqlite/db-schema/ast/fingerprint.test.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "schemaNumber": "off"
+              }
+            }
+          }
         ]
       }
     ],

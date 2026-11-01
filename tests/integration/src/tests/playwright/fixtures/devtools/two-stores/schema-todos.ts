@@ -24,4 +24,9 @@ const materializers = State.SQLite.materializers(events, {
 
 const state = State.SQLite.makeState({ tables, materializers })
 
-export const schema = makeSchema({ events, state, devtools: { alias: 'schema-todos' } })
+export const schema = makeSchema({
+  projectionRevision: 'test-fixture-v1',
+  events,
+  state,
+  devtools: { alias: 'schema-todos' },
+})

@@ -17,6 +17,10 @@
  * @see {@link https://webidl.spec.whatwg.org/#quotaexceedederror | Web IDL Specification}
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/QuotaExceededError | MDN Reference}
  */
+// Export a local binding without shadowing the augmentable global interface.
+type GlobalQuotaExceededError = globalThis.QuotaExceededError
+export type { GlobalQuotaExceededError as QuotaExceededError }
+
 declare global {
   interface QuotaExceededError extends DOMException {
     /**

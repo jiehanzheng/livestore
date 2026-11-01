@@ -1,74 +1,31 @@
-import { catalog, commonPnpmPolicySettings, pnpmWorkspaceYaml, repoPnpmAllowBuilds } from './genie/repo.ts'
+import { effectV4Catalog, livestoreOnlyCatalog } from './genie/external.ts'
+// @genie-bootstrap
+import {
+  commonPnpmPolicySettings,
+  pnpmWorkspaceYaml,
+  repoPnpmAllowBuilds,
+  repoPackageExtensions,
+} from './genie/repo.ts'
 import { rootWorkspacePackages } from './package.json.genie.ts'
 
-const effectV4MinimumReleaseAgeExclude = Object.entries(
-  catalog.pick(
-    'effect',
-    '@effect/ai-openai',
-    '@effect/opentelemetry',
-    '@effect/platform-browser',
-    '@effect/platform-bun',
-    '@effect/platform-node',
-    '@effect/platform-node-shared',
-    '@effect/sql-sqlite-node',
-    '@effect/vitest',
-  ),
-).map(([name, version]) => `${name}@${version}`)
+// The exact reviewed registry family is shared by all supported owners.
+const effectV4MinimumReleaseAgeExclude = Object.entries(effectV4Catalog).map(([name, version]) => `${name}@${version}`)
+
+// The supported CF runtime was reviewed as one exact official release cohort, including its recent beta runtime.
+const hostMinimumReleaseAgeExclude = (['miniflare', 'wrangler', '@cloudflare/workers-types'] as const).map(
+  (name) => `${name}@${livestoreOnlyCatalog[name]}`,
+)
+
+// Reviewed with Volar 2.4.30 and the owned TS 6 compiler host; keep this exception version-specific.
+const docsMinimumReleaseAgeExclude = ['@vue/language-core@3.3.14']
 
 const examplesWorkspaceSettings = {
-  linkWorkspacePackages: true,
-  /** Dedupe package identities pulled in transitively by older example and peer-deps packages. */
-  overrides: catalog.pick(
-    'effect',
-    '@effect/platform-browser',
-    '@effect/platform-bun',
-    '@effect/platform-node',
-    '@effect/platform-node-shared',
-    '@effect/opentelemetry',
-    '@effect/vitest',
-    'react',
-    'react-dom',
-    '@tanstack/router-core',
-    '@tanstack/history',
-    '@tanstack/react-router',
-    '@tanstack/react-start',
-    '@tanstack/router-devtools',
-    '@tanstack/router-devtools-core',
-    '@tanstack/react-router-devtools',
-    '@tanstack/router-plugin',
-    '@tanstack/start-plugin-core',
-    '@tanstack/start-server-core',
-    '@tanstack/start-client-core',
-  ),
+  // Published integrations must consume this workspace's matching SDK even through transitive dependencies.
+  // pnpm's ordinary deep linking retains declared semver checks; it does not override upstream peers.
+  linkWorkspacePackages: 'deep' as const,
 }
 
-export const repoPackageExtensions = {
-  '@livestore/devtools-vite': {
-    dependencies: {
-      '@parcel/watcher': '^2.5.6',
-    },
-  },
-  'starlight-auto-sidebar': {
-    dependencies: {
-      astro: '>=6.0.0',
-    },
-  },
-  'starlight-links-validator': {
-    dependencies: {
-      astro: '>=6.0.0',
-    },
-  },
-  'starlight-sidebar-topics': {
-    dependencies: {
-      astro: '>=6.0.0',
-    },
-  },
-  typedoc: {
-    dependencies: {
-      'typedoc-plugin-markdown': '^4.8.1',
-    },
-  },
-} as const
+export { repoPackageExtensions } from './genie/repo.ts'
 
 export default pnpmWorkspaceYaml.root({
   packages: rootWorkspacePackages,
@@ -88,8 +45,10 @@ export default pnpmWorkspaceYaml.root({
   minimumReleaseAgeExclude: [
     ...commonPnpmPolicySettings.minimumReleaseAgeExclude,
     ...effectV4MinimumReleaseAgeExclude,
+    ...hostMinimumReleaseAgeExclude,
+    ...docsMinimumReleaseAgeExclude,
   ],
-  /** Relaxed until @livestore/devtools-vite publishes with updated Effect peer ranges */
-  strictPeerDependencies: false,
+  // Supported owners must declare mutually compatible peers during normal installs.
+  strictPeerDependencies: true,
   ...examplesWorkspaceSettings,
 })

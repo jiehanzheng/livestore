@@ -4,8 +4,11 @@
 packages:
   - docs
   - docs/src/content/_assets/code
+  - docs/src/content/_assets/code/native
   - examples/*
   - packages/@livestore/adapter-cloudflare
+  - packages/@livestore/adapter-expo
+  - packages/@livestore/adapter-node
   - packages/@livestore/adapter-web
   - packages/@livestore/common
   - packages/@livestore/common-cf
@@ -32,41 +35,22 @@ packages:
   - tests/sync-provider
   - tests/wa-sqlite
 
-overrides:
-  effect: 4.0.3
-  '@effect/platform-browser': 4.0.3
-  '@effect/platform-bun': 4.0.3
-  '@effect/platform-node': 4.0.3
-  '@effect/platform-node-shared': 4.0.3
-  '@effect/opentelemetry': 4.0.3
-  '@effect/vitest': 4.0.3
-  react: 19.2.3
-  react-dom: 19.2.3
-  '@tanstack/router-core': 1.145.7
-  '@tanstack/history': 1.145.7
-  '@tanstack/react-router': 1.145.7
-  '@tanstack/react-start': 1.145.10
-  '@tanstack/router-devtools': 1.145.7
-  '@tanstack/router-devtools-core': 1.145.7
-  '@tanstack/react-router-devtools': 1.145.7
-  '@tanstack/router-plugin': 1.145.10
-  '@tanstack/start-plugin-core': 1.145.7
-  '@tanstack/start-server-core': 1.145.7
-  '@tanstack/start-client-core': 1.145.7
-
 packageExtensions:
+  '@vue/language-core@3.3.14':
+    peerDependencies:
+      typescript: '>=5 <7'
   '@livestore/devtools-vite':
     dependencies:
       '@parcel/watcher': ^2.5.6
-  starlight-auto-sidebar:
-    dependencies:
-      astro: '>=6.0.0'
-  starlight-links-validator:
-    dependencies:
-      astro: '>=6.0.0'
-  starlight-sidebar-topics:
-    dependencies:
-      astro: '>=6.0.0'
+  starlight-auto-sidebar@0.4.1:
+    peerDependencies:
+      astro: ^7.0.0
+  starlight-links-validator@0.27.0:
+    peerDependencies:
+      astro: ^7.0.0
+  starlight-sidebar-topics@0.9.0:
+    peerDependencies:
+      astro: ^7.0.0
   typedoc:
     dependencies:
       typedoc-plugin-markdown: ^4.8.1
@@ -101,15 +85,19 @@ minimumReleaseAgeExclude:
   - '@effect/vitest'
   - '@effect/opentelemetry'
   - '@effect/atom-react'
-  - effect@4.0.3
-  - '@effect/ai-openai@4.0.3'
-  - '@effect/opentelemetry@4.0.3'
-  - '@effect/platform-browser@4.0.3'
-  - '@effect/platform-bun@4.0.3'
-  - '@effect/platform-node@4.0.3'
-  - '@effect/platform-node-shared@4.0.3'
-  - '@effect/sql-sqlite-node@4.0.3'
-  - '@effect/vitest@4.0.3'
+  - effect@4.1.0
+  - '@effect/ai-openai@4.1.0'
+  - '@effect/opentelemetry@4.1.0'
+  - '@effect/platform-browser@4.1.0'
+  - '@effect/platform-bun@4.1.0'
+  - '@effect/platform-node@4.1.0'
+  - '@effect/platform-node-shared@4.1.0'
+  - '@effect/sql-sqlite-node@4.1.0'
+  - '@effect/vitest@4.1.0'
+  - miniflare@5.20261023.3-beta
+  - wrangler@4.156.0
+  - '@cloudflare/workers-types@5.20261030.1'
+  - '@vue/language-core@3.3.14'
 
 supportedArchitectures:
   os: [linux, darwin]
@@ -118,7 +106,7 @@ supportedArchitectures:
 
 dedupePeerDependents: true
 
-strictPeerDependencies: false
+strictPeerDependencies: true
 
 injectWorkspacePackages: false
 
@@ -128,7 +116,7 @@ optimisticRepeatInstall: false
 
 verifyDepsBeforeRun: false
 
-linkWorkspacePackages: true
+linkWorkspacePackages: deep
 
 ignoreScripts: true
 

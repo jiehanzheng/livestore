@@ -6,6 +6,11 @@ import {
   liveStoreStorageFormatVersion,
   makeClientSession,
   MaterializationJournal,
+  mapToAdapterError,
+  SourceIdentity,
+  type SqliteDb,
+  type SqliteTransactionHost,
+  toAdapterError,
   StateSqliteDb,
   type SyncOptions,
   UnknownError,
@@ -23,10 +28,11 @@ import { getStateDbBaseName } from '@livestore/common/schema'
 import { LiveStoreEvent } from '@livestore/livestore'
 import { CF_SQL_VFS_REQUIRED_PRAGMAS, sqliteDbFactory } from '@livestore/sqlite-wasm/cf'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { Effect, FetchHttpClient, Layer, Queue, Schedule, SubscriptionRef, WebChannel } from '@livestore/utils/effect'
+import { Effect, FetchHttpClient, Layer, Queue, SubscriptionRef, WebChannel } from '@livestore/utils/effect'
 
 import { makeSqliteDb as makeDoSqliteDb } from './make-sqlite-db.ts'
 import * as StateFiles from './state-files.ts'
+import { makeTransactionHost } from './transaction-host.ts'
 
 export const makeAdapter =
   ({
@@ -55,97 +61,127 @@ export const makeAdapter =
 
       const devtoolsOptions = { enabled: false } as DevtoolsOptions
 
-      const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
-
-      const makeSqliteDb = sqliteDbFactory({ sqlite3 })
-
-      const syncInMemoryDb = yield* makeSqliteDb({ _tag: 'in-memory', storage, configureDb: () => {} }).pipe(
-        UnknownError.mapToUnknownError,
-      )
-
+      // Storage.sql also contains application/KV data; only retained SDK storage disproves a new source.
+      const sourceIsNew = yield* Effect.try({
+        try: () =>
+          !storage.sql
+            .exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .toArray()
+            .some(
+              ({ name }) =>
+                name === 'eventlog' ||
+                name.startsWith('__livestore_') ||
+                name === 'vfs_pages' ||
+                name === 'vfs_files' ||
+                name === 'vfs_blocks',
+            ),
+        catch: toAdapterError,
+      })
+      let stateToClose: SqliteDb | undefined
+      const transactionHost = makeTransactionHost(storage, () => stateToClose?.close())
+      const dbEventlog = yield* Effect.acquireRelease(
+        makeDoSqliteDb({
+          _tag: 'file',
+          db: storage.sql,
+          configureDb: () => {},
+        }),
+        (db) => Effect.sync(() => db.close()),
+      ).pipe(mapToAdapterError)
+      dbEventlog.transactionHost = transactionHost
+      let initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
       if (resetPersistence === true) {
-        yield* resetDurableObjectPersistence({ storage, storeId })
+        yield* resetDurableObjectPersistence({ storage, storeId, dbEventlog, transactionHost })
+        initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
       }
 
+      const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
+      const makeSqliteDb = sqliteDbFactory({ sqlite3 })
+      const syncInMemoryDb = yield* Effect.acquireRelease(
+        makeSqliteDb({ _tag: 'in-memory', configureDb: () => {} }),
+        (db) => Effect.sync(() => db.close()),
+      ).pipe(mapToAdapterError)
+
       const stateFileName = `${getStateDbBaseName(schema)}@${liveStoreStorageFormatVersion}.db`
-      yield* StateFiles.register(storage, stateFileName).pipe(UnknownError.mapToUnknownError)
+      const { leaderThread, initialSnapshot } = yield* transactionHost.runTransaction(
+        Effect.gen(function* () {
+          yield* StateFiles.register(storage, stateFileName).pipe(UnknownError.mapToUnknownError)
 
-      const dbState = yield* makeSqliteDb({
-        _tag: 'storage',
-        storage,
-        fileName: stateFileName,
-        configureDb: (db) =>
-          db.execute([...CF_SQL_VFS_REQUIRED_PRAGMAS, 'cache_size=-8000'].map((p) => `PRAGMA ${p}`).join(';\n')),
-      }).pipe(UnknownError.mapToUnknownError)
+          const dbState = yield* Effect.acquireRelease(
+            makeSqliteDb({
+              _tag: 'storage',
+              storage,
+              fileName: stateFileName,
+              configureDb: (db) =>
+                db.execute([...CF_SQL_VFS_REQUIRED_PRAGMAS, 'cache_size=-8000'].map((p) => `PRAGMA ${p}`).join(';\n')),
+            }),
+            (db) => Effect.sync(() => db.close()),
+          ).pipe(mapToAdapterError)
+          stateToClose = dbState
+          dbState.transactionHost = transactionHost
 
-      // dbEventlog runs on DO SQLite directly (not through the VFS). SQL-level transaction
-      // control (BEGIN/COMMIT/ROLLBACK) is silently dropped — see isTransactionControlStatement
-      // in make-sqlite-db.ts for details on why this is safe.
-      const dbEventlog = yield* makeDoSqliteDb({
-        _tag: 'file',
-        db: storage.sql,
-        configureDb: () => {},
-      }).pipe(UnknownError.mapToUnknownError)
+          const shutdownChannel = yield* WebChannel.noopChannel<any, any>()
+          const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
+          const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
+            Layer.provide(sqliteDbLayer),
+          )
 
-      const shutdownChannel = yield* WebChannel.noopChannel<any, any>()
-      const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
-      const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
-        Layer.provide(sqliteDbLayer),
+          const layer = yield* Layer.build(
+            makeLeaderThreadLayer({
+              initializedSource,
+              schema,
+              storeId,
+              clientId,
+              makeSqliteDb,
+              syncOptions,
+              devtoolsOptions,
+              shutdownChannel,
+              syncPayloadEncoded,
+              syncPayloadSchema,
+              params,
+            }).pipe(Layer.provide(Layer.mergeAll(sqliteDbLayer, stateServicesLayer))),
+          )
+
+          return yield* Effect.gen(function* () {
+            const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
+              yield* LeaderThreadCtx
+
+            const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
+            // const initialLeaderHead = EventSequenceNumber.ROOT
+
+            const leaderThread = ClientSessionLeaderThreadProxy.of(
+              {
+                events: {
+                  pull: ({ cursor }) => syncProcessor.pull({ cursor }),
+                  push: syncProcessor.push,
+                  stream: (options) =>
+                    streamEventsWithSyncState({
+                      dbEventlog,
+                      syncState: syncProcessor.syncState,
+                      options,
+                    }),
+                },
+                initialState: {
+                  leaderHead: initialLeaderHead,
+                  migrationsReport: initialState.migrationsReport,
+                  storageMode: 'persisted',
+                },
+                export: exportSnapshot,
+                getEventlogData: Effect.sync(() => dbEventlog.export()),
+                syncState: syncProcessor.syncState,
+                sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
+                networkStatus,
+              },
+              {
+                // overrides: testing?.overrides?.clientSession?.leaderThreadProxy
+              },
+            )
+
+            const initialSnapshot = yield* exportSnapshot
+
+            return { leaderThread, initialSnapshot }
+          }).pipe(Effect.provide(layer))
+        }),
       )
-
-      const layer = yield* Layer.build(
-        makeLeaderThreadLayer({
-          schema,
-          storeId,
-          clientId,
-          makeSqliteDb,
-          syncOptions,
-          devtoolsOptions,
-          shutdownChannel,
-          syncPayloadEncoded,
-          syncPayloadSchema,
-          params,
-        }).pipe(Layer.provide(Layer.mergeAll(sqliteDbLayer, stateServicesLayer))),
-      )
-
-      const { leaderThread, initialSnapshot } = yield* Effect.gen(function* () {
-        const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus } = yield* LeaderThreadCtx
-
-        const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
-        // const initialLeaderHead = EventSequenceNumber.ROOT
-
-        const leaderThread = ClientSessionLeaderThreadProxy.of(
-          {
-            events: {
-              pull: ({ cursor }) => syncProcessor.pull({ cursor }),
-              push: syncProcessor.push,
-              stream: (options) =>
-                streamEventsWithSyncState({
-                  dbEventlog,
-                  syncState: syncProcessor.syncState,
-                  options,
-                }),
-            },
-            initialState: {
-              leaderHead: initialLeaderHead,
-              migrationsReport: initialState.migrationsReport,
-              storageMode: 'persisted',
-            },
-            export: Effect.sync(() => dbState.export()),
-            getEventlogData: Effect.sync(() => dbEventlog.export()),
-            syncState: syncProcessor.syncState,
-            sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
-            networkStatus,
-          },
-          {
-            // overrides: testing?.overrides?.clientSession?.leaderThreadProxy
-          },
-        )
-
-        const initialSnapshot = dbState.export()
-
-        return { leaderThread, initialSnapshot }
-      }).pipe(Effect.provide(layer))
 
       syncInMemoryDb.import(initialSnapshot)
 
@@ -183,37 +219,36 @@ export const makeAdapter =
     }).pipe(
       Effect.withSpan('@livestore/adapter-cloudflare:makeAdapter', { attributes: { clientId, sessionId } }),
       Effect.provide(FetchHttpClient.layer),
+      mapToAdapterError,
     )
 
 const resetDurableObjectPersistence = ({
   storage,
   storeId,
+  dbEventlog,
+  transactionHost,
 }: {
   storage: CfTypes.DurableObjectStorage
   storeId: string
+  dbEventlog: SqliteDb
+  transactionHost: SqliteTransactionHost
 }) =>
-  Effect.try({
-    try: () =>
-      // All four tables live in the DO's single storage.sql database but are
-      // owned by different layers during normal operation:
-      // - vfs_pages: written by the wa-sqlite VFS layer (backs dbState)
-      // - eventlog, __livestore_sync_status: written directly by dbEventlog via storage.sql
-      // - __livestore_state_files: adapter-owned state file registry
-      storage.transactionSync(() => {
-        safeSqlExec(storage, 'DELETE FROM vfs_pages')
-        safeSqlExec(storage, 'DELETE FROM __livestore_state_files')
-        safeSqlExec(storage, 'DELETE FROM eventlog')
-        safeSqlExec(storage, 'DELETE FROM __livestore_sync_status')
+  transactionHost
+    .runTransaction(
+      Effect.try({
+        try: () => {
+          // Source was validated before this destructive option; identity rotation invalidates every old derived image.
+          safeSqlExec(storage, 'DELETE FROM vfs_pages')
+          safeSqlExec(storage, 'DELETE FROM __livestore_state_files')
+          dbEventlog.execute('DELETE FROM eventlog')
+          dbEventlog.execute('DELETE FROM __livestore_sync_status')
+          dbEventlog.execute('INSERT INTO __livestore_sync_status (head) VALUES (0)')
+          SourceIdentity.rotateWithinTransaction(dbEventlog)
+        },
+        catch: toAdapterError,
       }),
-    catch: (cause) =>
-      new UnknownError({
-        cause,
-        note: `@livestore/adapter-cloudflare: Failed to reset persistence for store ${storeId}`,
-      }),
-  }).pipe(
-    Effect.retry({ schedule: Schedule.exponentialBackoff10Sec }),
-    Effect.withSpan('@livestore/adapter-cloudflare:resetPersistence', { attributes: { storeId } }),
-  )
+    )
+    .pipe(Effect.withSpan('@livestore/adapter-cloudflare:resetPersistence', { attributes: { storeId } }))
 
 const safeSqlExec = (storage: CfTypes.DurableObjectStorage, query: string, binding?: string) => {
   try {

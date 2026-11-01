@@ -1,11 +1,22 @@
 import { type WebChannel, Schema } from '@livestore/utils/effect'
 
-import { BackendIdMismatchError, IntentionalShutdownCause, MaterializeError, UnknownError } from '../index.ts'
+import {
+  LegacyStorageFormatError,
+  ProjectionMismatchError,
+  LiveDatabaseImportRefusedError,
+  BackendIdMismatchError,
+  IntentionalShutdownCause,
+  MaterializeError,
+  UnknownError,
+} from '../index.ts'
 import { MaterializationJournalError } from '../MaterializationJournal.ts'
 
 export const All = Schema.Union([
   IntentionalShutdownCause,
   UnknownError,
+  LegacyStorageFormatError,
+  ProjectionMismatchError,
+  LiveDatabaseImportRefusedError,
   BackendIdMismatchError,
   MaterializeError,
   MaterializationJournalError,

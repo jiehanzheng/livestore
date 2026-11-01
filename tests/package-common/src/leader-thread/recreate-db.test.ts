@@ -58,7 +58,7 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
       const events = { created: Events.synced({ name: 'created', schema: Schema.Struct({ id: Schema.String }) }) }
       const factory = EventFactory.makeFactory(events)({ client: EventFactory.clientIdentity('test') })
       const eventIds = Array.from({ length: 5 }, (_, i) => `todo-${i + 1}`)
-      yield* Eventlog.initEventlogDb(dbEventlog)
+      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
       for (const id of eventIds) {
         const event = LiveStoreEvent.Client.fromGlobal(factory.created.next({ id }))
         yield* Eventlog.insertIntoEventlog(
@@ -83,6 +83,7 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
         if (shouldFail === true && failure === stage) throw new Error(`Injected ${stage} failure`)
       }
       const schema = makeSchema({
+        projectionRevision: 'test-fixture-v1',
         events,
         state: State.SQLite.makeState({
           tables: { todos },
@@ -126,6 +127,7 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
         }),
       })
       const boot = Effect.gen(function* () {
+        const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
         const persistedState = yield* openState
         // Model adapters whose failure cleanup leaves the persisted file intact.
         const dbState = { ...persistedState, destroy: () => persistedState.close() }
@@ -135,11 +137,12 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
           return {
             todos: dbState.select(todos.orderBy('id', 'asc')),
             pending: (yield* leader.syncProcessor.syncState.get).pending.length,
-            marker: dbState.select(SystemTables.rebuildMetaTable),
+            marker: dbState.select(SystemTables.rebuildMetaTable).map(({ id }) => ({ id })),
           }
         }).pipe(
           Effect.provide(
             makeLeaderThreadLayer({
+              initializedSource,
               schema,
               storeId: 'rebuild-test',
               clientId: 'test',
@@ -216,6 +219,7 @@ Vitest.live('publishes rebuild completion only after an async post hook finishes
     const enteredPost = yield* Deferred.make<void>()
     const releasePost = yield* Deferred.make<void>()
     const schema = makeSchema({
+      projectionRevision: 'test-fixture-v1',
       events: [],
       state: State.SQLite.makeState({
         tables: {},
@@ -231,7 +235,7 @@ Vitest.live('publishes rebuild completion only after an async post hook finishes
         },
       }),
     })
-    yield* Eventlog.initEventlogDb(dbEventlog)
+    yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
     const bootStatusQueue = yield* Effect.acquireRelease(Queue.unbounded<BootStatus>(), Queue.shutdown)
     const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
     const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(servicesLayer))
@@ -243,6 +247,6 @@ Vitest.live('publishes rebuild completion only after an async post hook finishes
     expect(dbState.select(SystemTables.rebuildMetaTable)).toEqual([])
     yield* Deferred.succeed(releasePost, undefined)
     yield* Fiber.join(rebuild)
-    expect(dbState.select(SystemTables.rebuildMetaTable)).toEqual([{ id: 1 }])
+    expect(dbState.select(SystemTables.rebuildMetaTable).map(({ id }) => ({ id }))).toEqual([{ id: 1 }])
   }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
 )

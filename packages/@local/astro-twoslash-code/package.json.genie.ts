@@ -8,10 +8,11 @@ const runtimeDeps = catalog.compose({
     external: {
       ...catalog.pick(
         '@effect/platform-node',
-        'astro-expressive-code',
-        'expressive-code',
-        'expressive-code-twoslash',
-        'hast',
+        'shiki',
+        '@shikijs/twoslash',
+        'twoslash-vue',
+        '@vue/language-core',
+        '@volar/typescript',
         'hast-util-to-html',
       ),
       // Twoslash requires TypeScript's legacy runtime API, which is absent from TypeScript 7.
@@ -19,12 +20,12 @@ const runtimeDeps = catalog.compose({
     },
   },
   devDependencies: {
-    external: effectDevDeps('@astrojs/starlight', '@types/hast', '@types/node', 'astro', 'vitest'),
+    external: effectDevDeps('@astrojs/starlight', '@types/hast', '@types/node', 'astro', 'vitest', 'vue'),
   },
   peerDependencies: {
     external: {
-      '@astrojs/starlight': '^0.35 || ^0.40',
-      astro: '^5 || ^6',
+      '@astrojs/starlight': '^0.42',
+      astro: '^7',
     },
   },
 })

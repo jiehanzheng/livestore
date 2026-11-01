@@ -1,8 +1,11 @@
 import { Cause, Effect, Layer, Option, Schema, Stream, Struct } from '@livestore/utils/effect'
 
+import { ProjectionIdentity } from './ProjectionIdentity.ts'
 import * as LiveStoreEvent from './schema/LiveStoreEvent/mod.ts'
 
-export class UnknownError extends Schema.TaggedError<UnknownError>('~@livestore/common/UnknownError')('UnknownError', {
+export class UnknownError extends Schema.TaggedError<UnknownError, { readonly brand: unique symbol }>(
+  '~@livestore/common/UnknownError',
+)('UnknownError', {
   cause: Schema.Defect(),
   note: Schema.optional(Schema.String),
   payload: Schema.optional(Schema.Any),
@@ -31,9 +34,10 @@ export class UnknownError extends Schema.TaggedError<UnknownError>('~@livestore/
 
 const materializerHashMismatchNote = 'Please make sure your event materializer is a pure function without side effects.'
 
-export class MaterializerHashMismatchError extends Schema.TaggedError<MaterializerHashMismatchError>(
-  '~@livestore/common/MaterializerHashMismatchError',
-)('MaterializerHashMismatchError', {
+export class MaterializerHashMismatchError extends Schema.TaggedError<
+  MaterializerHashMismatchError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/MaterializerHashMismatchError')('MaterializerHashMismatchError', {
   eventName: Schema.String,
   note: Schema.String.pipe(
     Schema.withDecodingDefaultType(Effect.succeed(materializerHashMismatchNote)),
@@ -41,20 +45,32 @@ export class MaterializerHashMismatchError extends Schema.TaggedError<Materializ
   ),
 }) {}
 
-export class IntentionalShutdownCause extends Schema.TaggedError<IntentionalShutdownCause>(
-  '~@livestore/common/IntentionalShutdownCause',
-)('IntentionalShutdownCause', {
+export class IntentionalShutdownCause extends Schema.TaggedError<
+  IntentionalShutdownCause,
+  { readonly brand: unique symbol }
+>('~@livestore/common/IntentionalShutdownCause')('IntentionalShutdownCause', {
   reason: Schema.Literals(['devtools-reset', 'devtools-import', 'adapter-reset', 'manual', 'backend-id-mismatch']),
 }) {}
 
-export class StoreInterrupted extends Schema.TaggedError<StoreInterrupted>('~@livestore/common/StoreInterrupted')(
-  'StoreInterrupted',
-  {
-    reason: Schema.String,
-  },
-) {}
+/** The admitted owner ended; callers must reopen rather than reuse its snapshot. */
+export class AdmittedOwnerEndedError extends Schema.TaggedError<
+  AdmittedOwnerEndedError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/AdmittedOwnerEndedError')('AdmittedOwnerEndedError', {}) {
+  override get message(): string {
+    return 'Admitted leader ended; reopen the Store'
+  }
+}
 
-export class SqliteError extends Schema.TaggedError<SqliteError>('~@livestore/common/SqliteError')('SqliteError', {
+export class StoreInterrupted extends Schema.TaggedError<StoreInterrupted, { readonly brand: unique symbol }>(
+  '~@livestore/common/StoreInterrupted',
+)('StoreInterrupted', {
+  reason: Schema.String,
+}) {}
+
+export class SqliteError extends Schema.TaggedError<SqliteError, { readonly brand: unique symbol }>(
+  '~@livestore/common/SqliteError',
+)('SqliteError', {
   query: Schema.optional(
     Schema.Struct({
       sql: Schema.String,
@@ -70,20 +86,71 @@ export class SqliteError extends Schema.TaggedError<SqliteError>('~@livestore/co
   note: Schema.optional(Schema.String),
 }) {}
 
-export class UnknownEventError extends Schema.TaggedError<UnknownEventError>('~@livestore/common/UnknownEventError')(
-  'UnknownEventError',
-  {
-    event: LiveStoreEvent.Client.Encoded.mapFields(Struct.pick(['name', 'args', 'seqNum', 'clientId', 'sessionId'])),
-    reason: Schema.Literals(['event-definition-missing', 'materializer-missing']),
-    operation: Schema.String,
-    note: Schema.optional(Schema.String),
-  },
-) {}
+export class UnknownEventError extends Schema.TaggedError<UnknownEventError, { readonly brand: unique symbol }>(
+  '~@livestore/common/UnknownEventError',
+)('UnknownEventError', {
+  event: LiveStoreEvent.Client.Encoded.mapFields(Struct.pick(['name', 'args', 'seqNum', 'clientId', 'sessionId'])),
+  reason: Schema.Literals(['event-definition-missing', 'materializer-missing']),
+  operation: Schema.String,
+  note: Schema.optional(Schema.String),
+}) {}
 
-export class MaterializeError extends Schema.TaggedError<MaterializeError>('~@livestore/common/MaterializeError')(
-  'MaterializeError',
-  {
-    cause: Schema.Union([MaterializerHashMismatchError, SqliteError, UnknownEventError]),
-    note: Schema.optional(Schema.String),
-  },
-) {}
+export class MaterializeError extends Schema.TaggedError<MaterializeError, { readonly brand: unique symbol }>(
+  '~@livestore/common/MaterializeError',
+)('MaterializeError', {
+  cause: Schema.Union([MaterializerHashMismatchError, SqliteError, UnknownEventError]),
+  note: Schema.optional(Schema.String),
+}) {}
+
+/** Expected refusal: retained source must never become an empty new-format database. */
+export class LegacyStorageFormatError extends Schema.TaggedError<
+  LegacyStorageFormatError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/LegacyStorageFormatError')('LegacyStorageFormatError', {
+  expectedFormatVersion: Schema.Finite,
+  actualFormatVersion: Schema.optional(Schema.Finite),
+  storageBase: Schema.optional(Schema.String),
+  reason: Schema.String,
+}) {}
+
+/** A joining client may refuse this owner without ending its healthy, differently versioned projection. */
+export class ProjectionMismatchError extends Schema.TaggedError<
+  ProjectionMismatchError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/ProjectionMismatchError')('ProjectionMismatchError', {
+  expected: ProjectionIdentity,
+  actual: ProjectionIdentity,
+}) {}
+
+export class LiveDatabaseImportRefusedError extends Schema.TaggedError<
+  LiveDatabaseImportRefusedError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/LiveDatabaseImportRefusedError')('LiveDatabaseImportRefusedError', {
+  reason: Schema.String,
+}) {}
+
+/** Expected boot/admission refusals remain typed across adapter boundaries. */
+export const AdapterError = Schema.Union([
+  UnknownError,
+  LegacyStorageFormatError,
+  ProjectionMismatchError,
+  LiveDatabaseImportRefusedError,
+])
+export type AdapterError = typeof AdapterError.Type
+
+export const toAdapterError = (cause: unknown): AdapterError => {
+  if (
+    Schema.is(UnknownError)(cause) === true ||
+    Schema.is(LegacyStorageFormatError)(cause) === true ||
+    Schema.is(ProjectionMismatchError)(cause) === true ||
+    Schema.is(LiveDatabaseImportRefusedError)(cause) === true
+  )
+    return cause
+  return UnknownError.make({ cause })
+}
+
+export const mapToAdapterError = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, AdapterError, R> =>
+  effect.pipe(
+    Effect.mapError(toAdapterError),
+    Effect.catchDefect((cause) => Effect.fail(toAdapterError(cause))),
+  )

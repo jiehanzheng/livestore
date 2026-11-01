@@ -12,6 +12,8 @@ import type { PreparedBindValues } from './util.ts'
  */
 export interface SqliteDb<TReq = any, TMetadata extends TReq = TReq> {
   _tag: 'SqliteDb'
+  /** The same capability instance must own native SOURCE and WASM-backed STATE on a shared host. */
+  transactionHost?: SqliteTransactionHost
   metadata: TMetadata
   /** Debug information (currently not persisted and only available at runtime) */
   debug: SqliteDebugInfo
@@ -32,6 +34,12 @@ export interface SqliteDb<TReq = any, TMetadata extends TReq = TReq> {
   destroy(): void
   session(): SqliteDbSession
   makeChangeset: (data: Uint8Array<ArrayBuffer>) => SqliteDbChangeset
+}
+
+export interface SqliteTransactionHost {
+  readonly sourceNamespace: 'durable-object'
+  /** Resolves only after host commit and durability confirmation; failure must settle before returning. */
+  runTransaction<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqliteError, R>
 }
 
 export type SqliteDebugInfo = { head: EventSequenceNumber.Client.Composite }

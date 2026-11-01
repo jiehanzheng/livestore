@@ -29,7 +29,7 @@ Vitest.describe('issue #487 - Optional fields without defaults cause errors', ()
 
       const tables = { uiState }
       const state = State.SQLite.makeState({ tables, materializers: {} })
-      const schema = makeSchema({ state, events: { UiStateSet: uiState.set } })
+      const schema = makeSchema({ projectionRevision: 'test-fixture-v1', state, events: { UiStateSet: uiState.set } })
 
       // Create store with in-memory adapter
       const adapter = makeInMemoryAdapter()

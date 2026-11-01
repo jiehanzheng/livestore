@@ -40,6 +40,23 @@ persisted eventlog (parent Leadership Handover contract,
 takeover but has no listener anywhere — currently inert
 (`persisted-adapter.ts:341`).
 
+The adapter's internal scoped election handle owns its release Deferred before
+either the immediate try or waiting acquisition can succeed. Its cleanup is
+registered before later SDK resources, so those resources finalize before the
+lock release is signaled. Interrupted or failed opening therefore releases the
+lock even before snapshot admission or the successful-boot finalizer exists.
+The same ownership covers a follower promoted while opening. A pending grant
+whose callback arrives after scope closure sees the already-completed release
+Deferred and releases immediately; pending wait cancellation still uses the
+request's AbortSignal. The acquisition callback's signal is not a lifetime
+signal after acquisition has completed.
+
+A “Releasing lock” debug message alone does not establish that the browser has
+released the lock. Completion of the LockManager request is a separate browser
+receipt; tests join that receipt rather than infer release from logging or a
+closed scope flag. This lease does not extend the existing SDK contract to
+physical SQLite-close-error attestation.
+
 ## Death Detection
 
 There is no heartbeat (LS.SYS.RT.WEB.LEAD-R03). Crash detection is

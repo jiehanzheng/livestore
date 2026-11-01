@@ -50,6 +50,28 @@ not structured-cloneable); the schema travels with the worker bundle and
 only the encoded payload is sent (`persisted-adapter.ts:195-200`;
 LS.SYS.RT.WEB.TOPO-R02).
 
+## Application-Owned Dedicated Workers
+
+The `worker` callback in both persisted and single-tab adapters may return a
+`Worker` or `MessagePort`; worker constructors continue to return `Worker`.
+When returning a port, the application transfers its paired endpoint to the
+worker and passes that endpoint as `makeWorkerEffect({ transport, ... })`.
+The runner uses Effect's public `BrowserWorkerRunner.layerMessagePort`; omitting
+`transport` preserves the ambient worker runner.
+
+This replaces only the outer transport. Effect's ready handshake and normal
+transferable outer initial message still carry the inner session port. The
+inner initial message, admission protocol, shared coordinator and leader
+election remain unchanged.
+
+Closing the explicit transport closes its SDK scopes and port without closing
+the worker global. The application must join the entire scoped worker effect,
+including its initialization resources, before sending its own completion
+receipt and terminating the dedicated Worker. Parent-side scope closure alone
+is not a worker-finalizer acknowledgment. A joined exit preserves failures
+surfaced by finalizers; it cannot attest to physical SQLite close errors that
+the underlying adapter suppresses. Shared-worker lifetime stays independent.
+
 ## Port Swap and Mediation
 
 Only the leader-elect tab spawns the dedicated worker and hands `mc.port2`

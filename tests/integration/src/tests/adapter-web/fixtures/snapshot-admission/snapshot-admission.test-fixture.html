@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>LiveStore real adapter admission proof</title>
+<body><h1>LiveStore real adapter admission proof</h1><p id="environment"></p>
+<button id="run">Run both web adapters</button><button id="cleanup" disabled>Clean fixture files</button>
+<h2 id="status">Not started</h2><pre role="status" id="result">No results</pre>
+<script type="module">
+import { runAdapterAdmission } from './snapshot-admission.test-fixture.ts'
+const output=document.querySelector('#result'), status=document.querySelector('#status'), run=document.querySelector('#run'), cleanup=document.querySelector('#cleanup')
+const directories=new Set(), namespaces=[], results=[]
+document.querySelector('#environment').textContent=JSON.stringify({origin:location.origin,crossOriginIsolated,serviceWorkerControlled:Boolean(navigator.serviceWorker?.controller),sharedWorkerAvailable:typeof SharedWorker!=='undefined'})
+run.disabled=!crossOriginIsolated||Boolean(navigator.serviceWorker?.controller)
+run.onclick=async()=>{
+ run.disabled=true
+ try { for(const mode of ['single','shared']) {
+   const namespace=`fork-correctness-opfs-01a17145-${crypto.randomUUID()}`
+   namespaces.push(namespace); directories.add(`livestore-${namespace}@6`)
+   status.textContent=`Testing real ${mode} adapter`
+   const result=await runAdapterAdmission(mode,namespace); results.push({passed:true,...result})
+   output.textContent=JSON.stringify({namespaces,directories:[...directories],results},null,2)
+ } status.textContent='Both real web adapter checks passed' }
+ catch(error){ results.push({passed:false,error:String(error),cause:String(error.cause)});status.textContent='FAILED' }
+ finally{cleanup.disabled=false;output.textContent=JSON.stringify({namespaces,directories:[...directories],results},null,2)}
+}
+cleanup.onclick=async()=>{const root=await navigator.storage.getDirectory(); const removed=[]
+ for(const directory of directories){try{await root.removeEntry(directory,{recursive:true});removed.push(directory)}catch(error){if(error.name!=='NotFoundError')throw error}}
+ directories.clear(); results.push({cleanup:removed}); output.textContent=JSON.stringify({namespaces,directories:[...directories],results},null,2);cleanup.disabled=true
+}
+</script></body></html>

@@ -11,13 +11,13 @@
     "@livestore/wa-sqlite": "0.5.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.13.12",
-    "@cloudflare/workers-types": "4.20251118.0",
-    "@livestore/devtools-vite": "0.4.0-dev.25",
+    "@cloudflare/vite-plugin": "1.66.0",
+    "@cloudflare/workers-types": "5.20261030.1",
+    "@livestore/devtools-vite": "0.5.0",
     "@playwright/test": "1.63.0",
-    "typescript": "6.0.3",
-    "vite": "7.3.1",
-    "wrangler": "4.42.2"
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "wrangler": "4.156.0"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -27,7 +27,8 @@
     "deploy": "pnpm run build && bunx wrangler deploy",
     "dev": "vite --force",
     "preview": "vite preview",
-    "test": "playwright test"
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -42,19 +43,6 @@
       "sharp",
       "unix-dgram",
       "workerd"
-    ],
-    "overrides": {
-      "@effect/opentelemetry": "4.0.3",
-      "@effect/platform-browser": "4.0.3",
-      "@effect/platform-bun": "4.0.3",
-      "@effect/platform-node": "4.0.3",
-      "@effect/vitest": "4.0.3",
-      "@opentelemetry/api": "1.9.0",
-      "@opentelemetry/resources": "2.2.0",
-      "@standard-schema/spec": "1.0.0",
-      "effect": "4.0.3",
-      "@cloudflare/workers-types": "4.20251118.0",
-      "@effect/platform-node-shared": "4.0.3"
-    }
+    ]
   }
 }

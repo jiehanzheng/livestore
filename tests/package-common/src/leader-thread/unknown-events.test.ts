@@ -101,6 +101,7 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
       })
 
       const schema = makeSchema({
+        projectionRevision: 'test-fixture-v1',
         events: [knownEvent],
         state: State.SQLite.makeState({ tables: {}, materializers: {} }),
         unknownEventHandling: { strategy: 'warn' },
@@ -110,7 +111,7 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-      yield* Eventlog.initEventlogDb(dbEventlog)
+      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
 
       const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
       const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(
@@ -180,6 +181,7 @@ const getMaterializationChangesetTag = (dbState: SqliteDb, key: EventSequenceNum
 
 const makeSchemaWith = (config: UnknownEvents.HandlingConfig) =>
   makeSchema({
+    projectionRevision: 'test-fixture-v1',
     events: [],
     state: State.SQLite.makeState({ tables: {}, materializers: {} }),
     unknownEventHandling: config,
@@ -195,7 +197,7 @@ const setup = (config: UnknownEvents.HandlingConfig) =>
     const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
 
     const schema = makeSchemaWith(config)
-    yield* Eventlog.initEventlogDb(dbEventlog)
+    yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
 
     const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
     const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(

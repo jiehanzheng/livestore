@@ -242,12 +242,65 @@ export function Factory(Module) {
 
   sqlite3.deserialize = (function () {
     const fname = 'sqlite3_deserialize'
-    const f = Module.cwrap(fname, ...decl('nnnnnn:n'))
+    // This non-BigInt WASM ABI splits each sqlite3_int64 into low/high i32 arguments.
+    // Marshal UTF-8 explicitly before entry so ownership does not depend on cwrap string conversion.
+    const f = Module.cwrap(fname, ...decl('nnnnnnnn:n'))
     return function (db, schema, data, szDb, szBuf, flags) {
       verifyDatabase(db)
-      const ptr = Module._sqlite3_malloc(szDb)
-      Module.HEAPU8.subarray(ptr).set(data)
-      const result = f(db, schema, ptr, szDb, szBuf, flags)
+      if (
+        typeof schema !== 'string' ||
+        schema.includes('\0') ||
+        !(data instanceof Uint8Array) ||
+        !Number.isSafeInteger(szDb) ||
+        szDb < 0 ||
+        szDb > data.byteLength ||
+        !Number.isSafeInteger(szBuf) ||
+        szBuf < szDb ||
+        szBuf > 0x7fffffff ||
+        !Number.isSafeInteger(flags) ||
+        flags < 0 ||
+        flags > 0xffffffff
+      ) {
+        throw new SQLiteError('Invalid deserialize schema, sizes, or flags', SQLite.SQLITE_MISUSE)
+      }
+      const schemaBytes = textEncoder.encode(schema)
+      if (schemaBytes.byteLength >= 0x7fffffff) return SQLite.SQLITE_NOMEM
+      let schemaPtr = 0
+      let dataPtr = 0
+      let enteredNative = false
+      let result = SQLite.SQLITE_NOMEM
+      const errors = []
+      try {
+        schemaPtr = Module._sqlite3_malloc(schemaBytes.byteLength + 1)
+        if (schemaPtr) {
+          // sqlite3_malloc takes a signed i32 size, so validated sizes have zero high halves.
+          dataPtr = Module._sqlite3_malloc(Math.max(szBuf, 1))
+          if (dataPtr) {
+            Module.HEAPU8.set(schemaBytes, schemaPtr)
+            Module.HEAPU8[schemaPtr + schemaBytes.byteLength] = 0
+            Module.HEAPU8.set(data.subarray(0, szDb), dataPtr)
+            // The hidden image pointer is never exposed to JS callers. SQLite must own this
+            // private copy, even if FREEONCLOSE was omitted, on failure or eventual DB close.
+            // After native entry even a trap leaves ownership uncertain: never free it again.
+            enteredNative = true
+            result = f(db, schemaPtr, dataPtr, szDb, 0, szBuf, 0, flags | 1)
+          }
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+      for (const ptr of [enteredNative ? 0 : dataPtr, schemaPtr]) {
+        if (ptr) {
+          try {
+            Module._sqlite3_free(ptr)
+          } catch (error) {
+            errors.push(error)
+          }
+        }
+      }
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1)
+        throw new AggregateError(errors, 'Deserialize or private allocation cleanup failed', { cause: errors[0] })
       return result
     }
   })()
@@ -502,19 +555,20 @@ export function Factory(Module) {
   //   return SQLite.SQLITE_OK;
   // };
   sqlite3.exec = function (db, sql, callback) {
-    const stmts = sqlite3.statements(db, sql, { unscoped: true })
-    for (const stmt of stmts) {
-      let columns
-      while (sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
-        if (callback) {
-          columns = columns ?? sqlite3.column_names(stmt)
-          const row = sqlite3.row(stmt)
-          callback(row, columns)
+    const statements = sqlite3.statements(db, sql)
+    for (const stmt of statements) {
+      try {
+        let columns
+        while (sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+          if (callback) {
+            columns = columns ?? sqlite3.column_names(stmt)
+            callback(sqlite3.row(stmt), columns)
+          }
         }
+      } catch (error) {
+        // Pass the consumer failure into the scope so cleanup failures retain it.
+        statements.throw(error)
       }
-    }
-    for (const stmt of stmts) {
-      sqlite3.finalize(stmt)
     }
     return SQLite.SQLITE_OK
   }
@@ -763,76 +817,74 @@ export function Factory(Module) {
     }
   })()
 
-  sqlite3.statements = function (db, sql, options = {}) {
+  sqlite3.statements = function (db, sql, options) {
     const prepare = Module.cwrap(
       'sqlite3_prepare_v3',
       'number',
       ['number', 'number', 'number', 'number', 'number', 'number'],
-      // { async: true });
       { async: false },
     )
-
-    const stmts = []
-
-    // return (async function*() {
-    const onFinally = []
-    // try {
-    // Encode SQL string to UTF-8.
-    const utf8 = textEncoder.encode(sql)
-
-    // Copy encoded string to WebAssembly memory. The SQLite docs say
-    // zero-termination is a minor optimization so add room for that.
-    // Also add space for the statement handle and SQL tail pointer.
-    const allocSize = utf8.byteLength - (utf8.byteLength % 4) + 12
-    const pzHead = Module._sqlite3_malloc(allocSize)
-    const pzEnd = pzHead + utf8.byteLength + 1
-    onFinally.push(() => Module._sqlite3_free(pzHead))
-    Module.HEAPU8.set(utf8, pzHead)
-    Module.HEAPU8[pzEnd - 1] = 0
-
-    // Use extra space for the statement handle and SQL tail pointer.
-    const pStmt = pzHead + allocSize - 8
-    const pzTail = pzHead + allocSize - 4
-
-    // Ensure that statement handles are not leaked.
-    let stmt
-    function maybeFinalize() {
-      if (stmt && !options.unscoped) {
-        sqlite3.finalize(stmt)
+    const statements = (function* () {
+      let allocation = 0
+      const owned = new Set()
+      let completed = false
+      let failed = false
+      let failure
+      // A release operation aggregates failures without replacing a thrown consumer value.
+      function release() {
+        const errors = failed ? [failure] : []
+        try {
+          if (allocation) Module._sqlite3_free(allocation)
+        } catch (error) {
+          errors.push(error)
+        }
+        // Transfer only after preparation AND allocation cleanup succeed.
+        if (!options?.unscoped || !completed || errors.length > 0) {
+          for (const stmt of owned) {
+            try {
+              sqlite3.finalize(stmt)
+            } catch (error) {
+              errors.push(error)
+            }
+          }
+        }
+        if (errors.length === 1) throw errors[0]
+        if (errors.length > 1) throw new AggregateError(errors, 'Statement preparation or cleanup failed')
       }
-      stmt = 0
-    }
-    onFinally.push(maybeFinalize)
-
-    // Loop over statements.
-    Module.setValue(pzTail, pzHead, '*')
-    do {
-      // Reclaim resources for the previous iteration.
-      maybeFinalize()
-
-      // Call sqlite3_prepare_v3() for the next statement.
-      // Allow retry operations.
-      const zTail = Module.getValue(pzTail, '*')
-      const rc = prepare(db, zTail, pzEnd - pzTail, options.flags || 0, pStmt, pzTail)
-
-      if (rc !== SQLite.SQLITE_OK) {
-        check('sqlite3_prepare_v3', rc, db)
+      try {
+        const utf8 = textEncoder.encode(sql)
+        const allocSize = utf8.byteLength - (utf8.byteLength % 4) + 12
+        allocation = Module._sqlite3_malloc(allocSize)
+        if (!allocation) check('sqlite3_malloc', SQLite.SQLITE_NOMEM, db)
+        const end = allocation + utf8.byteLength + 1
+        Module.HEAPU8.set(utf8, allocation)
+        Module.HEAPU8[end - 1] = 0
+        const pStmt = allocation + allocSize - 8
+        const pTail = allocation + allocSize - 4
+        Module.setValue(pTail, allocation, '*')
+        while (true) {
+          const tail = Module.getValue(pTail, '*')
+          const rc = prepare(db, tail, end - tail, options?.flags || 0, pStmt, pTail)
+          if (rc !== SQLite.SQLITE_OK) check('sqlite3_prepare_v3', rc, db)
+          const stmt = Module.getValue(pStmt, '*')
+          if (!stmt) break
+          mapStmtToDB.set(stmt, db)
+          owned.add(stmt)
+          yield stmt
+          if (!options?.unscoped) {
+            owned.delete(stmt)
+            sqlite3.finalize(stmt)
+          }
+        }
+        completed = true
+      } catch (error) {
+        failed = true
+        failure = error
+      } finally {
+        release()
       }
-
-      stmt = Module.getValue(pStmt, '*')
-      if (stmt) {
-        mapStmtToDB.set(stmt, db)
-        // yield stmt;
-        stmts.push(stmt)
-      }
-    } while (stmt)
-    // } finally {
-    //   while (onFinally.length) {
-    //     onFinally.pop()();
-    //   }
-    // }
-
-    return stmts
+    })()
+    return options?.unscoped ? Array.from(statements) : statements
   }
 
   sqlite3.step = (function () {

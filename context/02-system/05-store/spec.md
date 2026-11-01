@@ -30,7 +30,7 @@ see `../04-runtime/`). Members (`store.ts`):
 - Identity/environment: `storeId`, `clientId`, `sessionId`, `storageMode`
   (persisted vs in-memory fallback, e.g. Safari/Firefox private browsing —
   `store.ts:166-207`; LS.SYS.STORE-R12).
-- Lifecycle: `shutdown`, `shutdownPromise`; debug: `_dev.*`, devtools wiring
+- Lifecycle: bounded `shutdown`, `shutdownPromise`, strict local `shutdownAndWait`, `shutdownAndWaitPromise`; debug: `_dev.*`, devtools wiring
   (`src/store/devtools.ts`).
 
 The Effect-native binding (`Store.Tag`) is a realization of the integration
@@ -95,11 +95,11 @@ per-commit root span with links.
 
 ## Lifecycle
 
-- Every public operation guards on `isShutdown` (`checkShutdown`).
+- Public reads and writes guard on `isShutdown` (`checkShutdown`); shutdown requests and strict observers remain repeatable.
 - `shutdown` first drains admitted client-session events to the leader, then
   closes the store's `lifetimeScope`. **Durability contract (Q2, see
   [`.decisions/0001-client-session-shutdown-drain.md`](./.decisions/0001-client-session-shutdown-drain.md)):
-  a successful orderly `shutdown()` flushes every admitted client commit to the
+  successful completion of orderly local teardown flushes every admitted client commit to the
   leader; a hard crash may still lose un-acked client commits** — the client
   session is the only tier without persist-before-admit (LS.SYS.STORE-DQ1). The
   caller's 1s timeout limits how long `shutdown()` blocks; the detached cleanup
@@ -107,6 +107,16 @@ per-commit root span with links.
   after which the lifetime scope is force-closed so an unresponsive leader
   cannot leak it. Intentional shutdown is distinguished from failure via the
   Exit cause (LS.SYS.STORE-R07, LS.SYS.SYNC.PROC-R03).
+- `shutdownPromise()` observes the bounded shutdown request itself, rather than
+  only the bootstrap that forks it. Neither bounded request completion nor
+  `shutdownDeferred` attests to finished teardown.
+- `shutdownAndWait()` and `shutdownAndWaitPromise()` start or join the same
+  cached local teardown as `shutdown()` and caller-scope close. They have no
+  observer timeout and retain its actual failure, including a hard drain timeout
+  after local cleanup. Cancelling a waiter does not cancel the owned cleanup;
+  repeated and concurrent observers share its outcome. Local completion does
+  not attest to closure of another session's shared leader or exclusive file
+  availability. That requires separate owner and storage evidence.
 - Closing the scope `createStore` runs in is an orderly shutdown too: for a
   successful exit the finalizer runs the same bounded drain before closing
   `lifetimeScope`, so integrations that dispose stores by scope (the

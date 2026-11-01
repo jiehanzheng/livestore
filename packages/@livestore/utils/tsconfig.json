@@ -8,6 +8,7 @@
       "DOM"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -39,6 +40,41 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "effect/FileSystem#WatchBackend",
+          "effect/Graph",
+          "@effect/opentelemetry/OtelTracer",
+          "effect/rpc",
+          "effect/socket",
+          "effect/workers/Transferable",
+          "effect/http/HttpClient#HttpClient",
+          "@effect/platform-node/NodeFileSystem#layer"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/FileSystem#WatchBackend",
+                "effect/Graph",
+                "@effect/opentelemetry/OtelTracer",
+                "effect/rpc",
+                "effect/socket",
+                "effect/workers/Transferable",
+                "effect/http/HttpClient#HttpClient",
+                "@effect/platform-node/NodeFileSystem#layer",
+                "@effect/vitest",
+                "effect/FileSystem#FileSystem",
+                "effect/http/FetchHttpClient#layer"
+              ]
+            }
+          }
         ]
       }
     ],

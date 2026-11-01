@@ -39,6 +39,12 @@ implemented):
   later manual refresh / `runDeferredEffects` pass; subscriber effects run
   through the adapter-provided `batchUpdates` wrapper.
 
+Subscriber callbacks may synchronously unsubscribe themselves or other
+subscriptions during a refresh. A pending effect that is destroyed before its
+turn is skipped, including when the adapter's batch wrapper delays dispatch.
+New subscriptions still perform their normal initial read and participate in
+subsequent updates. Direct reads of destroyed graph nodes remain errors.
+
 ## Query Kinds
 
 | Kind | Constructor | Identity (`def.hash`) | Notes |

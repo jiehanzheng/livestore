@@ -118,7 +118,9 @@ const schemaDescriptor = (schema: Schema.Top, cache: SchemaDescriptorCache): Can
   const document = SchemaRepresentation.toRepresentations([schema.ast, SchemaAST.toType(schema.ast)], {
     referencePolicy: () => undefined,
   })
-  const descriptor: CanonicalValue = ['schema', schemaRepresentationDescriptor(document)]
+  // V1 omitted the JSON content's encoded shape (Number and NumberFromString
+  // could collide). This intentional format boundary must retain that content.
+  const descriptor: CanonicalValue = ['json-schema-v2', schemaRepresentationDescriptor(document)]
   cache.set(schema, descriptor)
   return descriptor
 }
@@ -136,6 +138,10 @@ const schemaRepresentationDescriptor = (value: unknown, parentKey?: string): Can
         ? [key, renamedEffectCheckIds.get(entryValue) ?? entryValue]
         : [key, entryValue],
     )
+    const tag = sourceEntries.find(([key]) => key === '_tag')?.[1]
+    if (typeof tag === 'string' && Object.hasOwn(effectRepresentationTags, tag) === false) {
+      throw new Error(`Unsupported schema representation: ${tag}`)
+    }
     const isUnion = sourceEntries.some(([key, entryValue]) => key === '_tag' && entryValue === 'Union')
     // Effect rc.113 removed this representation field because unions only support `anyOf`.
     // Restore the old default so dependency upgrades preserve existing state fingerprints.
@@ -153,6 +159,33 @@ const schemaRepresentationDescriptor = (value: unknown, parentKey?: string): Can
 }
 
 const effectIgnoredFields = new Set(['annotations', 'isMutable'])
+
+const effectRepresentationTags = {
+  Declaration: true,
+  Reference: true,
+  Suspend: true,
+  Null: true,
+  Undefined: true,
+  Void: true,
+  Never: true,
+  Unknown: true,
+  Any: true,
+  String: true,
+  Number: true,
+  Boolean: true,
+  BigInt: true,
+  Symbol: true,
+  Literal: true,
+  UniqueSymbol: true,
+  ObjectKeyword: true,
+  Enum: true,
+  TemplateLiteral: true,
+  Arrays: true,
+  Objects: true,
+  Union: true,
+  Filter: true,
+  FilterGroup: true,
+} satisfies Record<SchemaRepresentation.Representation['_tag'] | SchemaRepresentation.Check['_tag'], true>
 
 /** Maps renamed Effect check ids to the ids existing fingerprints were computed from, so the rename does not rebuild state. */
 const renamedEffectCheckIds = new Map([

@@ -5,6 +5,14 @@
       "dir": "packages/@livestore/adapter-cloudflare"
     },
     {
+      "name": "@livestore/adapter-expo",
+      "dir": "packages/@livestore/adapter-expo"
+    },
+    {
+      "name": "@livestore/adapter-node",
+      "dir": "packages/@livestore/adapter-node"
+    },
+    {
       "name": "@livestore/adapter-web",
       "dir": "packages/@livestore/adapter-web"
     },
@@ -59,6 +67,8 @@
   ],
   "publishablePackageNames": [
     "@livestore/adapter-cloudflare",
+    "@livestore/adapter-expo",
+    "@livestore/adapter-node",
     "@livestore/adapter-web",
     "@livestore/common",
     "@livestore/common-cf",

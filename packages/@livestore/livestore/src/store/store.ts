@@ -22,6 +22,7 @@ import {
   type StorageMode,
   type SyncState,
   UnknownError,
+  type AdapterError,
 } from '@livestore/common'
 import type { StreamEventsOptions } from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
@@ -192,6 +193,8 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
   //#region constructor
   constructor({
     clientSession,
+    shutdown,
+    shutdownAndWait,
     schema,
     otelOptions,
     context,
@@ -409,6 +412,8 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
         LiveStoreEvent.Client.Encoded
       >,
       clientSession,
+      shutdown,
+      shutdownAndWait,
       sqliteDbWrapper,
       effectContext,
       otel: otelObj,
@@ -923,7 +928,9 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
         ],
       }),
       Effect.tapCause(Effect.logError),
-      Effect.catchCause((cause) => Effect.forkChild(this.shutdown(cause))),
+      // This synchronous commit fiber ends immediately. Its child would be interrupted before the shutdown
+      // request is accepted, losing the original failure and notification. The request owns its cleanup once started.
+      Effect.catchCause((cause) => Effect.forkDetach(this.shutdown(cause))),
       Effect.runSyncWith(this[StoreInternalsSymbol].effectContext.services),
     )
   }
@@ -988,7 +995,7 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
    */
   eventsStream = (
     options?: StoreEventsOptions<TSchema>,
-  ): Stream.Stream<LiveStoreEvent.Client.ForSchema<TSchema>, UnknownError> => {
+  ): Stream.Stream<LiveStoreEvent.Client.ForSchema<TSchema>, AdapterError> => {
     const { clientSession } = this[StoreInternalsSymbol]
     const eventSchema = LiveStoreEvent.Client.makeSchema(this.schema)
 
@@ -1059,12 +1066,7 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
    * ```
    */
   syncStatusStream = (): Stream.Stream<SyncStatus> => {
-    const syncStateSubscribable = this[StoreInternalsSymbol].syncProcessor.syncState
-
-    return Stream.concat(
-      Stream.fromEffect(syncStateSubscribable.pipe(Effect.map(this.makeSyncStatus))),
-      syncStateSubscribable.changes.pipe(Stream.map(this.makeSyncStatus)),
-    )
+    return this[StoreInternalsSymbol].syncProcessor.syncState.changes.pipe(Stream.map(this.makeSyncStatus))
   }
 
   /**
@@ -1089,14 +1091,26 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
   subscribeSyncStatus = (onUpdate: (status: SyncStatus) => void): Unsubscribe => {
     this.checkShutdown('subscribeSyncStatus')
 
+    let active = true
     const fiber = this.syncStatusStream().pipe(
-      Stream.tap((status) => Effect.sync(() => onUpdate(status))),
+      Stream.tap((status) =>
+        Effect.sync(() => {
+          if (active === true) onUpdate(status)
+        }),
+      ),
       Stream.runDrain,
       this.runEffectFork,
     )
 
     return () => {
-      Fiber.interrupt(fiber).pipe(Effect.runForkWith(this[StoreInternalsSymbol].effectContext.services))
+      if (active === false) return
+      active = false
+      // runEffectFork starts a lifetime-scoped child. Join its bootstrap fiber so
+      // unsubscribe interrupts the listener itself, including cancellation during startup.
+      Fiber.join(fiber).pipe(
+        Effect.flatMap(Fiber.interrupt),
+        Effect.runForkWith(this[StoreInternalsSymbol].effectContext.services),
+      )
     }
   }
 
@@ -1136,31 +1150,46 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
   }
 
   /**
-   * Shuts down the store and closes the client session.
+   * Requests shutdown of the Store and client session with a bounded wait.
+   * Use shutdownAndWait for actual local teardown completion; remote owners are independent.
    *
    * This is called automatically when the store was created using the React or Effect API.
    */
-  shutdownPromise = async (cause?: UnknownError) => {
-    this.checkShutdown('shutdownPromise')
+  shutdownPromise = (cause?: AdapterError) =>
+    this.runEffectPromise(this.shutdown(cause !== undefined ? Cause.fail(cause) : undefined))
 
+  /**
+   * Starts or joins the once-only adapter shutdown and this Store's local teardown. Observes both
+   * completing or the first known failure, even if the other owner remains stalled.
+   * Rejection does not prove the other owner has finished or physical resources are closed.
+   * Repeated observers retain that same failure; success requires both owners to complete.
+   * Cancelling the observer leaves the shared cleanup running. This does not close a leader
+   * owned by another session or attest that its files are available for exclusive access.
+   */
+  shutdownAndWait = (
+    cause?: Cause.Cause<AdapterError | MaterializeError | MaterializationJournal.MaterializationJournalError>,
+  ): Effect.Effect<void> => {
     this[StoreInternalsSymbol].isShutdown = true
-    await this.shutdown(cause !== undefined ? Cause.fail(cause) : undefined).pipe(
-      this.runEffectFork,
-      Fiber.join,
-      Effect.runPromise,
+    return this[StoreInternalsSymbol].shutdownAndWait(
+      cause !== undefined ? Exit.failCause(cause) : Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })),
     )
   }
 
+  /** Promise form of the strict local teardown observer; repeated calls share the same cleanup. */
+  shutdownAndWaitPromise = (cause?: AdapterError) =>
+    this.runEffectPromise(this.shutdownAndWait(cause !== undefined ? Cause.fail(cause) : undefined))
+
   /**
-   * Shuts down the store and closes the client session.
+   * Requests shutdown of the Store and client session with a bounded wait.
+   * Use shutdownAndWait for actual local teardown completion; remote owners are independent.
    *
    * This is called automatically when the store was created using the React or Effect API.
    */
   shutdown = (
-    cause?: Cause.Cause<UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError>,
+    cause?: Cause.Cause<AdapterError | MaterializeError | MaterializationJournal.MaterializationJournalError>,
   ): Effect.Effect<void> => {
     this[StoreInternalsSymbol].isShutdown = true
-    return this[StoreInternalsSymbol].clientSession.shutdown(
+    return this[StoreInternalsSymbol].shutdown(
       cause !== undefined ? Exit.failCause(cause) : Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })),
     )
   }

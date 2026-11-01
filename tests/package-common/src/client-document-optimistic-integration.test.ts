@@ -22,6 +22,7 @@ Vitest.describe('Client Document Optimistic Decoding Integration', () => {
       const adapter1 = makeTestAdapter()
       const store1 = yield* createStore({
         schema: makeSchema({
+          projectionRevision: 'test-fixture-v1',
           state: State.SQLite.makeState({ tables: { settings: v1Doc }, materializers: {} }),
           events: { SettingsSet: v1Doc.set },
         }),
@@ -46,6 +47,7 @@ Vitest.describe('Client Document Optimistic Decoding Integration', () => {
       const adapter2 = makeTestAdapter({ importSnapshot: snapshot })
       const store2 = yield* createStore({
         schema: makeSchema({
+          projectionRevision: 'test-fixture-v1',
           state: State.SQLite.makeState({ tables: { settings: v2Doc }, materializers: {} }),
           events: {},
         }),
@@ -74,6 +76,7 @@ Vitest.describe('Client Document Optimistic Decoding Integration', () => {
       const adapter1 = makeTestAdapter()
       const store1 = yield* createStore({
         schema: makeSchema({
+          projectionRevision: 'test-fixture-v1',
           state: State.SQLite.makeState({ tables: { config: v1Doc }, materializers: {} }),
           events: { ConfigSet: v1Doc.set },
         }),
@@ -94,6 +97,7 @@ Vitest.describe('Client Document Optimistic Decoding Integration', () => {
       const adapter2 = makeTestAdapter({ importSnapshot: snapshot })
       const store2 = yield* createStore({
         schema: makeSchema({
+          projectionRevision: 'test-fixture-v1',
           state: State.SQLite.makeState({ tables: { config: v2Doc }, materializers: {} }),
           events: { ConfigSet: v2Doc.set },
         }),

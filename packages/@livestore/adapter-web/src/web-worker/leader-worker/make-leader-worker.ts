@@ -1,8 +1,9 @@
 import type * as otel from '@opentelemetry/api'
 
+import { mapToAdapterError } from '@livestore/common'
 import type { BootStatus, BootWarningReason, LogConfig, SqliteDb, SyncOptions } from '@livestore/common'
 import { MaterializationJournal } from '@livestore/common'
-import { Devtools, EventlogSqliteDb, StateHead, StateSqliteDb, UnknownError } from '@livestore/common'
+import { Devtools, EventlogSqliteDb, StateHead, StateSqliteDb, type UnknownError } from '@livestore/common'
 import type { DevtoolsOptions, StreamEventsOptions } from '@livestore/common/leader-thread'
 import {
   configureConnection,
@@ -16,7 +17,6 @@ import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { isDevEnv, LS_DEV } from '@livestore/utils'
 import {
-  Cause,
   Deferred,
   Effect,
   FetchHttpClient,
@@ -36,11 +36,24 @@ import {
 import { BrowserWorkerRunner, Opfs, WebError } from '@livestore/utils/effect/browser'
 import * as WebmeshWorker from '@livestore/webmesh/worker'
 
-import { cleanupOldStateDbFiles, getStateDbFileName, sanitizeOpfsDir } from '../common/persisted-sqlite.ts'
+import {
+  cleanupOldStateDbFiles,
+  discoverPersistedSource,
+  getStateDbFileName,
+  sanitizeOpfsDir,
+} from '../common/persisted-sqlite.ts'
 import { makeShutdownChannel } from '../common/shutdown-channel.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
+import { closeSqliteDb } from './close-sqlite-db.ts'
 
 export type WorkerOptions = {
+  /**
+   * Optional outer RPC transport paired with the adapter's worker factory port.
+   * Closing this endpoint releases SDK resources without closing the worker global,
+   * so its application owner can join makeWorkerEffect before terminating the Worker.
+   * Omit to use the ambient worker transport. Inner session ports are unchanged.
+   */
+  transport?: MessagePort
   schema: LiveStoreSchema
   sync?: SyncOptions
   syncPayloadSchema?: Schema.Top
@@ -78,7 +91,14 @@ export const makeWorkerEffect = (options: WorkerOptions) => {
   )
 
   return makeWorkerRunnerOuter(options).pipe(
-    Effect.provide(Layer.provideMerge(RpcServer.layerProtocolWorkerRunner, BrowserWorkerRunner.layer)),
+    Effect.provide(
+      Layer.provideMerge(
+        RpcServer.layerProtocolWorkerRunner,
+        options.transport === undefined
+          ? BrowserWorkerRunner.layer
+          : BrowserWorkerRunner.layerMessagePort(options.transport),
+      ),
+    ),
     Effect.scoped,
     Effect.tapCauseLogPretty,
     Effect.annotateLogs({ thread: self.name }),
@@ -215,6 +235,9 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
 
           const opfsDirectory = useOpfs === true ? yield* sanitizeOpfsDir(storageOptions.directory, storeId) : undefined
 
+          const { sourceIsNew } =
+            useOpfs === true ? yield* discoverPersistedSource({ storageOptions, storeId }) : { sourceIsNew: true }
+
           const makeOpfsDb = (kind: 'state' | 'eventlog') =>
             Effect.acquireRelease(
               makeSqliteDb({
@@ -231,11 +254,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
                     foreignKeys: true,
                   }).pipe(Effect.runSyncWith(services)),
               }),
-              (db) =>
-                Effect.try({
-                  try: () => db.close(),
-                  catch: (cause) => new Cause.UnknownError(cause),
-                }).pipe(Effect.ignore),
+              closeSqliteDb,
             )
 
           const makeInMemoryDb = () =>
@@ -244,18 +263,13 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
                 _tag: 'in-memory',
                 configureDb: (db) => configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
               }),
-              (db) =>
-                Effect.try({
-                  try: () => db.close(),
-                  catch: (cause) => new Cause.UnknownError(cause),
-                }).pipe(Effect.ignore),
+              closeSqliteDb,
             )
 
-          // Use OPFS if available, otherwise fall back to in-memory
-          const [dbState, dbEventlog] =
-            useOpfs === true
-              ? yield* Effect.all([makeOpfsDb('state'), makeOpfsDb('eventlog')], { concurrency: 2 })
-              : yield* Effect.all([makeInMemoryDb(), makeInMemoryDb()], { concurrency: 2 })
+          // Validate authoritative source before opening any derived database.
+          const dbEventlog = yield* useOpfs === true ? makeOpfsDb('eventlog') : makeInMemoryDb()
+          const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
+          const dbState = yield* useOpfs === true ? makeOpfsDb('state') : makeInMemoryDb()
 
           // Clean up old state database files after successful database creation
           // This prevents OPFS file pool capacity exhaustion from accumulated state db files after schema changes/migrations
@@ -276,6 +290,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
 
           const leaderThreadLayer = makeLeaderThreadLayer({
             schema,
+            initializedSource,
             storeId,
             clientId,
             makeSqliteDb,
@@ -292,10 +307,9 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
         }).pipe(
           Scope.provide(leaderThreadScope),
           Effect.tapCauseLogPretty,
-          UnknownError.mapToUnknownError,
+          mapToAdapterError,
           Effect.withPerformanceMeasure('@livestore/adapter-web:worker:InitialMessage'),
           Effect.withSpan('@livestore/adapter-web:worker:InitialMessage'),
-          Effect.orDie,
         ),
       )
 
@@ -316,7 +330,6 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
         GetRecreateSnapshot: () =>
           Effect.gen(function* () {
             const workerCtx = yield* LeaderThreadCtx
-            const dbState = yield* StateSqliteDb.StateSqliteDb
 
             // NOTE we can only return the cached snapshot once as it's transferred (i.e. disposed), so we need to set it to undefined
             // const cachedSnapshot =
@@ -324,9 +337,18 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
 
             // return cachedSnapshot ?? workerCtx.db.export()
 
-            const snapshot = dbState.export()
+            const snapshot = yield* workerCtx.exportSnapshot
             return { snapshot, migrationsReport: workerCtx.initialState.migrationsReport }
           }).pipe(provideLeaderThread),
+        OpenSession: (request) =>
+          Effect.gen(function* () {
+            const { syncProcessor, initialState } = yield* LeaderThreadCtx
+            const { admission, queue } = yield* syncProcessor.openSession(request)
+            return Stream.concat(
+              Stream.succeed({ ...admission, migrationsReport: initialState.migrationsReport }),
+              Stream.fromQueue(queue).pipe(Stream.map((item) => ({ _tag: 'Pull' as const, item }))),
+            )
+          }).pipe(provideLeaderThread, Stream.unwrap),
         PullStream: ({ cursor }) =>
           Effect.gen(function* () {
             const { syncProcessor } = yield* LeaderThreadCtx // <- syncState comes from here
@@ -354,8 +376,8 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
             })
           }).pipe(provideLeaderThread, Stream.unwrap, Stream.withSpan('@livestore/adapter-web:worker:StreamEvents')),
         Export: () =>
-          StateSqliteDb.StateSqliteDb.pipe(
-            Effect.flatMap((dbState) => Effect.sync(() => dbState.export())),
+          LeaderThreadCtx.pipe(
+            Effect.flatMap((ctx) => ctx.exportSnapshot),
             provideLeaderThread,
             Effect.withSpan('@livestore/adapter-web:worker:Export'),
           ),

@@ -9,6 +9,10 @@ import { useClientDocument } from './useClientDocument.ts'
 import { useQuery } from './useQuery.ts'
 import { useSyncStatus } from './useSyncStatus.ts'
 
+// Weak identity keys follow actual store lifetimes, without keeping disposed cache entries alive.
+const observedLoads = new WeakSet<Promise<unknown>>()
+const resolvedLoads = new WeakMap<object, Promise<unknown>>()
+
 /**
  * Returns a store instance augmented with hooks (`store.useQuery()` and `store.useClientDocument()`) for reactive queries.
  *
@@ -63,27 +67,33 @@ export const useStore = <
 ): Store<TSchema, TContext> & ReactApi => {
   const storeRegistry = useStoreRegistry()
 
-  // Called on every render (intentionally not memoized). For already-loaded stores this returns
-  // the Store synchronously, so React.use() is skipped entirely. Caching the initial Promise via
-  // useMemo would cause React.use() to be called with a resolved Promise on subsequent renders,
-  // which blocks React transitions from committing.
+  // Always consult the registry: cached options or storeId promises can outlive an evicted Store.
   const storeOrPromise = storeRegistry.getOrLoadPromise(options)
+  let store: Store<TSchema, TContext>
+  if (storeOrPromise instanceof Promise) {
+    if (observedLoads.has(storeOrPromise) === false) {
+      observedLoads.add(storeOrPromise)
+      // Register before React.use subscribes. A normal promise-driven retry then sees the
+      // identity link and completes the same promise read, as React 19.3 requires.
+      void storeOrPromise.then(
+        (loaded) => {
+          resolvedLoads.set(loaded, storeOrPromise)
+        },
+        // The original rejection still reaches React; this observer must not create another unhandled rejection.
+        () => undefined,
+      )
+    }
+    store = React.use(storeOrPromise)
+  } else {
+    const observedLoad = resolvedLoads.get(storeOrPromise)
+    if (observedLoad !== undefined) React.use(observedLoad)
+    // Stores first encountered warm need no Promise. Previously suspended stores keep reading
+    // their original Promise; the registry's current Store remains the source of truth.
+    store = storeOrPromise
+  }
 
-  const store = storeOrPromise instanceof Promise ? React.use(storeOrPromise) : storeOrPromise
-
-  // NOTE: retain() must be declared AFTER the React.use() call above. When React.use() suspends
-  // the component, any hooks declared before it get committed while hooks after the suspension
-  // point (including those in the caller) don't. On re-render when the store resolves synchronously,
-  // those late hooks appear for the first time, causing a hook-order violation in strict mode.
-  // By placing useEffect after React.use(), no effect hooks are committed during suspension,
-  // so React treats all effects as fresh mounts on the first successful render.
-  //
-  // retain() is called in useEffect (after render), while getOrLoadPromise() is called during
-  // render. This creates a timing gap where with very short unusedCacheTime values (e.g., 0),
-  // the store could theoretically be disposed before the effect fires. In practice, this is not
-  // an issue with the default 60s cache time, but it becomes an issue when `unusedCacheTime` is
-  // configured to values less than ~100ms.
-  // See https://github.com/livestorejs/livestore/issues/916
+  // Retain only from a committed render's effect; abandoned suspended attempts must not retain.
+  // Very short unusedCacheTime can expire between render and this effect (#916); zero TTL remains unqualified.
   React.useEffect(() => storeRegistry.retain(options), [storeRegistry, options])
 
   return withReactApi(store)

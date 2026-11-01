@@ -258,7 +258,9 @@ export const pageConsole = ({
     ),
   )
 
-export class SiteError extends Schema.TaggedError<SiteError>('~@livestore/effect-playwright/SiteError')('SiteError', {
+export class SiteError extends Schema.TaggedError<SiteError, { readonly brand: unique symbol }>(
+  '~@livestore/effect-playwright/SiteError',
+)('SiteError', {
   // TODO remove `label` again once error tracing works properly with Playwright
   label: Schema.String,
   messages: Schema.Union([Schema.Array(ConsoleMessage), Schema.Defect()]),

@@ -47,6 +47,35 @@ export const decodeAccessHandlePoolFilename = async (file: File): Promise<string
   }
 }
 
+/**
+ * Discovery must not inherit the VFS's repair-on-open behavior: a corrupt association
+ * is retained evidence, not proof that an eventlog never existed.
+ * Header layout follows wa-sqlite AccessHandlePoolVFS#getAssociatedPath/setAssociatedPath.
+ */
+export const decodeAccessHandlePoolFilenameStrict = async (file: File): Promise<string> => {
+  const headerSize = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE
+  const header = new Uint8Array(await file.slice(0, headerSize).arrayBuffer())
+  if (header.byteLength !== headerSize) throw new Error('Truncated OPFS pool header')
+  const corpus = header.subarray(0, HEADER_CORPUS_SIZE)
+  const flags = new DataView(header.buffer, header.byteOffset).getUint32(HEADER_OFFSET_FLAGS)
+  const fileDigest = new Uint32Array(header.buffer, header.byteOffset + HEADER_OFFSET_DIGEST, 2)
+  const computedDigest = computeDigest(corpus)
+  if (fileDigest.every((value, index) => value === computedDigest[index]) === false) {
+    throw new Error('Invalid OPFS pool header digest')
+  }
+  const pathEnd = corpus.subarray(0, HEADER_MAX_PATH_SIZE).indexOf(0)
+  if (pathEnd === -1) throw new Error('Unterminated OPFS pool filename')
+  if (pathEnd === 0) {
+    // A valid free handle is truncated to one sector. Retained payload can be an interrupted deletion.
+    if (flags !== 0 || file.size !== HEADER_OFFSET_DATA) throw new Error('Incomplete OPFS pool disassociation')
+    return ''
+  }
+  if ((flags & VFS.SQLITE_OPEN_DELETEONCLOSE) !== 0 || (flags & PERSISTENT_FILE_TYPES) === 0) {
+    throw new Error('Unexpected OPFS pool file flags')
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(corpus.subarray(0, pathEnd))
+}
+
 const computeDigest = (corpus: Uint8Array): Uint32Array => {
   if (corpus[0] === 0) {
     // Optimization for deleted file.

@@ -26,11 +26,12 @@ import {
 
 import { type SqliteDb, UnknownError } from '../adapter-types.ts'
 import { PullItem } from '../ClientSessionLeaderThreadProxy.ts'
-import { IntentionalShutdownCause } from '../errors.ts'
+import { IntentionalShutdownCause, type ProjectionMismatchError } from '../errors.ts'
 import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
 import { EventSequenceNumber, LiveStoreEvent } from '../schema/mod.ts'
 import { EVENTLOG_META_TABLE, SYNC_STATUS_TABLE } from '../schema/state/sqlite/system-tables/eventlog-tables.ts'
+import type * as StateSnapshot from '../StateSnapshot.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
 import type { BackendIdMismatchError, IsOfflineError, ServerAheadError } from '../sync/errors.ts'
 import type * as SyncBackend from '../sync/sync-backend.ts'
@@ -78,6 +79,15 @@ export interface Service {
   readonly pullQueue: (args: {
     cursor: EventSequenceNumber.Client.Composite
   }) => Effect.Effect<Queue.Queue<typeof PullItem.Type>, never, Scope.Scope>
+  /** Validates the snapshot and attaches its subsequent changes in one owner turn. */
+  readonly openSession: (request: StateSnapshot.AdmissionRequest) => Effect.Effect<
+    {
+      readonly admission: StateSnapshot.Admission
+      readonly queue: Queue.Queue<typeof PullItem.Type>
+    },
+    ProjectionMismatchError,
+    Scope.Scope
+  >
   readonly syncState: Subscribable.Subscribable<SyncState.SyncState>
 }
 
@@ -182,17 +192,19 @@ export const make = Effect.fnUntraced(function* ({
     Effect.gen(function* () {
       if ((yield* Deferred.isDone(stoppedDeferred)) === true) return false
       model = { ...model, lifecycle: args.lifecycle }
-      if (args.notify === true && args.error !== undefined) {
+      const terminalError =
+        args.error === undefined
+          ? undefined
+          : Schema.is(Shutdown.All)(args.error) === true
+            ? args.error
+            : UnknownError.make({ cause: args.error, note: 'Leader sync loop failed' })
+      if (args.notify === true && terminalError !== undefined) {
         // A broken shutdown channel must not prevent resource cleanup or leave admitted pushes unresolved.
-        yield* shutdownChannel
-          .send(
-            Schema.is(Shutdown.All)(args.error) === true
-              ? args.error
-              : UnknownError.make({ cause: args.error, note: 'Leader sync loop failed' }),
-          )
-          .pipe(Effect.exit)
+        yield* shutdownChannel.send(terminalError).pipe(Effect.exit)
       }
       yield* interruptAllWork
+      // Either transport can win the session's shutdown race; both must retain the originating failure.
+      yield* connectedSessions.close(terminalError)
       yield* Deferred.succeed(stoppedDeferred, void 0)
       return false
     })
@@ -344,7 +356,10 @@ export const make = Effect.fnUntraced(function* ({
         return yield* stopForSyncFailure(new Error('Local push was not retained as pending'))
       }
       const persistExit = yield* persistence.persistLocal({ events }).pipe(Effect.exit)
-      if (Exit.isFailure(persistExit) === true) return yield* stopForSyncFailure(Cause.squash(persistExit.cause))
+      // A persistence failure may leave a split commit; every session must close until offline recovery.
+      if (Exit.isFailure(persistExit) === true) {
+        return yield* stop({ lifecycle: 'failed', error: Cause.squash(persistExit.cause), notify: true })
+      }
       const receipt = persistExit.value
       if (EventSequenceNumber.Client.isEqual(receipt.stateHead, merge.newSyncState.localHead) === false) {
         return yield* stopForSyncFailure({
@@ -395,7 +410,10 @@ export const make = Effect.fnUntraced(function* ({
           backendHead,
         })
         .pipe(Effect.exit)
-      if (Exit.isFailure(persistExit) === true) return yield* stopForSyncFailure(Cause.squash(persistExit.cause))
+      // A persistence failure may leave a split commit; every session must close until offline recovery.
+      if (Exit.isFailure(persistExit) === true) {
+        return yield* stop({ lifecycle: 'failed', error: Cause.squash(persistExit.cause), notify: true })
+      }
       const receipt = persistExit.value
       // The backend reports confirmed events without their local rebase generation, so confirming a pending event
       // that was rebased locally leaves the persisted state head at the same DAG position with a higher generation.
@@ -491,7 +509,7 @@ export const make = Effect.fnUntraced(function* ({
         // Stop all work that could still touch the databases before clearing them.
         model = { ...model, lifecycle: 'stopping' }
         yield* interruptAllWork
-        const resetExit = yield* clearLocalDatabases({ dbEventlog, dbState }).pipe(Effect.exit)
+        const resetExit = yield* persistence.resetSource.pipe(Effect.exit)
         const cause =
           Exit.isFailure(resetExit) === true
             ? Cause.squash(resetExit.cause)
@@ -524,6 +542,20 @@ export const make = Effect.fnUntraced(function* ({
       }
 
       switch (message._tag) {
+        case 'OpenSession': {
+          if (message.queue.state._tag !== 'Open') return true
+          const admitted = yield* persistence.admitSnapshot(message.request).pipe(Effect.exit)
+          if (Exit.isFailure(admitted) === true) {
+            // Refusing one incompatible client must not terminate the valid serving owner.
+            yield* Deferred.failCause(message.deferred, admitted.cause)
+            return true
+          }
+          const admission = admitted.value
+          // This mailbox turn includes persistence, publication and attachment. No cached-head heuristic is needed.
+          yield* connectedSessions.attach(message.queue)
+          yield* Deferred.succeed(message.deferred, admission)
+          return true
+        }
         case 'LocalPushRequested': {
           // The local queue holds admitted but not-yet-committed events. Validating against its tail prevents two
           // callers from being admitted with the same sequence number while they wait in the queue.
@@ -751,6 +783,20 @@ export const make = Effect.fnUntraced(function* ({
         return Stream.fromQueue(queue)
       }).pipe(Stream.unwrap),
     pullQueue: ({ cursor }) => connectedSessions.makeQueue(cursor),
+    openSession: (request) =>
+      Effect.gen(function* () {
+        const queue = yield* Effect.acquireRelease(
+          Queue.make<typeof PullItem.Type>({ capacity: 128, strategy: 'dropping' }),
+          (queue) => connectedSessions.detach(queue).pipe(Effect.andThen(Queue.shutdown(queue))),
+        )
+        const deferred = yield* Deferred.make<StateSnapshot.Admission, ProjectionMismatchError>()
+        yield* Deferred.await(startedDeferred)
+        yield* send({ _tag: 'OpenSession', request, queue, deferred })
+        const admission = yield* Deferred.await(deferred).pipe(
+          Effect.raceFirst(Deferred.await(stoppedDeferred).pipe(Effect.andThen(Effect.interrupt))),
+        )
+        return { admission, queue }
+      }),
     syncState: Subscribable.make({
       get: SubscriptionRef.get(syncStateRef),
       changes: SubscriptionRef.changes(syncStateRef),
@@ -844,6 +890,12 @@ type LeaderMessage =
       readonly defect: boolean
     }
   | { readonly _tag: 'PushRetryElapsed'; readonly retryId: OperationId }
+  | {
+      readonly _tag: 'OpenSession'
+      readonly request: StateSnapshot.AdmissionRequest
+      readonly queue: Queue.Queue<typeof PullItem.Type>
+      readonly deferred: Deferred.Deferred<StateSnapshot.Admission, ProjectionMismatchError>
+    }
   | { readonly _tag: 'Started' }
   | { readonly _tag: 'ShutdownRequested'; readonly reason: string }
 
@@ -1225,6 +1277,9 @@ const countRequestItems = (items: ReadonlyArray<LocalItem>) => {
 }
 
 interface PullQueueSet {
+  close: (error: unknown) => Effect.Effect<void>
+  attach: (queue: Queue.Queue<typeof PullItem.Type>) => Effect.Effect<void>
+  detach: (queue: Queue.Queue<typeof PullItem.Type>) => Effect.Effect<void>
   makeQueue: (
     cursor: EventSequenceNumber.Client.Composite,
   ) => Effect.Effect<Queue.Queue<typeof PullItem.Type>, never, Scope.Scope>
@@ -1238,6 +1293,7 @@ interface PullQueueSet {
 
 const makePullQueueSet = Effect.gen(function* () {
   const set = new Set<Queue.Queue<typeof PullItem.Type>>()
+  const admitted = new Set<Queue.Queue<typeof PullItem.Type>>()
 
   type StringifiedSeqNum = string
   // NOTE this could grow unbounded for long running sessions
@@ -1336,37 +1392,40 @@ const makePullQueueSet = Effect.gen(function* () {
       // console.debug(`offering to ${set.size} queues`, item.leaderHead, JSON.stringify(item.payload, null, 2))
 
       for (const queue of set) {
-        yield* Queue.offer(queue, pullItem)
+        if ((yield* Queue.offer(queue, pullItem)) === false) {
+          // A stalled opener must not retain unbounded events or block every other tab's durable owner.
+          set.delete(queue)
+          admitted.delete(queue)
+          yield* Queue.failCause(queue, Cause.die(new Error('Session catch-up buffer exceeded; reopen the Store')))
+        }
       }
     })
 
   return {
     makeQueue,
     offer,
+    close: (error: unknown) =>
+      Effect.gen(function* () {
+        for (const queue of admitted) {
+          yield* Queue.failCause(queue, Cause.die(error === undefined ? new Error('Admitted leader stopped') : error))
+          set.delete(queue)
+        }
+        admitted.clear()
+      }),
+    attach: (queue: Queue.Queue<typeof PullItem.Type>) =>
+      Effect.sync(() => {
+        if (queue.state._tag === 'Open') {
+          set.add(queue)
+          admitted.add(queue)
+        }
+      }),
+    detach: (queue: Queue.Queue<typeof PullItem.Type>) =>
+      Effect.sync(() => {
+        set.delete(queue)
+        admitted.delete(queue)
+      }),
   }
 })
-
-/**
- * Clears local databases (eventlog and state) so the client can start fresh on next boot.
- * This is used when the sync backend identity has changed (i.e. backend was reset).
- */
-const clearLocalDatabases = ({ dbEventlog, dbState }: { dbEventlog: SqliteDb; dbState: SqliteDb }) =>
-  Effect.try({
-    try: () => {
-      // Clear eventlog tables
-      dbEventlog.execute(sql`DELETE FROM ${EVENTLOG_META_TABLE}`)
-      dbEventlog.execute(sql`DELETE FROM ${SYNC_STATUS_TABLE}`)
-
-      // Drop all state tables - they'll be recreated on next boot
-      const tables = dbState.select<{ name: string }>(
-        sql`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
-      )
-      for (const { name } of tables) {
-        dbState.execute(`DROP TABLE IF EXISTS "${name}"`)
-      }
-    },
-    catch: (cause) => UnknownError.make({ cause, note: 'Failed to reset local databases after backend mismatch' }),
-  })
 
 const localItemKey = (item: LocalItem) => `${item.requestId}:${item.index}`
 const retryDelay = (attempt: number) => Math.min(30_000, 1_000 * 2 ** Math.max(0, attempt - 1))

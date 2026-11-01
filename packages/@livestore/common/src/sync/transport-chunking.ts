@@ -23,9 +23,10 @@ export interface ChunkingOptions<A> {
   readonly measure?: (items: ReadonlyArray<A>) => number
 }
 
-export class OversizeChunkItemError extends Schema.TaggedError<OversizeChunkItemError>(
-  '~@livestore/common/OversizeChunkItemError',
-)('OversizeChunkItemError', {
+export class OversizeChunkItemError extends Schema.TaggedError<
+  OversizeChunkItemError,
+  { readonly brand: unique symbol }
+>('~@livestore/common/OversizeChunkItemError')('OversizeChunkItemError', {
   size: Schema.Finite,
   maxBytes: Schema.Finite,
 }) {}

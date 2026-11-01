@@ -39,8 +39,8 @@ LiveStore operates two SQLite databases by default: a state database (your mater
   - Stores the latest composite event sequence number reflected by the state database snapshot.
 - `__livestore_materialization_journal`
   - Stores the materialization journal: SQLite session changeset blobs (or none, when an event changed nothing) keyed by complete composite event sequence numbers. LiveStore uses these records to roll back affected materializations during a rebase and discards them once the events are confirmed.
-- `__livestore_rebuild`
-  - Marks a state database whose rebuild completed. A state database without this marker is rebuilt from the event log.
+- `__livestore_state_consistency`
+  - Records a completed reconstruction or coordinated persistence transition, including its owner/transition identity. A database without this marker is rebuilt from the retained event log. Browser sessions also validate captured identity with the serving leader and attach subsequent changes atomically before exposing queries; a delayed completed image is replaced when stale.
 - Your application tables
   - All tables you define via `State.SQLite.table(...)` live in the state database.
 

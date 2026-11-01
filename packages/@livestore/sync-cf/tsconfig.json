@@ -7,6 +7,7 @@
       "ES2024"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -38,6 +39,33 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "effect/rpc",
+          "effect/http",
+          "effect/socket",
+          "effect/observability/Otlp#layerJson"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/rpc",
+                "effect/http",
+                "effect/socket",
+                "effect/observability/Otlp#layerJson",
+                "@effect/vitest",
+                "@effect/opentelemetry/OtelTracer",
+                "effect/persistence/KeyValueStore#layerMemory"
+              ]
+            }
+          }
         ]
       }
     ],

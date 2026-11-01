@@ -223,6 +223,7 @@ const makeWorkerRunner = Effect.gen(function* () {
     BootStatusStream: (payload) =>
       forwardRequestStream('BootStatusStream', (client) => client.BootStatusStream(payload)),
     PushToLeader: (payload) => forwardRequest('PushToLeader', (client) => client.PushToLeader(payload)),
+    OpenSession: (payload) => forwardRequestStream('OpenSession', (client) => client.OpenSession(payload)),
     PullStream: (payload) => forwardRequestStream('PullStream', (client) => client.PullStream(payload)),
     StreamEvents: (payload) => forwardRequestStream('StreamEvents', (client) => client.StreamEvents(payload)),
     Export: (payload) => forwardRequest('Export', (client) => client.Export(payload)),

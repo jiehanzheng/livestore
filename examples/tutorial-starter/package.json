@@ -4,23 +4,24 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.1.18",
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "25.3.3",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "5.1.2",
-    "tailwindcss": "4.1.18",
-    "typescript": "6.0.3",
-    "vite": "7.3.1"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
   },
   "scripts": {
     "build": "tsc -b && vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -35,18 +36,6 @@
       "sharp",
       "unix-dgram",
       "workerd"
-    ],
-    "overrides": {
-      "@effect/opentelemetry": "4.0.3",
-      "@effect/platform-browser": "4.0.3",
-      "@effect/platform-bun": "4.0.3",
-      "@effect/platform-node": "4.0.3",
-      "@effect/vitest": "4.0.3",
-      "@opentelemetry/api": "1.9.0",
-      "@opentelemetry/resources": "2.2.0",
-      "@standard-schema/spec": "1.0.0",
-      "effect": "4.0.3",
-      "@effect/platform-node-shared": "4.0.3"
-    }
+    ]
   }
 }

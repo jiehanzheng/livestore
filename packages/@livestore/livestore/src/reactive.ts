@@ -475,7 +475,11 @@ export class ReactiveGraph<
 
       try {
         for (const effect of effectsToRefresh) {
-          effect.doEffect(options?.otelContext, options.debugRefreshReason)
+          // Earlier callbacks can dispose subscriptions already captured in this batch.
+          // Check at dispatch time, including when effectsWrapper delays execution.
+          if (effect.isDestroyed === false) {
+            effect.doEffect(options?.otelContext, options.debugRefreshReason)
+          }
         }
       } finally {
         this.currentDebugRefresh = previousDebugRefresh

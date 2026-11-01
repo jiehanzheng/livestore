@@ -7,6 +7,7 @@
       "ES2024"
     ],
     "module": "ESNext",
+    "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -24,7 +25,6 @@
     "skipLibCheck": true,
     "plugins": [],
     "moduleDetection": "force",
-    "moduleResolution": "Bundler",
     "noEmit": true,
     "rootDir": ".",
     "types": [

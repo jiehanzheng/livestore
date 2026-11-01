@@ -8,6 +8,7 @@
       "DOM"
     ],
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
@@ -39,6 +40,33 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "effect/TxQueue",
+          "effect/workers/Transferable#MessagePort",
+          "effect/encoding/SchemaBinary#toCodec",
+          "effect/http/HttpClient#HttpClient",
+          "effect/socket"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/TxQueue",
+                "effect/workers/Transferable#MessagePort",
+                "effect/encoding/SchemaBinary#toCodec",
+                "effect/http/HttpClient#HttpClient",
+                "effect/socket",
+                "@effect/vitest"
+              ]
+            }
+          }
         ]
       }
     ],

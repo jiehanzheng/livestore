@@ -53,6 +53,8 @@ LiveStore provides two APIs for shutting down a store:
 
 Shutting down sends every event committed in this session to the leader, which persists it, before the store closes. The same happens when the scope a store was created in closes, for example when a store registry disposes an unused store. Shutdown waits for this up to one second and then finishes it in the background. Closing a browser tab or killing the process gives LiveStore no time to do this, so events committed in the last moments may be lost; with `confirmUnsavedChanges` (on by default) the browser asks before leaving while such events are pending.
 
+Use `await store.shutdownAndWaitPromise()` when you need this Store's local cleanup to finish, or `yield* store.shutdownAndWait()` in an Effect program. These methods start or join the same teardown and report cleanup failures and drain timeouts. Repeated calls share the outcome; cancelling an Effect waiter leaves cleanup running. They do not close another session's shared leader or prove its files are available for exclusive access. The bounded `shutdown()` and `shutdownPromise()` methods remain suitable for requesting shutdown without waiting indefinitely.
+
 ## Effect integration
 
 For applications using [Effect](https://effect.website), LiveStore provides a type-safe way to access stores through the Effect layer system via `makeStoreContext()`.
@@ -122,7 +124,7 @@ if (!status.isSynced) {
 
 ### `store.subscribeSyncStatus(callback)`
 
-Subscribes to sync status changes. The callback is invoked immediately with the current status and whenever the sync state changes.
+Subscribes to sync status changes. Each subscriber receives the current status as its first callback and every subsequent completed sync-state update, independently of other subscribers. Unsubscribing stops that listener and releases its subscription without affecting others. A late subscriber starts with the latest status rather than replaying old progress.
 
 ```ts
 const unsubscribe = store.subscribeSyncStatus((status) => {
@@ -135,7 +137,7 @@ unsubscribe()
 
 ### `store.syncStatusStream()`
 
-Returns an Effect Stream of sync status updates. For Effect-based workflows.
+Returns an Effect Stream of the current sync status followed by updates. Each stream run owns an independent scoped subscription, released when the stream ends or is interrupted. For Effect-based workflows.
 
 ```ts
 import { Effect, Stream } from 'effect'

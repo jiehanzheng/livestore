@@ -1,5 +1,6 @@
 import {
   baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
   packageTsconfigCompilerOptions,
   packageTsconfigExclude,
   tsconfigJson,
@@ -10,6 +11,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@livestore/wa-sqlite')],
     ...packageTsconfigCompilerOptions,
     outDir: './.tsc-out',
     tsBuildInfoFile: './.tsc-out/.tsbuildinfo',

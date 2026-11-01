@@ -5,8 +5,12 @@ import {
   liveStoreVersion,
   MigrationsReport,
   RejectedPushError,
+  ProjectionMismatchError,
+  LegacyStorageFormatError,
+  LiveDatabaseImportRefusedError,
   SyncBackend,
   SyncState,
+  StateSnapshot,
   UnknownError,
 } from '@livestore/common'
 import { StateRebuildBatchSizeSchema, StreamEventsOptionsFields } from '@livestore/common/leader-thread'
@@ -71,10 +75,18 @@ export class LeaderWorkerInnerInitialMessage extends Rpc.make('InitialMessage', 
   error: UnknownError,
 }) {}
 
+/** Every inner operation can trigger lazy source initialization. */
+const WorkerInitializationError = Schema.Union([
+  UnknownError,
+  LegacyStorageFormatError,
+  ProjectionMismatchError,
+  LiveDatabaseImportRefusedError,
+])
+
 export class LeaderWorkerInnerBootStatusStream extends Rpc.make('BootStatusStream', {
   payload: {},
   success: BootStatus,
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
@@ -83,7 +95,30 @@ export class LeaderWorkerInnerPushToLeader extends Rpc.make('PushToLeader', {
     batch: Schema.Array(Schema.toType(LiveStoreEvent.Client.Encoded)),
   },
   success: Schema.Void,
-  error: RejectedPushError,
+  error: Schema.Union([RejectedPushError, WorkerInitializationError]),
+}) {}
+
+export const OpenSessionFrame = Schema.Union([
+  Schema.TaggedStruct('Accepted', {
+    provenance: StateSnapshot.Provenance,
+    migrationsReport: MigrationsReport,
+  }),
+  Schema.TaggedStruct('StaleSnapshot', {
+    provenance: StateSnapshot.Provenance,
+    snapshot: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
+    migrationsReport: MigrationsReport,
+  }),
+  Schema.TaggedStruct('Pull', { item: ClientSessionLeaderThreadProxy.PullItem }),
+])
+
+export class LeaderWorkerInnerOpenSession extends Rpc.make('OpenSession', {
+  payload: {
+    expectedProjection: StateSnapshot.ProjectionIdentity,
+    candidate: Schema.UndefinedOr(StateSnapshot.Provenance),
+  },
+  success: OpenSessionFrame,
+  error: WorkerInitializationError,
+  stream: true,
 }) {}
 
 export class LeaderWorkerInnerPullStream extends Rpc.make('PullStream', {
@@ -91,27 +126,27 @@ export class LeaderWorkerInnerPullStream extends Rpc.make('PullStream', {
     cursor: Schema.toType(EventSequenceNumber.Client.Composite),
   },
   success: ClientSessionLeaderThreadProxy.PullItem,
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
 export class LeaderWorkerInnerStreamEvents extends Rpc.make('StreamEvents', {
   payload: StreamEventsOptionsFields,
   success: LiveStoreEvent.Client.Encoded,
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
 export class LeaderWorkerInnerExport extends Rpc.make('Export', {
   payload: {},
   success: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerExportEventlog extends Rpc.make('ExportEventlog', {
   payload: {},
   success: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerGetRecreateSnapshot extends Rpc.make('GetRecreateSnapshot', {
@@ -120,45 +155,45 @@ export class LeaderWorkerInnerGetRecreateSnapshot extends Rpc.make('GetRecreateS
     snapshot: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
     migrationsReport: MigrationsReport,
   }),
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerGetLeaderHead extends Rpc.make('GetLeaderHead', {
   payload: {},
   success: Schema.toType(EventSequenceNumber.Client.Composite),
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerGetLeaderSyncState extends Rpc.make('GetLeaderSyncState', {
   payload: {},
   success: SyncState.SyncState,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerSyncStateStream extends Rpc.make('SyncStateStream', {
   payload: {},
   success: SyncState.SyncState,
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
 export class LeaderWorkerInnerGetNetworkStatus extends Rpc.make('GetNetworkStatus', {
   payload: {},
   success: SyncBackend.NetworkStatus,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerNetworkStatusStream extends Rpc.make('NetworkStatusStream', {
   payload: {},
   success: SyncBackend.NetworkStatus,
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
 export class LeaderWorkerInnerShutdown extends Rpc.make('Shutdown', {
   payload: {},
   success: Schema.Void,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class LeaderWorkerInnerExtraDevtoolsMessage extends Rpc.make('ExtraDevtoolsMessage', {
@@ -166,13 +201,13 @@ export class LeaderWorkerInnerExtraDevtoolsMessage extends Rpc.make('ExtraDevtoo
     message: Devtools.Leader.MessageToApp,
   },
   success: Schema.Void,
-  error: Schema.Never,
+  error: WorkerInitializationError,
 }) {}
 
 export class WebmeshWorkerCreateConnection extends Rpc.make('WebmeshWorker.CreateConnection', {
   payload: WebmeshWorker.Schema.CreateConnection,
   success: Schema.Struct({}),
-  error: Schema.Never,
+  error: WorkerInitializationError,
   stream: true,
 }) {}
 
@@ -180,6 +215,7 @@ export class LeaderWorkerInnerRpcs extends RpcGroup.make(
   LeaderWorkerInnerBootStatusStream,
   LeaderWorkerInnerPushToLeader,
   LeaderWorkerInnerPullStream,
+  LeaderWorkerInnerOpenSession,
   LeaderWorkerInnerStreamEvents,
   LeaderWorkerInnerExport,
   LeaderWorkerInnerExportEventlog,
@@ -218,6 +254,7 @@ export class SharedWorkerRpcs extends RpcGroup.make(
   LeaderWorkerInnerBootStatusStream,
   LeaderWorkerInnerPushToLeader,
   LeaderWorkerInnerPullStream,
+  LeaderWorkerInnerOpenSession,
   LeaderWorkerInnerStreamEvents,
   LeaderWorkerInnerExport,
   LeaderWorkerInnerGetRecreateSnapshot,

@@ -19,7 +19,7 @@ const runtimeDeps = catalog.compose({
     external: catalog.pick('@cloudflare/workers-types'),
   },
   devDependencies: {
-    external: catalog.pick('wrangler'),
+    external: catalog.pick('wrangler', 'miniflare', 'esbuild'),
   },
   peerDependencies: {
     external: getUtilsPeerDeps(),

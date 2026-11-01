@@ -11,7 +11,7 @@ import {
 
 import type { ClientSessionLeaderThreadProxy } from './ClientSessionLeaderThreadProxy.ts'
 import type * as Devtools from './devtools/mod.ts'
-import type { IntentionalShutdownCause, MaterializeError, UnknownError } from './errors.ts'
+import type { AdapterError, IntentionalShutdownCause, MaterializeError, UnknownError } from './errors.ts'
 import type * as MaterializationJournal from './MaterializationJournal.ts'
 import type { LiveStoreSchema } from './schema/mod.ts'
 import type { SqliteDb } from './sqlite-types.ts'
@@ -35,10 +35,11 @@ export interface ClientSession {
   sessionId: string
   /** Status info whether current session is leader or not */
   lockStatus: SubscriptionRef.SubscriptionRef<LockStatus>
+  /** Requests local session shutdown; bounded waits do not attest to completed cleanup or shared-owner closure. */
   shutdown: (
     cause: Exit.Exit<
       IntentionalShutdownCause,
-      UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError | BackendIdMismatchError
+      AdapterError | MaterializeError | MaterializationJournal.MaterializationJournalError | BackendIdMismatchError
     >,
   ) => Effect.Effect<void>
   /** A proxy API to communicate with the leader thread */
@@ -124,7 +125,7 @@ export type ConnectDevtoolsToStore = (
   storeDevtoolsChannel: ClientSessionDevtoolsChannel,
 ) => Effect.Effect<void, UnknownError, Scope.Scope>
 
-export type Adapter = (args: AdapterArgs) => Effect.Effect<ClientSession, UnknownError, Scope.Scope>
+export type Adapter = (args: AdapterArgs) => Effect.Effect<ClientSession, AdapterError, Scope.Scope>
 
 export interface AdapterArgs {
   schema: LiveStoreSchema
@@ -136,10 +137,11 @@ export interface AdapterArgs {
   devtoolsEnabled: boolean
   debugInstanceId: string
   bootStatusQueue: Queue.Queue<BootStatus>
+  /** Requests local session shutdown; bounded waits do not attest to completed cleanup or shared-owner closure. */
   shutdown: (
     exit: Exit.Exit<
       IntentionalShutdownCause,
-      UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError | BackendIdMismatchError
+      AdapterError | MaterializeError | MaterializationJournal.MaterializationJournalError | BackendIdMismatchError
     >,
   ) => Effect.Effect<void>
   connectDevtoolsToStore: ConnectDevtoolsToStore

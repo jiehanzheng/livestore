@@ -48,7 +48,7 @@ const makeTestEnvironment = Effect.gen(function* () {
   const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
   const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
 
-  yield* Eventlog.initEventlogDb(dbEventlog)
+  yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
 
   const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
   const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })

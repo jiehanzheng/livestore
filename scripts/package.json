@@ -6,6 +6,7 @@
       "docs",
       "docs/src/content/_assets/code",
       "packages/@livestore/adapter-cloudflare",
+      "packages/@livestore/adapter-node",
       "packages/@livestore/adapter-web",
       "packages/@livestore/common",
       "packages/@livestore/common-cf",
@@ -38,12 +39,12 @@
     "./release": "./src/commands/release.ts"
   },
   "devDependencies": {
-    "@effect/opentelemetry": "4.0.3",
-    "@effect/platform-browser": "4.0.3",
-    "@effect/platform-bun": "4.0.3",
-    "@effect/platform-node": "4.0.3",
-    "@effect/platform-node-shared": "4.0.3",
-    "@effect/vitest": "4.0.3",
+    "@effect/opentelemetry": "4.1.0",
+    "@effect/platform-browser": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/platform-node": "4.1.0",
+    "@effect/platform-node-shared": "4.1.0",
+    "@effect/vitest": "4.1.0",
     "@livestore/common": "workspace:^",
     "@livestore/utils": "workspace:^",
     "@livestore/utils-dev": "workspace:^",
@@ -60,11 +61,11 @@
     "@types/bun": "1.3.10",
     "@types/node": "25.3.3",
     "@types/semver": "^7.7.0",
-    "effect": "4.0.3",
+    "effect": "4.1.0",
     "madge": "^8.0.0",
     "semver": "^7.7.3",
     "typescript": "7.0.2",
-    "vitest": "4.1.9",
+    "vitest": "5.0.5",
     "yaml": "2.8.1"
   }
 }

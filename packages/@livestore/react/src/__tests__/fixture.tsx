@@ -1,6 +1,6 @@
 import React from 'react'
 
-import type { UnknownError } from '@livestore/common'
+import type { AdapterError } from '@livestore/common'
 import {
   type AppState,
   type CreateTodoMvcStoreOptions,
@@ -30,7 +30,7 @@ export const makeTodoMvcReact: (opts?: MakeTodoMvcReactOptions) => Effect.Effect
     store: Store<typeof schema> & LiveStoreReact.ReactApi
     renderCount: { readonly val: number; inc: () => void }
   },
-  UnknownError,
+  AdapterError,
   Scope.Scope
 > = (opts: MakeTodoMvcReactOptions = {}) =>
   Effect.gen(function* () {

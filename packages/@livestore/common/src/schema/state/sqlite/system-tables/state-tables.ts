@@ -66,13 +66,20 @@ export const stateHeadMetaTable = table({
 
 export type StateHeadMetaRow = typeof stateHeadMetaTable.Type
 
-export const REBUILD_META_TABLE = '__livestore_rebuild'
+// A new physical name forces a source-preserving rebuild of snapshots created before the write-ahead fence.
+export const REBUILD_META_TABLE = '__livestore_state_consistency'
 
-/** Only a completed replay and successful migration hooks may insert the marker row. */
+/** Present only after completed reconstruction or a successfully committed leader transition in both databases. */
 export const rebuildMetaTable = table({
   name: REBUILD_META_TABLE,
   columns: {
     id: SqliteDsl.integer({ primaryKey: true }),
+    ownerId: SqliteDsl.text({ nullable: true }),
+    transitionId: SqliteDsl.text({ nullable: true }),
+    proofVersion: SqliteDsl.integer({ nullable: true }),
+    sourceIncarnation: SqliteDsl.text({ nullable: true }),
+    stateSchemaHash: SqliteDsl.text({ nullable: true }),
+    projectionRevision: SqliteDsl.text({ nullable: true }),
   },
 })
 

@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LiveStore OPFS persistence recovery fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font: 16px/1.5 system-ui, sans-serif;
+        color: #182535;
+        background: #fafafa;
+      }
+
+      body {
+        max-width: 1000px;
+        margin: 32px auto;
+        padding: 0 20px;
+      }
+
+      button {
+        margin: 0 8px 8px 0;
+        padding: 9px 12px;
+        font: inherit;
+      }
+
+      table,
+      pre {
+        width: 100%;
+        border: 1px solid #d7dde4;
+        border-collapse: collapse;
+        background: white;
+      }
+
+      th,
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e7ebef;
+        text-align: left;
+      }
+
+      pre {
+        box-sizing: border-box;
+        padding: 16px;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .passed {
+        color: #176b3a;
+      }
+
+      .failed,
+      .blocked {
+        color: #a32626;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LiveStore OPFS persistence recovery fixture</h1>
+    <p>Standalone fork regression page using isolated synthetic OPFS namespaces.</p>
+
+    <p id="environment">Checking page control…</p>
+    <button id="run" disabled>Run recovery matrix</button>
+    <button id="cleanup" disabled>Clean fixture files</button>
+    <button id="stop">Stop fixture workers</button>
+
+    <h2 id="status">Not started</h2>
+    <h3>Case summary</h3>
+    <table aria-label="Recovery case summary">
+      <thead>
+        <tr><th>Case</th><th>Status</th><th>Namespace</th><th>OPFS directory</th></tr>
+      </thead>
+      <tbody id="case-summary"></tbody>
+    </table>
+    <h3>Detailed evidence</h3>
+    <pre id="result" role="status">No results yet.</pre>
+
+    <script type="module">
+      const workerURL = new URL('./persistence-recovery.test-fixture.ts', import.meta.url)
+      const caseNames = [
+        'before-state',
+        'after-state',
+        'after-eventlog',
+        'after-completion',
+        'concurrent-fast-open',
+        'interrupted-reconstruction',
+        'confirmation-only',
+        'delayed-completed-image',
+      ]
+
+      const activeWorkers = new Set()
+      const generatedNamespaces = new Set()
+      const opfsDirectories = new Set()
+      const results = []
+      const caseStates = new Map(caseNames.map((name) => [name, { status: 'pending' }]))
+
+      const output = document.querySelector('#result')
+      const summary = document.querySelector('#case-summary')
+      const status = document.querySelector('#status')
+      const runButton = document.querySelector('#run')
+      const cleanupButton = document.querySelector('#cleanup')
+      const environment = document.querySelector('#environment')
+      const controlledByServiceWorker = Boolean(navigator.serviceWorker?.controller)
+
+      environment.textContent = JSON.stringify({
+        origin: location.origin,
+        serviceWorkerControlled: controlledByServiceWorker,
+        crossOriginIsolated,
+      })
+
+      if (controlledByServiceWorker) {
+        status.textContent = 'BLOCKED: an existing service worker controls this route'
+        status.className = 'blocked'
+      } else if (!crossOriginIsolated) {
+        status.textContent = 'BLOCKED: worker crash barriers require cross-origin isolation'
+        status.className = 'blocked'
+      } else {
+        runButton.disabled = false
+      }
+
+      const assert = (condition, message) => {
+        if (!condition) throw new Error(message)
+      }
+
+      const makeNamespace = () => {
+        const namespace = `fork-correctness-opfs-01a17145-${crypto.randomUUID()}`
+        // Register ownership before dispatch so an early worker error still has a visible namespace.
+        generatedNamespaces.add(namespace)
+        return namespace
+      }
+
+      const recordDirectory = (directory) => {
+        if (typeof directory === 'string') opfsDirectories.add(directory)
+      }
+
+      const updateSummary = () => {
+        summary.replaceChildren(...caseNames.map((name) => {
+          const state = caseStates.get(name)
+          const row = document.createElement('tr')
+          const values = [name, state.status, state.namespace ?? '—', state.directory ?? '—']
+
+          for (const value of values) {
+            const cell = document.createElement('td')
+            cell.textContent = value
+            row.append(cell)
+          }
+
+          row.className = state.status === 'passed' ? 'passed' : state.status === 'failed' ? 'failed' : ''
+          return row
+        }))
+      }
+
+      const showResults = () => {
+        updateSummary()
+        output.textContent = JSON.stringify({
+          generatedNamespaces: [...generatedNamespaces],
+          opfsDirectories: [...opfsDirectories],
+          cases: results,
+        }, null, 2)
+      }
+
+      const request = (command, keepWorkerAtBoundary = false) => new Promise((resolve, reject) => {
+        const worker = new Worker(workerURL, { type: 'module' })
+        activeWorkers.add(worker)
+
+        const stopWorker = () => {
+          worker.terminate()
+          activeWorkers.delete(worker)
+        }
+
+        const timeout = setTimeout(() => {
+          stopWorker()
+          const error = new Error('Fixture worker exceeded bounded test time')
+          error.details = { namespace: command.namespace }
+          reject(error)
+        }, 20_000)
+
+        let capturedSnapshot
+        worker.onmessage = ({ data }) => {
+          if (data.capturedSnapshot) { capturedSnapshot = data.capturedSnapshot; return }
+          clearTimeout(timeout)
+          if (data.namespace) generatedNamespaces.add(data.namespace)
+          recordDirectory(data.directory ?? data.result?.directory)
+
+          if (data.error) {
+            stopWorker()
+            const error = new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
+            error.details = data
+            reject(error)
+            return
+          }
+
+          if (data.boundary) {
+            if (!keepWorkerAtBoundary) stopWorker()
+            resolve({ boundary: data.boundary, worker, capturedSnapshot })
+            return
+          }
+
+          stopWorker()
+          resolve(data.result)
+        }
+
+        worker.onerror = (event) => {
+          clearTimeout(timeout)
+          stopWorker()
+          const error = new Error(event.message)
+          error.details = { namespace: command.namespace }
+          reject(error)
+        }
+
+        worker.postMessage(command)
+      })
+
+      const inspectRecovery = (result, expectedId, confirmed = false) => {
+        assert(JSON.stringify(result.rows) === JSON.stringify([{ id: expectedId }]), 'Wrong recovered projection')
+        assert(result.sourceUnchanged === true, 'Recovery mutated authoritative source')
+        assert(result.pending.length === (confirmed ? 0 : 1), 'Wrong retained pending count')
+
+        if (!confirmed) {
+          assert(result.pending[0].id === expectedId, 'Wrong pending identity')
+          assert(
+            result.pending[0].clientId === 'fork-fixture-client' &&
+              result.pending[0].sessionId === 'fork-fixture-session',
+            'Lost source identity',
+          )
+        }
+
+        assert(result.backendHead === (confirmed ? 1 : 0), 'Wrong backend head')
+        assert(result.journalCount === (confirmed ? 0 : 1), 'Wrong rebuilt journal')
+        assert(result.marker.length === 1 && result.marker[0].id === 1, 'Missing completed marker')
+        assert(result.stateHead.length === 1 && result.stateHead[0].seqNumGlobal === 1, 'Wrong state head')
+      }
+
+      const markCase = (name, state, result) => {
+        caseStates.set(name, {
+          status: state,
+          namespace: result.namespace,
+          directory: result.directory,
+        })
+      }
+
+      const runCrashBoundaryCase = async (boundary) => {
+        const namespace = makeNamespace()
+        markCase(boundary, 'running', { namespace })
+        status.textContent = `Testing abrupt worker termination: ${boundary}`
+
+        const parked = await request({ action: 'seed', namespace, boundary })
+        assert(parked.boundary === boundary, 'Wrong crash boundary')
+
+        const fast = await request({ action: 'fast-read', namespace })
+        assert(
+          fast.snapshot.accepted === (boundary === 'after-completion'),
+          'Fast path accepted incomplete state or rejected completed state',
+        )
+
+        const recovered = await request({ action: 'recover', namespace })
+        inspectRecovery(
+          recovered,
+          ['after-eventlog', 'after-completion'].includes(boundary) ? 'replacement' : 'original',
+        )
+        markCase(boundary, 'passed', recovered)
+        results.push({ case: boundary, passed: true, fastPath: fast.snapshot, recovered })
+        showResults()
+      }
+
+      const runButtonHandler = async () => {
+        runButton.disabled = true
+        cleanupButton.disabled = true
+        results.length = 0
+        for (const name of caseNames) caseStates.set(name, { status: 'pending' })
+        showResults()
+
+        try {
+          for (const boundary of ['before-state', 'after-state', 'after-eventlog', 'after-completion']) {
+            await runCrashBoundaryCase(boundary)
+          }
+
+          status.textContent = 'Testing concurrent fast-open during a fenced commit'
+          {
+            const namespace = makeNamespace()
+            markCase('concurrent-fast-open', 'running', { namespace })
+            const parked = await request({ action: 'seed', namespace, boundary: 'after-state' }, true)
+            const fast = await request({ action: 'fast-read', namespace })
+            assert(!fast.snapshot.accepted, 'Concurrent opener accepted fenced state')
+            parked.worker.terminate()
+            activeWorkers.delete(parked.worker)
+
+            const recovered = await request({ action: 'recover', namespace })
+            inspectRecovery(recovered, 'original')
+            markCase('concurrent-fast-open', 'passed', recovered)
+            results.push({ case: 'concurrent-fast-open', passed: true, fastPath: fast.snapshot, recovered })
+            showResults()
+          }
+
+          status.textContent = 'Testing interrupted reconstruction'
+          {
+            const namespace = makeNamespace()
+            markCase('interrupted-reconstruction', 'running', { namespace })
+            await request({ action: 'seed', namespace, boundary: 'after-state' })
+            const interrupted = await request({ action: 'recover', namespace, boundary: 'rebuild-post' })
+            assert(interrupted.boundary === 'rebuild-post', 'Wrong reconstruction boundary')
+
+            const fast = await request({ action: 'fast-read', namespace })
+            assert(!fast.snapshot.accepted, 'Accepted interrupted reconstruction')
+            const recovered = await request({ action: 'recover', namespace })
+            inspectRecovery(recovered, 'original')
+            markCase('interrupted-reconstruction', 'passed', recovered)
+            results.push({ case: 'interrupted-reconstruction', passed: true, fastPath: fast.snapshot, recovered })
+            showResults()
+          }
+
+          status.textContent = 'Testing confirmation-only interrupted persistence'
+          {
+            const namespace = makeNamespace()
+            markCase('confirmation-only', 'running', { namespace })
+            await request({ action: 'seed', namespace, boundary: 'after-eventlog', confirmation: true })
+
+            const fast = await request({ action: 'fast-read', namespace })
+            assert(!fast.snapshot.accepted, 'Accepted incomplete confirmation')
+            const recovered = await request({ action: 'recover', namespace })
+            inspectRecovery(recovered, 'original', true)
+            markCase('confirmation-only', 'passed', recovered)
+            results.push({ case: 'confirmation-only', passed: true, fastPath: fast.snapshot, recovered })
+            showResults()
+          }
+
+          status.textContent = 'Testing a delayed completed image after source recovery'
+          {
+            const namespace = makeNamespace()
+            markCase('delayed-completed-image', 'running', { namespace })
+            const captured = await request({ action: 'seed', namespace, boundary: 'after-eventlog', delayed: true })
+            assert(captured.capturedSnapshot instanceof Uint8Array, 'No completed pre-fence capture')
+            const recovered = await request({ action: 'recover', namespace, capturedSnapshot: captured.capturedSnapshot })
+            const ids = (rows) => rows.map((row) => row.id).sort().join(',')
+            assert(ids(recovered.rows) === 'base,pending,remote', 'Lost recovered source projection')
+            assert(recovered.sourceUnchanged && recovered.backendHead === 2 && recovered.journalCount === 1, 'Wrong retained source/journal')
+            assert(recovered.pending.length === 1 && recovered.pending[0].id === 'pending', 'Lost pending action')
+            assert(recovered.pending[0].clientId === 'fork-fixture-client' && recovered.pending[0].sessionId === 'fork-fixture-session', 'Changed pending identity')
+            assert(recovered.admission.tag === 'StaleSnapshot', 'Delayed image was not explicitly rejected')
+            assert(ids(recovered.admission.capturedRows) === 'base,pending', 'Wrong capture-time history')
+            assert(ids(recovered.admission.admittedRows) === 'base,pending,remote', 'Stale projection exposed after admission')
+            assert(recovered.admission.capturedProvenance.ownerId !== recovered.admission.admittedProvenance.ownerId, 'Owner change missing')
+            assert(recovered.admission.subsequentIds.join(',') === 'later', 'Post-admission event lost or duplicated')
+            markCase('delayed-completed-image', 'passed', recovered)
+            results.push({ case: 'delayed-completed-image', passed: true, recovered })
+            showResults()
+          }
+
+          status.textContent = 'All 8 OPFS checks passed'
+          cleanupButton.disabled = opfsDirectories.size === 0
+        } catch (error) {
+          const details = error.details ?? {}
+          recordDirectory(details.directory)
+          const failedCase = caseNames.find((name) => caseStates.get(name).status === 'running')
+          if (failedCase) markCase(failedCase, 'failed', {
+            namespace: details.namespace ?? [...generatedNamespaces].at(-1),
+            directory: details.directory,
+          })
+          status.textContent = 'FAILED'
+          status.className = 'failed'
+          results.push({ error: error.message, ...details })
+          cleanupButton.disabled = opfsDirectories.size === 0
+          showResults()
+        } finally {
+          for (const worker of activeWorkers) worker.terminate()
+          activeWorkers.clear()
+          runButton.disabled = controlledByServiceWorker || !crossOriginIsolated
+        }
+      }
+
+      cleanupButton.onclick = async () => {
+        try {
+          assert(activeWorkers.size === 0, 'Workers still active')
+          const root = await navigator.storage.getDirectory()
+          for (const directory of opfsDirectories) {
+            assert(
+              /^livestore-fork-correctness-opfs-01a17145-[0-9a-f-]+@[^/]+$/.test(directory),
+              `Refusing unrecognized fixture directory: ${directory}`,
+            )
+            await root.removeEntry(directory, { recursive: true })
+          }
+
+          results.push({ cleanup: 'Removed only registered fixture directories', count: opfsDirectories.size })
+          opfsDirectories.clear()
+          cleanupButton.disabled = true
+          showResults()
+        } catch (error) {
+          status.textContent = 'CLEANUP FAILED'
+          status.className = 'failed'
+          results.push({ error: error.message, directories: [...opfsDirectories] })
+          showResults()
+        }
+      }
+
+      runButton.onclick = runButtonHandler
+      document.querySelector('#stop').onclick = () => {
+        for (const worker of activeWorkers) worker.terminate()
+        activeWorkers.clear()
+        status.textContent = 'Owned fixture workers stopped'
+      }
+
+      addEventListener('beforeunload', () => {
+        for (const worker of activeWorkers) worker.terminate()
+      })
+
+      updateSummary()
+    </script>
+  </body>
+</html>

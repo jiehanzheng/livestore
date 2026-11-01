@@ -1,7 +1,7 @@
 import type * as otel from '@opentelemetry/api'
 
 import { makeInMemoryAdapter } from '@livestore/adapter-web'
-import { provideOtel, type UnknownError } from '@livestore/common'
+import { provideOtel, type AdapterError } from '@livestore/common'
 import { Events, makeSchema, State } from '@livestore/common/schema'
 import type { Store } from '@livestore/livestore'
 import { createStore } from '@livestore/livestore'
@@ -107,7 +107,7 @@ const materializers = State.SQLite.materializers(events, {
 export const tables = { todos, app, userInfo, AppRouterSchema, kv }
 
 const state = State.SQLite.makeState({ tables, materializers })
-export const schema = makeSchema({ state, events })
+export const schema = makeSchema({ projectionRevision: 'todo-testing-v1', state, events })
 
 // ============================================================================
 // Store creation helper
@@ -124,7 +124,7 @@ export type CreateTodoMvcStoreOptions = {
  */
 export const createTodoMvcStore = ({ otelTracer, otelContext }: CreateTodoMvcStoreOptions = {}): Effect.Effect<
   Store<typeof schema>,
-  UnknownError,
+  AdapterError,
   Scope.Scope
 > =>
   Effect.gen(function* () {

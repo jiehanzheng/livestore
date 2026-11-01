@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from '@livestore/utils/effect'
 
-import type { SqliteError } from './adapter-types.ts'
+import type { SqliteError, SqliteDb } from './adapter-types.ts'
 import { execSql, selectSql } from './leader-thread/connection.ts'
 import * as EventSequenceNumber from './schema/EventSequenceNumber/mod.ts'
 import { SystemTables } from './schema/mod.ts'
@@ -77,3 +77,17 @@ export const layerTest = Layer.succeed(
     get: Effect.succeed(EventSequenceNumber.Client.ROOT),
   }),
 )
+
+/** Read only, used before cache admission while the physical source owner is held. */
+export const readFromDb = (db: SqliteDb): EventSequenceNumber.Client.Composite => {
+  const row = db.select<SystemTables.StateHeadMetaRow>(
+    `SELECT * FROM ${SystemTables.STATE_HEAD_META_TABLE} WHERE id = 1`,
+  )[0]
+  return row === undefined
+    ? EventSequenceNumber.Client.ROOT
+    : EventSequenceNumber.Client.Composite.make({
+        global: row.seqNumGlobal,
+        client: row.seqNumClient,
+        rebaseGeneration: row.seqNumRebaseGeneration,
+      })
+}

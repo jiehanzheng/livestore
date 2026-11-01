@@ -1,6 +1,7 @@
 import {
   baseTsconfigCompilerOptions,
   domLib,
+  effectTsgoPluginFor,
   packageTsconfigExclude,
   reactJsx,
   tsconfigJson,
@@ -9,6 +10,7 @@ import {
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('tests/integration')],
     // Playwright browser tests and their in-page fixtures use DOM globals
     // (window, document, MessageEvent, FileSystemFileHandle, …), so pull in the
     // DOM lib on top of the base ES lib set.

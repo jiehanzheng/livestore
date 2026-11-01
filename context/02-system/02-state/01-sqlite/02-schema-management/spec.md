@@ -57,9 +57,11 @@ Tables and indexes are treated as unordered collections and sorted with
 locale-independent code-unit ordering. Column order within a table or index
 remains significant.
 
-For a JSON text column, the descriptor also includes Effect's public
-representations of the codec's encoded and type sides. The type side describes
-the value represented inside the JSON string. Consequently,
+For a JSON text column, the internally versioned `json-schema-v2` descriptor
+includes Effect's public encoded and type representations. JSON is recognized
+from the encoded string representation's `content.mediaType`, not from a
+descriptive AST annotation. Its `content.schema` distinguishes the shape inside
+the stored JSON string; the type side distinguishes decoded codecs. Consequently,
 `SqliteDsl.json({ schema })` and
 `SqliteDsl.text({ schema: Schema.fromJsonString(schema) })` produce the same
 fingerprint without separate schema-provenance metadata.
@@ -77,14 +79,23 @@ schema representation, LiveStore ignores the generated `annotations` and
 representation `payload` remain part of the fingerprint. Effect representation
 arrays retain their upstream order.
 
-Effect upgrades can change the public representation without changing which
-JSON a codec accepts. LiveStore normalizes those changes back to the form that
-existing fingerprints were computed from, so a dependency upgrade alone never
-rebuilds state. A Union without a `mode` field is hashed with `mode: "anyOf"`.
+The v2 boundary intentionally changes JSON fingerprints: the previous descriptor
+could give `Number` and `NumberFromString` identical identities despite storing
+`42` and `"42"`. Such a collision must not be preserved. The new state filename
+selects normal replay from retained source; no event rewrite, source reset or
+old-format reader is introduced. Unchanged non-JSON fingerprints remain stable.
+See [decision 0004](./.decisions/0004-json-fingerprint-v2.md).
+
+Within this format, cosmetic dependency representation changes are normalized
+only when semantic equivalence is established. Semantic encoded content must
+not be discarded merely to retain an old hash. A Union without a `mode` field is hashed with `mode: "anyOf"`.
 Renamed check ids are hashed under their original names, for example
 `effect/schema/isBetweenLength` as `effect/schema/isLengthBetween`. Removing a
 normalization changes the fingerprint of every schema that uses the affected
 representation.
+
+Unknown structural representation tags fail closed. Application-owned payload
+keys remain data, including keys named `_tag` or `content`.
 
 Canonical UTF-8 bytes are digested with one shared synchronous SHA-256
 implementation and encoded as an unpadded 43-character base64url string. The
@@ -109,8 +120,9 @@ database:
 2. Create state tables and record their table fingerprints.
 3. Run the `pre` migration hook.
 4. Replay the full eventlog through the current materializers.
-5. Run the `post` migration hook.
-6. Insert the singleton completion row (`id = 1`) in `__livestore_rebuild`.
+5. Discard journal records at or below the retained backend head; pending records remain.
+6. Run the `post` migration hook.
+7. Insert the singleton consistency row (`id = 1`) in `__livestore_state_consistency`.
 
 Replay consumes eventlog pages in order, with each page committed in one
 state-database savepoint. The per-client runtime parameter
@@ -136,21 +148,46 @@ depend on failure finalizers deleting the state file.
 
 Both browser session variants apply the same check when loading an OPFS snapshot
 for fast-path boot. An incomplete snapshot falls back to the leader's recovered
-snapshot before the session becomes available to application queries.
+snapshot before the session becomes available to application queries. A completed
+capture is also validated against the serving owner's completed transition;
+completion at capture time alone cannot admit a delayed image. Validation,
+conditional export and attachment of subsequent changes occupy one serialized
+leader turn. Both web variants await admission and local import before exposing
+ClientSession; see the web persistence opening contract.
 
 Completion is recorded only on the successful path, never by a finalizer. Hooks
 can run again after a failed/interrupted rebuild. External hook side effects must
-tolerate retries; the marker does not make them exactly-once. Normal live-event
-transaction boundaries and asynchronous persistence/sync are unchanged.
+tolerate retries; the marker does not make them exactly-once.
+
+The same marker fences live persistence. The leader deletes it in a separate
+state autocommit before opening either database transaction, then restores it
+only after both commits succeed. Every failure fences that persistence owner
+and shuts down its sessions, including when ordinary sync errors are ignored.
+Public Store reads/commits are fenced as teardown starts. A failed final marker
+write also closes the owner; it cannot publish a receipt. A process death at
+any intermediate boundary leaves either a consistent completed pair or an
+incomplete state database that boot reconstructs from the full retained source.
+This covers same-head/count rebases and confirmation-only journal changes.
+
+Leader snapshot exports share the persistence semaphore and reject failed
+owners. Both OPFS fast-open variants reject the absent marker. Explicit
+in-memory seed imports may migrate legacy snapshots with no marker table, but
+must reject a current-format table with no completion row. Devtools database
+replacement remains an explicit destructive administrative operation, not a
+recovery path; it is outside this crash-recovery guarantee.
 
 The marker table participates in the compound state fingerprint. Upgrading from
-a version without it selects a fresh derived database and causes a one-time
-rebuild, including for previously complete databases. No eventlog schema or
+the legacy `__livestore_rebuild` marker selects a fresh derived database and
+causes a one-time rebuild, including for previously complete databases. Legacy
+completion proves only that boot finished, not that the last live transition
+committed in both databases, so compatibility readers cannot safely trust it. No eventlog schema or
 storage-format version changes. This protocol detects incomplete **readable**
 SQLite databases, not arbitrary file corruption or loss of the eventlog.
 
 See [the completion/recovery decision](./.decisions/0001-rebuild-completion.md)
 and [the replay batching decision](./.decisions/0002-batch-replay-writes.md).
+The fork extends completion into a live fence in
+[decision 0003](./.decisions/0003-persistence-consistency-fence.md).
 
 The rebuild produces a `migrationsReport` surfaced through adapter boot info.
 On the Cloudflare Durable Object adapter, replay writes the newly materialized

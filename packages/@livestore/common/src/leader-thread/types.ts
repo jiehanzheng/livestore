@@ -101,6 +101,7 @@ export class LeaderThreadCtx extends Context.Service<
     devtools: DevtoolsContext
     syncBackend: SyncBackend.SyncBackend | undefined
     syncProcessor: LeaderSyncProcessor.Service
+    exportSnapshot: Effect.Effect<Uint8Array<ArrayBuffer>>
     materializeEvent: MaterializeEvent
     initialState: {
       leaderHead: EventSequenceNumber.Client.Composite

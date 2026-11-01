@@ -1,3 +1,29 @@
+# User-owned fork coordination (October 24, 2026)
+
+This repository is the user-authorized LiveStore fork. Read
+`contributor-docs/fork-correctness.md` before repairs. The independent repair
+chat owns only this checkout; the ECBKS lead owns application integration.
+
+- Report questions, blockers and results to lead chat
+  `01a13c15-257b-7010-a157-90c780b4f6fa`; the human explicitly requested a chat
+  that reports to the lead. Do not ask the human for handoff permission.
+- Direct user input here applies only to its narrow slice, not overall leadership.
+- Work independently; maintain a concise local handoff/status document the lead
+  can inspect if chat messaging is blocked. Continue unaffected work.
+- Local validation only: never enable or dispatch GitHub Actions. Their remote
+  execution is disabled on the fork. Do not publish workflows with automatic
+  triggers. Preserve upstream Git history.
+- Fetch/read upstream as needed, but do not push, open PRs/issues, comment or
+  otherwise contact upstream. `origin` is the user fork; upstream push is disabled.
+- Do not modify the ECBKS checkout or its dependency installation. Give the lead
+  exact compatible package/artifact instructions after local qualification.
+- No installed-file patches, generated-file edits, forced incompatible peers,
+  relaxed correctness checks or public registry publication.
+- Use PFM before shared ports/simulators; no new browser origins, raw CDP,
+  keyboard capture, detached processes or Docker daemon changes.
+- User instructions override conflicting upstream guidance below, including its
+  CI requirements, issue-filing defaults and ASCII diagram suggestion.
+
 # Project-Specific Instructions for Coding Agents
 
 ## Setup

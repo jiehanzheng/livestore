@@ -245,7 +245,7 @@ describe('table function overloads', () => {
   })
 
   it('should work with Schema.Class', () => {
-    class User extends Schema.Class<User>('User')({
+    class User extends Schema.Class<User, { readonly brand: unique symbol }>('User')({
       id: Schema.String,
       name: Schema.String,
       email: Schema.optional(Schema.String),
@@ -272,7 +272,7 @@ describe('table function overloads', () => {
   })
 
   it('preserves Date field codecs in Schema.Class tables', () => {
-    class Stamp extends Schema.Class<Stamp>('Stamp')({
+    class Stamp extends Schema.Class<Stamp, { readonly brand: unique symbol }>('Stamp')({
       id: Schema.String,
       createdAt: Schema.DateFromString,
       seenAt: Schema.DateFromMillis,
@@ -344,7 +344,7 @@ describe('table function overloads', () => {
   })
 
   it('should extract table name from Schema.Class identifier', () => {
-    class TodoItem extends Schema.Class<TodoItem>('TodoItem')({
+    class TodoItem extends Schema.Class<TodoItem, { readonly brand: unique symbol }>('TodoItem')({
       id: Schema.String,
       text: Schema.String,
       completed: Schema.Boolean,

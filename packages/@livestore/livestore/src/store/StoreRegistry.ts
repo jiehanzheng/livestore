@@ -1,4 +1,4 @@
-import { OtelLiveDummy, provideOtel, UnknownError } from '@livestore/common'
+import { type AdapterError, OtelLiveDummy, provideOtel, UnknownError } from '@livestore/common'
 import type { LiveStoreSchema } from '@livestore/common/schema'
 import { isDevEnv, omitUndefineds } from '@livestore/utils'
 import {
@@ -149,7 +149,7 @@ export class StoreRegistry {
    * Reference-counted cache mapping storeId to Store instances.
    * Stores are created on first access and disposed after `unusedCacheTime` when all references are released.
    */
-  readonly #rcMap: RcMap.RcMap<StoreCacheKey, Store<any, any>, UnknownError>
+  readonly #rcMap: RcMap.RcMap<StoreCacheKey, Store<any, any>, AdapterError>
 
   /**
    * Effect context providing Scope and OtelTracer for all registry operations.
@@ -240,7 +240,7 @@ export class StoreRegistry {
     TSyncPayloadSchema extends Schema.Codec<Schema.Json, Schema.Json> = typeof Schema.Json,
   >(
     options: RegistryStoreOptions<TSchema, TContext, TSyncPayloadSchema>,
-  ): Effect.Effect<Store<TSchema, TContext>, UnknownError, Scope.Scope> =>
+  ): Effect.Effect<Store<TSchema, TContext>, AdapterError, Scope.Scope> =>
     Effect.gen({ self: this }, function* () {
       // Cast options to satisfy StoreCacheKey's wider type (type safety enforced at API boundary)
       const key = new StoreCacheKey(options)

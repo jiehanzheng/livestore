@@ -12,6 +12,7 @@ const runtimeDeps = catalog.compose({
   dependencies: {
     workspace: [adapterWebPkg, commonPkg, livestorePkg, reactPkg, sqliteWasmPkg, utilsPkg, utilsDevPkg],
     external: catalog.pick(
+      '@standard-schema/spec',
       '@opentelemetry/api',
       '@opentelemetry/core',
       '@opentelemetry/exporter-trace-otlp-http',

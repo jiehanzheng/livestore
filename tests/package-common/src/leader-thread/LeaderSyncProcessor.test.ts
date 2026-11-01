@@ -13,6 +13,7 @@ import {
   type RejectedPushError,
   ServerAheadError,
   StateSqliteDb,
+  StateSnapshot,
   StaleRebaseGenerationError,
   type SyncBackend,
   type SyncOptions,
@@ -20,7 +21,12 @@ import {
   UnknownError,
 } from '@livestore/common'
 import type { MakeLeaderThreadLayerParams } from '@livestore/common/leader-thread'
-import { LeaderThreadCtx, makeLeaderThreadLayer, ShutdownChannel as Shutdown } from '@livestore/common/leader-thread'
+import {
+  Eventlog,
+  LeaderThreadCtx,
+  makeLeaderThreadLayer,
+  ShutdownChannel as Shutdown,
+} from '@livestore/common/leader-thread'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables } from '@livestore/common/schema'
 import { EventFactory } from '@livestore/common/testing'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
@@ -28,6 +34,7 @@ import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { omitUndefineds } from '@livestore/utils'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import {
+  Cause,
   Clock,
   Context,
   Deferred,
@@ -39,7 +46,8 @@ import {
   Queue,
   References,
   Result,
-  type Scope,
+  Scope,
+  Exit,
   Stream,
   WebChannel,
 } from '@livestore/utils/effect'
@@ -112,6 +120,225 @@ const endPullAfterFirstPage =
 
 /** Verifies: LS.SYS.SYNC.PROC-R01, LS.SYS.SYNC.PROC-R02, LS.SYS.SYNC.PROC-R04, LS.SYS.SYNC.SS-R06, LS.SYS.SYNC-R03, LS.SYS.RT-R10 */
 Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
+  Vitest.live(
+    'atomically admits concurrent openers and delivers post-admission changes before first consumption',
+    (test) =>
+      Effect.gen(function* () {
+        const { syncProcessor } = yield* LeaderThreadCtx
+        const { eventFactory, pushEncoded } = yield* TestContext
+        const dbState = yield* StateSqliteDb.StateSqliteDb
+        const provenance = StateSnapshot.readProvenance(dbState)
+        const [first, second] = yield* Effect.all(
+          [
+            syncProcessor.openSession({
+              expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+              candidate: provenance,
+            }),
+            syncProcessor.openSession({
+              expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+              candidate: provenance,
+            }),
+          ],
+          { concurrency: 2 },
+        )
+        expect(first.admission._tag).toBe('Accepted')
+        expect(second.admission._tag).toBe('Accepted')
+        yield* pushEncoded(eventFactory.todoCreated.next({ id: 'after-admission', text: 'After' }))
+        for (const { queue } of [first, second]) {
+          const item = yield* Queue.take(queue)
+          expect(item.payload.newEvents.map((event) => event.args.id)).toEqual(['after-admission'])
+          expect(yield* Queue.size(queue)).toBe(0)
+        }
+      }).pipe(withTestCtx({ mockBackendOverride: holdAdmissionPush })(test)),
+  )
+
+  Vitest.live('releases a partially consumed admission when its caller closes', (test) =>
+    Effect.gen(function* () {
+      const { syncProcessor } = yield* LeaderThreadCtx
+      const { eventFactory, pushEncoded } = yield* TestContext
+      const callerScope = yield* Scope.make()
+      const opened = yield* syncProcessor
+        .openSession({ expectedProjection: StateSnapshot.getProjectionIdentity(schema), candidate: undefined })
+        .pipe(Effect.provideService(Scope.Scope, callerScope))
+      yield* pushEncoded(eventFactory.todoCreated.next({ id: 'before-cancel', text: 'Before cancel' }))
+      yield* Queue.take(opened.queue)
+      yield* Scope.close(callerScope, Exit.void)
+      yield* pushEncoded(eventFactory.todoCreated.next({ id: 'after-cancel', text: 'After cancel' }))
+    }).pipe(withTestCtx({ mockBackendOverride: holdAdmissionPush })(test)),
+  )
+
+  Vitest.live('cancels an opener queued behind a busy owner without leaving a subscription', (test) =>
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      yield* Effect.gen(function* () {
+        const { syncProcessor } = yield* LeaderThreadCtx
+        const { mockSyncBackend, eventFactory, pushEncoded } = yield* TestContext
+        yield* mockSyncBackend.advance(eventFactory.todoCreated.next({ id: 'remote-before-open', text: 'Remote' }))
+        yield* Deferred.await(entered)
+        const requested = yield* Deferred.make<void>()
+        const opener = yield* Deferred.succeed(requested, undefined).pipe(
+          Effect.andThen(
+            syncProcessor.openSession({
+              expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+              candidate: undefined,
+            }),
+          ),
+          Effect.scoped,
+          Effect.forkScoped,
+        )
+        yield* Deferred.await(requested)
+        yield* Fiber.interrupt(opener)
+        yield* Deferred.succeed(release, undefined)
+        const healthy = yield* syncProcessor.openSession({
+          expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+          candidate: undefined,
+        })
+        expect(healthy.admission._tag).toBe('StaleSnapshot')
+        yield* pushEncoded(eventFactory.todoCreated.next({ id: 'after-cancelled-open', text: 'After' }))
+        expect((yield* Queue.take(healthy.queue)).payload.newEvents.map((event) => event.args.id)).toEqual([
+          'after-cancelled-open',
+        ])
+      }).pipe(
+        withTestCtx({
+          mockBackendOverride: holdAdmissionPush,
+          testing: {
+            syncProcessor: {
+              hooks: {
+                upstreamBatchReceived: (events) =>
+                  events.some((event) => event.args.id === 'remote-before-open') === true
+                    ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)))
+                    : Effect.void,
+              },
+            },
+          },
+        })(test),
+      )
+    }).pipe(Vitest.withTestCtx(test)),
+  )
+
+  Vitest.live(
+    'delivers confirmation-only changes after admission even when the materialized head stays fixed',
+    (test) =>
+      Effect.gen(function* () {
+        const { syncProcessor } = yield* LeaderThreadCtx
+        const { mockSyncBackend, eventFactory, pushEncoded } = yield* TestContext
+        const event = eventFactory.todoCreated.next({ id: 'confirm-after-open', text: 'Confirm' })
+        yield* pushEncoded(event)
+        const opened = yield* syncProcessor.openSession({
+          expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+          candidate: undefined,
+        })
+        yield* mockSyncBackend.advance(event)
+        const item = yield* Queue.take(opened.queue)
+        expect(item.payload.newEvents).toEqual([])
+        expect(item.globalHead.global).toBe(event.seqNum)
+        expect(yield* Queue.size(opened.queue)).toBe(0)
+      }).pipe(withTestCtx({ mockBackendOverride: holdAdmissionPush })(test)),
+  )
+
+  Vitest.live('fails a slow admitted consumer at its bounded buffer without blocking healthy consumers', (test) =>
+    Effect.gen(function* () {
+      const { syncProcessor } = yield* LeaderThreadCtx
+      const { eventFactory, pushEncoded } = yield* TestContext
+      const slow = yield* syncProcessor.openSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: undefined,
+      })
+      const healthy = yield* syncProcessor.openSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: undefined,
+      })
+      for (let index = 0; index < 129; index++) {
+        yield* pushEncoded(eventFactory.todoCreated.next({ id: `bounded-${index}`, text: 'Bounded' }))
+        expect((yield* Queue.take(healthy.queue)).payload.newEvents).toHaveLength(1)
+      }
+      expect(yield* Queue.size(slow.queue)).toBe(128)
+      expect((yield* Stream.fromQueue(slow.queue).pipe(Stream.runDrain, Effect.exit))._tag).toBe('Failure')
+      const current = yield* syncProcessor.openSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: undefined,
+      })
+      expect(current.admission._tag).toBe('StaleSnapshot')
+    }).pipe(withTestCtx({ mockBackendOverride: holdAdmissionPush })(test)),
+  )
+
+  Vitest.live('uses the same normalized terminal cause for admitted streams and shutdown notification', (test) =>
+    Effect.gen(function* () {
+      const { eventFactory, pushEncoded, shutdownDeferred } = yield* TestContext
+      const { syncProcessor } = yield* LeaderThreadCtx
+      const admitted = yield* syncProcessor.openSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: undefined,
+      })
+      yield* pushEncoded(eventFactory.todoCreated.next({ id: 'untyped', text: 'Untyped' })).pipe(Effect.exit)
+      const notification = yield* Deferred.await(shutdownDeferred).pipe(Effect.flip)
+      expect(notification._tag).toBe('UnknownError')
+      const failed = yield* Stream.fromQueue(admitted.queue).pipe(Stream.runDrain, Effect.exit)
+      expect(failed._tag).toBe('Failure')
+      if (failed._tag === 'Failure') {
+        expect(Cause.squash(failed.cause)).toBe(notification)
+        expect(Cause.pretty(failed.cause)).toContain('untyped admission failure')
+      }
+    }).pipe(
+      withTestCtx({
+        captureShutdown: true,
+        testing: {
+          syncProcessor: {
+            hooks: {
+              localPushAdmitted: () => Effect.die(new Error('untyped admission failure')),
+            },
+          },
+        },
+      })(test),
+    ),
+  )
+
+  Vitest.live('keeps no-error owner loss terminal while request cancellation remains separately scoped', (test) =>
+    Effect.gen(function* () {
+      const ownerScope = yield* Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void))
+      const callerScope = yield* Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void))
+      const context = yield* Layer.build(LeaderThreadCtxLive({})).pipe(Effect.provideService(Scope.Scope, ownerScope))
+      const { syncProcessor } = Context.get(context, LeaderThreadCtx)
+      const admitted = yield* syncProcessor
+        .openSession({ expectedProjection: StateSnapshot.getProjectionIdentity(schema), candidate: undefined })
+        .pipe(Effect.provideService(Scope.Scope, callerScope))
+      yield* Scope.close(ownerScope, Exit.void)
+      const ended = yield* Stream.fromQueue(admitted.queue).pipe(Stream.runDrain, Effect.exit)
+      expect(ended._tag).toBe('Failure')
+      if (ended._tag === 'Failure') expect(Cause.pretty(ended.cause)).toContain('Admitted leader stopped')
+    }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
+  )
+
+  Vitest.live('notifies every session after a persistence failure even when sync errors are ignored', (test) =>
+    Effect.gen(function* () {
+      const { eventFactory, pushEncoded, shutdownDeferred } = yield* TestContext
+      const dbState = yield* StateSqliteDb.StateSqliteDb
+      const leader = yield* LeaderThreadCtx
+      const admitted = yield* leader.syncProcessor.openSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: undefined,
+      })
+      dbState.execute(
+        `CREATE TRIGGER fail_materialization BEFORE INSERT ON todos BEGIN SELECT RAISE(ABORT, 'injected materialization failure'); END`,
+      )
+      yield* pushEncoded(eventFactory.todoCreated.next({ id: 'failed', text: 'Failed' })).pipe(Effect.exit)
+      const error = yield* Deferred.await(shutdownDeferred).pipe(Effect.flip)
+      expect(error._tag).toBe('MaterializeError')
+      expect(dbState.select(tables.todos)).toEqual([])
+      expect(dbState.select(SystemTables.rebuildMetaTable)).toEqual([])
+      expect(yield* leader.exportSnapshot.pipe(Effect.exit)).toMatchObject({ _tag: 'Failure' })
+      const queueExit = yield* Stream.fromQueue(admitted.queue).pipe(Stream.runDrain, Effect.exit)
+      expect(queueExit._tag).toBe('Failure')
+      if (queueExit._tag === 'Failure') expect(Cause.squash(queueExit.cause)).toBe(error)
+      expect(
+        (yield* leader.syncProcessor
+          .openSession({ expectedProjection: StateSnapshot.getProjectionIdentity(schema), candidate: undefined })
+          .pipe(Effect.exit))._tag,
+      ).toBe('Failure')
+    }).pipe(withTestCtx({ captureShutdown: true, syncOptions: { onSyncError: 'ignore' } })(test)),
+  )
+
   for (const reportsConnectivity of [true, false]) {
     Vitest.live(
       reportsConnectivity === true
@@ -196,11 +423,13 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
     Effect.gen(function* () {
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
-      const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
+      const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+      const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const mockBackend = yield* makeMockSyncBackend({ startConnected: false })
       const shutdownChannel = yield* WebChannel.noopChannel<any, any>()
       const leaderLayer = makeLeaderThreadLayer({
+        initializedSource,
         schema,
         storeId: 'boot-race',
         clientId: 'local',
@@ -1197,8 +1426,10 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       const afterEventlogRows = dbEventlog.select<{ name: string }>(`SELECT name FROM eventlog`)
       expect(afterEventlogRows.length).toBe(0)
 
-      const afterSyncStatusRows = dbEventlog.select<{ head: number }>(`SELECT head FROM __livestore_sync_status`)
-      expect(afterSyncStatusRows.length).toBe(0)
+      const afterSyncStatusRows = dbEventlog.select<{ head: number; backendId: string | null }>(
+        `SELECT head, backendId FROM __livestore_sync_status`,
+      )
+      expect(afterSyncStatusRows).toEqual([{ head: 0, backendId: null }])
     }).pipe(
       withTestCtx({ syncOptions: { onBackendIdMismatch: 'reset', livePull: false }, captureShutdown: true })(test),
     ),
@@ -1358,10 +1589,12 @@ const LeaderThreadCtxLive = ({
     const shutdownProxy =
       captureShutdown === true ? yield* WebChannel.queueChannelProxy({ schema: Shutdown.All }) : undefined
 
-    const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
     const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
+    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+    const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
     const sqliteServicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
     const leaderContextLayer = makeLeaderThreadLayer({
+      initializedSource,
       schema,
       storeId: 'test',
       clientId: 'test',
@@ -1432,3 +1665,8 @@ const LeaderThreadCtxLive = ({
 
     return runtimeLayer.pipe(Layer.merge(testContextLayer))
   }).pipe(Layer.unwrap)
+
+const holdAdmissionPush =
+  (mock: MockSyncBackend): SyncBackend.SyncBackendConstructor =>
+  () =>
+    mock.makeSyncBackend.pipe(Effect.map((backend) => ({ ...backend, push: () => Effect.never })))

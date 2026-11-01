@@ -56,10 +56,7 @@ export const skipRepeated_ = <R, E, A>(
             Ref.get(ref),
             Effect.flatMap((prevEl) => {
               if (prevEl._tag === 'None' || isEqual(prevEl.value, el) === false) {
-                return pipe(
-                  Ref.set(ref, Option.some(el)),
-                  Effect.map(() => true),
-                )
+                return pipe(Ref.set(ref, Option.some(el)), Effect.as(true))
               } else {
                 return Effect.succeed(false)
               }

@@ -195,19 +195,17 @@ export const makeSqliteDb = <
         }
 
         const tmpDb = makeInMemoryDb(sqlite3)
-        // TODO find a way to do this more efficiently with sqlite to avoid either of the deserialize + backup call
-        // Maybe this can be done via the VFS API
-        const rcDeserialize = sqlite3.deserialize(
-          tmpDb.dbPointer,
-          'main',
-          source,
-          source.length,
-          source.length,
-          FREE_ON_CLOSE | RESIZEABLE,
-        )
-        ensureSuccess(rcDeserialize, 'sqlite3.deserialize')
-
         try {
+          // The temporary connection is owned even if deserialization fails before backup starts.
+          const rcDeserialize = sqlite3.deserialize(
+            tmpDb.dbPointer,
+            'main',
+            source,
+            source.length,
+            source.length,
+            FREE_ON_CLOSE | RESIZEABLE,
+          )
+          ensureSuccess(rcDeserialize, 'sqlite3.deserialize')
           const rcBackup = sqlite3.backup(dbPointer, 'main', tmpDb.dbPointer, 'main')
           ensureSuccess(rcBackup, 'sqlite3.backup')
         } finally {

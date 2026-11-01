@@ -2,7 +2,7 @@ import { expect } from 'vitest'
 
 import { makeInMemoryAdapter } from '@livestore/adapter-web'
 import type { MockSyncBackend } from '@livestore/common'
-import { type ClientSessionLeaderThreadProxy, makeMockSyncBackend, type UnknownError } from '@livestore/common'
+import { type ClientSessionLeaderThreadProxy, makeMockSyncBackend, type AdapterError } from '@livestore/common'
 import type { LiveStoreEvent, LiveStoreSchema } from '@livestore/common/schema'
 import { EventFactory } from '@livestore/common/testing'
 import type { ShutdownDeferred, Store } from '@livestore/livestore'
@@ -92,7 +92,7 @@ class TestContext extends Context.Service<
           }
         }
       }
-    }) => Effect.Effect<Store, UnknownError, Scope.Scope | OtelTracer.OtelTracer>
+    }) => Effect.Effect<Store, AdapterError, Scope.Scope | OtelTracer.OtelTracer>
     mockSyncBackend: MockSyncBackend
     shutdownDeferred: ShutdownDeferred
   }

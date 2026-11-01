@@ -14,7 +14,7 @@ const runtimeDeps = catalog.compose({
   },
   devDependencies: {
     workspace: [utilsDevPkg],
-    external: effectDevDeps('@livestore/devtools-vite', '@types/node', 'vitest'),
+    external: effectDevDeps('@babel/parser', '@livestore/devtools-vite', '@types/node', 'vitest'),
   },
 })
 

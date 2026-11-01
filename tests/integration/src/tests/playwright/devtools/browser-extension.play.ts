@@ -28,7 +28,7 @@ import { checkDevtoolsState, checkProtocolMismatchOverlay } from './shared.ts'
 
 const appStoreId = 'app-root'
 
-export class TestError extends Schema.TaggedError<TestError>()('TestError', {
+export class TestError extends Schema.TaggedError<TestError, { readonly brand: unique symbol }>()('TestError', {
   message: Schema.String,
 }) {}
 

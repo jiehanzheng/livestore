@@ -15,6 +15,23 @@ import { events, makeTodoMvcReact, schema, tables } from './__tests__/fixture.ts
 import { __resetUseRcResourceCache } from './useRcResource.ts'
 import { withReactApi } from './useStore.ts'
 
+const listStyle = { height: 100, width: 100 }
+
+type ListRowProps = {
+  ids: ReadonlyArray<number>
+  store: Effect.Success<ReturnType<typeof makeTodoMvcReact>>['store']
+}
+
+const ListItem = ({ ids, store, index, style, ariaAttributes }: ReactWindow.RowComponentProps<ListRowProps>) => {
+  const id = ids[index]!
+  const res = store.useQuery(LiveStore.computed(() => id, { label: `ListItem.${id}`, deps: id }))
+  return (
+    <div {...ariaAttributes} style={style}>
+      {res}
+    </div>
+  )
+}
+
 /** Verifies: LS.SYS.INT.REACT-R01, LS.SYS.INT.REACT-R04, LS.SYS.INT.REACT-R05 */
 Vitest.describe.each([{ strictMode: true }, { strictMode: false }] as const)(
   'useQuery (strictMode=%s)',
@@ -153,23 +170,20 @@ Vitest.describe.each([{ strictMode: true }, { strictMode: false }] as const)(
         const { wrapper, store } = yield* makeTodoMvcReact({ strictMode })
 
         const ListWrapper: React.FC<{ numItems: number }> = ({ numItems }) => {
-          return (
-            <ReactWindow.FixedSizeList
-              height={100}
-              width={100}
-              itemSize={10}
-              itemCount={numItems}
-              itemData={Array.from({ length: numItems }, (_, i) => i).toReversed()}
-            >
-              {ListItem}
-            </ReactWindow.FixedSizeList>
+          const rowProps = React.useMemo(
+            () => ({ ids: Array.from({ length: numItems }, (_, i) => i).toReversed(), store }),
+            [numItems],
           )
-        }
-
-        const ListItem: React.FC<{ data: ReadonlyArray<number>; index: number }> = ({ data: ids, index }) => {
-          const id = ids[index]!
-          const res = store.useQuery(LiveStore.computed(() => id, { label: `ListItem.${id}`, deps: id }))
-          return <div role="listitem">{res}</div>
+          return (
+            <ReactWindow.List
+              defaultHeight={100}
+              style={listStyle}
+              rowHeight={10}
+              rowCount={numItems}
+              rowProps={rowProps}
+              rowComponent={ListItem}
+            />
+          )
         }
 
         const renderResult = ReactTesting.render(<ListWrapper numItems={1} />, { wrapper })

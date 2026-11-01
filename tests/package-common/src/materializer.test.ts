@@ -45,7 +45,11 @@ const materializers = State.SQLite.materializers(events, {
   emptyEventPayload: () => [],
 })
 
-const schema = makeSchema({ events, state: State.SQLite.makeState({ tables, materializers }) })
+const schema = makeSchema({
+  projectionRevision: 'test-fixture-v1',
+  events,
+  state: State.SQLite.makeState({ tables, materializers }),
+})
 
 /** Verifies: LS.SYS.STATE-R01, LS.SYS.STATE.SQLITE-R02, LS.SYS.VER.DET-R01 */
 Vitest.describe.each(['raw', 'query-builder'] as const)('materializer', (queryType) => {
@@ -115,6 +119,7 @@ Vitest.describe.each(['raw', 'query-builder'] as const)('materializer', (queryTy
       })
 
       const messageSchema = makeSchema({
+        projectionRevision: 'test-fixture-v1',
         events: messageEvents,
         state: State.SQLite.makeState({
           tables: { messages: messageTable },

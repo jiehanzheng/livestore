@@ -1,3 +1,5 @@
+import { mapToAdapterError } from '@livestore/common'
+import { openSnapshotSession, StateSnapshot } from '@livestore/common'
 /**
  * Single-tab adapter for browsers without SharedWorker support (e.g. Android Chrome).
  *
@@ -12,7 +14,6 @@
  *
  * @module
  */
-
 import type { Adapter, BootWarningReason, ClientSession, LockStatus } from '@livestore/common'
 import {
   IntentionalShutdownCause,
@@ -41,6 +42,7 @@ import {
 import { BrowserWorker, Opfs, WebError } from '@livestore/utils/effect/browser'
 import { nanoid } from '@livestore/utils/nanoid'
 
+import { makeLeaderElectionLock } from '../web-worker/client-session/leader-election-lock.ts'
 import { loadSqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
 import {
   readPersistedStateDbFromClientSession,
@@ -76,8 +78,14 @@ export type SingleTabAdapterOptions = {
    *   storage: { type: 'opfs' },
    * })
    * ```
+   *
+   * A factory may return a dedicated Worker or an application-owned MessagePort.
+   * For a MessagePort, configure the worker runner with the paired transport port;
+   * the application owns and terminates the underlying Worker after joining cleanup.
    */
-  worker: ((options: { name: string }) => globalThis.Worker) | (new (options: { name: string }) => globalThis.Worker)
+  worker:
+    | ((options: { name: string }) => globalThis.Worker | MessagePort)
+    | (new (options: { name: string }) => globalThis.Worker)
 
   /**
    * Storage configuration. Currently only OPFS is supported.
@@ -128,7 +136,7 @@ export type SingleTabAdapterOptions = {
  * **Limitations**:
  * - No multi-tab synchronization (each tab operates independently)
  * - No devtools support (requires SharedWorker)
- * - Opening multiple tabs with the same storeId may cause data conflicts
+ * - A second store with the same storeId is refused while its physical owner is active
  *
  * @see https://github.com/livestorejs/livestore/issues/321 - LiveStore tracking issue
  * @see https://issues.chromium.org/issues/40290702 - Chromium SharedWorker bug
@@ -154,6 +162,15 @@ export const makeSingleTabAdapter =
       // Note: devtoolsEnabled is ignored in single-tab mode (devtools require SharedWorker)
 
       yield* ensureBrowserRequirements
+
+      // This mode cannot join an existing owner. Refuse immediately instead of waiting
+      // forever behind a private worker, while sharing the normal physical owner lock.
+      const ownership = yield* makeLeaderElectionLock(`livestore-tab-lock-${storeId}`)
+      if ((yield* ownership.tryAcquire) === false) {
+        return yield* new UnknownError({
+          cause: 'Single-tab storage already has an active owner; close it before opening another store',
+        })
+      }
 
       yield* Queue.offer(bootStatusQueue, { stage: 'loading' })
 
@@ -230,7 +247,7 @@ export const makeSingleTabAdapter =
       )
       yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(
         Effect.provide(outerWorkerContext),
-        UnknownError.mapToUnknownError,
+        mapToAdapterError,
         Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
         Effect.withSpan('@livestore/adapter-web:single-tab:setupDedicatedWorker'),
         Effect.tapCauseLogPretty,
@@ -261,7 +278,7 @@ export const makeSingleTabAdapter =
       const innerWorker = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
         Effect.provide(innerWorkerContext),
         Effect.tapCauseLogPretty,
-        UnknownError.mapToUnknownError,
+        mapToAdapterError,
         Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
         Effect.withSpan('@livestore/adapter-web:single-tab:setupInnerWorker'),
       )
@@ -309,20 +326,12 @@ export const makeSingleTabAdapter =
       )
 
       // Get initial snapshot (either from fast-path or from worker)
-      const { sqliteDb, snapshotByteLength, migrationsReport } =
-        dataFromFile === undefined
-          ? yield* Effect.gen(function* () {
-              const { snapshot, migrationsReport } = yield* runInWorker(
-                'GetRecreateSnapshot',
-                innerWorker.GetRecreateSnapshot({}),
-              )
-              const sqliteDb = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-                Effect.sync(() => db.close()),
-              )
-              sqliteDb.import(snapshot)
-              return { sqliteDb, snapshotByteLength: snapshot.byteLength, migrationsReport }
-            })
-          : { ...dataFromFile, migrationsReport: { migrations: [] } }
+      const { sqliteDb, snapshotByteLength, migrationsReport, pull } = yield* openSnapshotSession({
+        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+        candidate: dataFromFile,
+        makeSqliteDb,
+        open: (request) => runInWorkerStream('OpenSession', innerWorker.OpenSession(request)),
+      })
 
       const numberOfTables =
         sqliteDb.select<{ count: number }>(`select count(*) as count from sqlite_master`)[0]?.count ?? 0
@@ -363,7 +372,7 @@ export const makeSingleTabAdapter =
         ),
 
         events: {
-          pull: ({ cursor }) => runInWorkerStream('PullStream', innerWorker.PullStream({ cursor })).pipe(Stream.orDie),
+          pull: () => pull,
           push: (batch) =>
             runInWorker('PushToLeader', innerWorker.PushToLeader({ batch })).pipe(
               Effect.withSpan('@livestore/adapter-web:single-tab:pushToLeader', {
@@ -427,7 +436,7 @@ export const makeSingleTabAdapter =
       })
 
       return clientSession
-    }).pipe(Effect.provide(Opfs.layer), UnknownError.mapToUnknownError)
+    }).pipe(Effect.provide(Opfs.layer), mapToAdapterError)
 
 /** Persists clientId/sessionId to storage */
 const getPersistedId = (key: string, storageType: 'session' | 'local') => {

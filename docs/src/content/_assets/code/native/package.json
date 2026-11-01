@@ -1,0 +1,64 @@
+{
+  "$genie": {
+    "source": "package.json.genie.ts",
+    "warning": "DO NOT EDIT - changes will be overwritten",
+    "workspaceClosureDirs": [
+      "docs/src/content/_assets/code/native",
+      "packages/@livestore/adapter-expo",
+      "packages/@livestore/adapter-web",
+      "packages/@livestore/common",
+      "packages/@livestore/common-cf",
+      "packages/@livestore/framework-toolkit",
+      "packages/@livestore/livestore",
+      "packages/@livestore/react",
+      "packages/@livestore/sqlite-wasm",
+      "packages/@livestore/sync-cf",
+      "packages/@livestore/utils",
+      "packages/@livestore/utils-dev",
+      "packages/@livestore/wa-sqlite",
+      "packages/@livestore/webmesh"
+    ]
+  },
+  "name": "@local/docs-native-code",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "tsc --build"
+  },
+  "dependencies": {
+    "@effect/opentelemetry": "4.1.0",
+    "@effect/platform-browser": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/platform-node": "4.1.0",
+    "@effect/platform-node-shared": "4.1.0",
+    "@effect/vitest": "4.1.0",
+    "@livestore/adapter-expo": "workspace:^",
+    "@livestore/common": "workspace:^",
+    "@livestore/livestore": "workspace:^",
+    "@livestore/react": "workspace:^",
+    "@livestore/sync-cf": "workspace:^",
+    "@livestore/utils": "workspace:^",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/resources": "2.2.0",
+    "@standard-schema/spec": "1.1.0",
+    "effect": "4.1.0",
+    "expo": "58.0.21",
+    "expo-crypto": "58.0.7",
+    "expo-file-system": "58.0.13",
+    "expo-sqlite": "58.0.14",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1"
+  },
+  "dependenciesMeta": {
+    "@livestore/react": {
+      "injected": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "25.3.3",
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

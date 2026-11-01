@@ -1,6 +1,7 @@
 import type * as otel from '@opentelemetry/api'
 
 import {
+  type AdapterError,
   type BackendIdMismatchError,
   type ClientSession,
   type ClientSessionSyncProcessor,
@@ -51,9 +52,10 @@ export type LiveStoreContext<TSchema extends LiveStoreSchema = LiveStoreSchema.A
       cause: IntentionalShutdownCause | StoreInterrupted | UnknownError
     }
 
+/** Reports the first accepted shutdown request/cause; it does not attest to completed local teardown. */
 export type ShutdownDeferred = Deferred.Deferred<
   IntentionalShutdownCause,
-  | UnknownError
+  | AdapterError
   | StoreInterrupted
   | MaterializeError
   | MaterializationJournal.MaterializationJournalError
@@ -61,7 +63,7 @@ export type ShutdownDeferred = Deferred.Deferred<
 >
 export const makeShutdownDeferred: Effect.Effect<ShutdownDeferred> = Deferred.make<
   IntentionalShutdownCause,
-  | UnknownError
+  | AdapterError
   | StoreInterrupted
   | MaterializeError
   | MaterializationJournal.MaterializationJournalError
@@ -114,6 +116,10 @@ export type StoreInternals = {
    * Do not close or mutate directly — use `store.shutdown(...)`.
    */
   readonly clientSession: ClientSession
+  /** Requests shutdown with a soft bound covering both adapter work and core teardown. */
+  readonly shutdown: ClientSession['shutdown']
+  /** Joins the one createStore-owned adapter hook and local teardown; the first observed failure wins. */
+  readonly shutdownAndWait: ClientSession['shutdown']
 
   /**
    * Wrapper around the local SQLite state database. Centralizes query
@@ -191,6 +197,8 @@ export type StoreInternals = {
  */
 export type StoreConstructorParams<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TContext = {}> = {
   clientSession: ClientSession
+  shutdown: ClientSession['shutdown']
+  shutdownAndWait: ClientSession['shutdown']
   schema: TSchema
   storeId: string
   context: TContext

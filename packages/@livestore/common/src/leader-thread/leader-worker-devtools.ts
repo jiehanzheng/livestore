@@ -1,6 +1,7 @@
-import { Cause, Effect, FiberMap, Option, Stream, SubscriptionRef } from '@livestore/utils/effect'
+import { Effect, FiberMap, Option, Stream, SubscriptionRef } from '@livestore/utils/effect'
 import { nanoid } from '@livestore/utils/nanoid'
 
+import { LiveDatabaseImportRefusedError } from '../errors.ts'
 import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import {
   Devtools,
@@ -124,38 +125,14 @@ const listenToDevtools = ({
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
     const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-    const {
-      schema,
-      syncBackend,
-      makeSqliteDb,
-      shutdownStateSubRef,
-      shutdownChannel,
-      syncProcessor,
-      clientId,
-      devtools,
-    } = yield* LeaderThreadCtx
+    const { schema, syncBackend, shutdownStateSubRef, shutdownChannel, syncProcessor, clientId, devtools } =
+      yield* LeaderThreadCtx
 
     type SubscriptionId = string
     const subscriptionFiberMap = yield* FiberMap.make<SubscriptionId>()
 
     type RequestId = string
     const handledRequestIds = new Set<RequestId>()
-
-    type LoadDatabaseKind = 'state' | 'eventlog'
-    const loadDatabaseBatchTracker = new Map<string, Set<LoadDatabaseKind>>()
-
-    const registerBatchProgress = (batchId: string, kind: LoadDatabaseKind) => {
-      const entry = loadDatabaseBatchTracker.get(batchId) ?? new Set<LoadDatabaseKind>()
-      entry.add(kind)
-      loadDatabaseBatchTracker.set(batchId, entry)
-      const finished = entry.has('state') && entry.has('eventlog')
-
-      if (finished === true) {
-        loadDatabaseBatchTracker.delete(batchId)
-      }
-
-      return finished
-    }
 
     yield* incomingMessages.pipe(
       Stream.tap((decodedEvent) =>
@@ -203,108 +180,28 @@ const listenToDevtools = ({
               return
             }
             case 'LSD.Leader.SnapshotReq': {
-              const snapshot = dbState.export()
+              const snapshot = yield* (yield* LeaderThreadCtx).exportSnapshot
 
               yield* sendMessage(Devtools.Leader.SnapshotRes.make({ snapshot, ...reqPayload }))
 
               return
             }
             case 'LSD.Leader.LoadDatabaseFile.Request': {
-              const { data, batchId } = decodedEvent
-
-              const handleLoadDb = Effect.gen(function* () {
-                const tableNames = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-                  Effect.sync(() => db.close()),
-                ).pipe(
-                  Effect.flatMap((db) =>
-                    Effect.try({
-                      try: () => {
-                        db.import(data)
-                        const rows = db.select<{ name: string }>(`select name from sqlite_master where type = 'table'`)
-                        return new Set(rows.map((r) => r.name))
-                      },
-                      catch: (cause) => new Cause.UnknownError(cause),
+              yield* sendMessage(
+                Devtools.Leader.LoadDatabaseFile.Error.make({
+                  ...reqPayload,
+                  cause: {
+                    _tag: 'unknown-error',
+                    cause: LiveDatabaseImportRefusedError.make({
+                      reason:
+                        'Live database import is unsupported. Initialize a fresh source with a compatible build and reopen; retained source bytes are unchanged.',
                     }),
-                  ),
-                )
-
-                let databaseKind: LoadDatabaseKind | undefined
-
-                if (tableNames.has(SystemTables.EVENTLOG_META_TABLE) === true) {
-                  databaseKind = 'eventlog'
-                  yield* SubscriptionRef.set(shutdownStateSubRef, 'shutting-down')
-                  yield* Effect.try({
-                    try: () => dbEventlog.import(data),
-                    catch: (cause) => new Cause.UnknownError(cause),
-                  })
-
-                  if (batchId === undefined) {
-                    yield* Effect.try({
-                      try: () => dbState.destroy(),
-                      catch: (cause) => new Cause.UnknownError(cause),
-                    })
-                  }
-                } else if (
-                  tableNames.has(SystemTables.SCHEMA_META_TABLE) === true &&
-                  tableNames.has(SystemTables.SCHEMA_EVENT_DEFS_META_TABLE) === true
-                ) {
-                  databaseKind = 'state'
-                  yield* SubscriptionRef.set(shutdownStateSubRef, 'shutting-down')
-                  yield* Effect.try({
-                    try: () => dbState.import(data),
-                    catch: (cause) => new Cause.UnknownError(cause),
-                  })
-
-                  if (batchId === undefined) {
-                    yield* Effect.try({
-                      try: () => dbEventlog.destroy(),
-                      catch: (cause) => new Cause.UnknownError(cause),
-                    })
-                  }
-                } else {
-                  return yield* Effect.fail({ _tag: 'unsupported-database' } as const)
-                }
-
-                const resolvedDatabaseKind = databaseKind
-                if (resolvedDatabaseKind === undefined) {
-                  return yield* Effect.fail({ _tag: 'unsupported-database' } as const)
-                }
-
-                const shouldShutdown =
-                  batchId === undefined ? true : registerBatchProgress(batchId, resolvedDatabaseKind)
-
-                yield* sendMessage(Devtools.Leader.LoadDatabaseFile.Success.make({ ...reqPayload }))
-
-                if (shouldShutdown === true) {
-                  yield* shutdownChannel.send(IntentionalShutdownCause.make({ reason: 'devtools-import' }))
-                }
-              })
-
-              yield* handleLoadDb.pipe(
-                Effect.catchTag('unsupported-database', () =>
-                  sendMessage(
-                    Devtools.Leader.LoadDatabaseFile.Error.make({
-                      ...reqPayload,
-                      cause: { _tag: 'unsupported-database' as const },
-                    }),
-                  ),
-                ),
-                Effect.catch((cause) =>
-                  Effect.logWarning('Error importing database file', cause).pipe(
-                    Effect.andThen(
-                      sendMessage(
-                        Devtools.Leader.LoadDatabaseFile.Error.make({
-                          ...reqPayload,
-                          cause: { _tag: 'unknown-error' as const, cause },
-                        }),
-                      ),
-                    ),
-                  ),
-                ),
+                  },
+                }),
               )
-
               return
             }
+
             case 'LSD.Leader.ResetAllData.Request': {
               const { mode } = decodedEvent
 
