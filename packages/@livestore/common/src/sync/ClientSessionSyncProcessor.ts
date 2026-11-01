@@ -37,6 +37,10 @@ export interface ClientSessionSyncProcessor {
   commit: (
     events: ReadonlyArray<LiveStoreEvent.Input.Decoded>,
   ) => Effect.Effect<{ writeTables: Set<string> }, ProcessorError>
+  /** Local per-invocation result; failures outside confirmed rollback stay in the error channel. */
+  commitWithOutcome: (
+    events: ReadonlyArray<LiveStoreEvent.Input.Decoded>,
+  ) => Effect.Effect<ClientSessionCommitOutcome, ProcessorError>
   /** Current completed status and scoped, replaying broadcast changes for every observer. */
   syncState: Subscribable.Subscribable<SyncState.SyncState>
   debug: {
@@ -46,6 +50,10 @@ export interface ClientSessionSyncProcessor {
     debugInfo: () => { rebaseCount: number; advanceCount: number }
   }
 }
+
+export type ClientSessionCommitOutcome =
+  | { readonly _tag: 'AcceptedLocally'; readonly writeTables: Set<string> }
+  | { readonly _tag: 'RejectedBeforeEnqueue'; readonly cause: Cause.Cause<ProcessorError> }
 
 export type RebaseBarrierPoint = 'before_leader_push_fiber_interrupt' | 'before_leader_push_fiber_run'
 
@@ -221,7 +229,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
 
   const commitLocalEvents = (
     events: ReadonlyArray<LiveStoreEvent.Input.Decoded>,
-  ): Effect.Effect<{ writeTables: Set<string> }, ProcessorError> =>
+  ): Effect.Effect<ClientSessionCommitOutcome, ProcessorError> =>
     Effect.gen(function* () {
       if (model.lifecycle._tag !== 'running') {
         return yield* Effect.die(
@@ -240,10 +248,30 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
         }, {}),
         ...(TRACE_VERBOSE === true ? { mergeResult: jsonStringify(result) } : {}),
       })
-      const { writeTables } = yield* materializeEvents(encoded).pipe(
-        SqliteDbHelper.withSavepoint(dbState),
+      const previousDebugHead = dbState.debug.head
+      const materialized = yield* materializeEvents(encoded).pipe(
         Effect.mapError((cause) => (cause._tag === 'SqliteError' ? new UnknownError({ cause }) : cause)),
+        SqliteDbHelper.withSavepointResult(dbState),
+        Effect.mapError((cause) => new UnknownError({ cause })),
       )
+      if (Exit.isFailure(materialized) === true) {
+        // Only the savepoint owner can establish rollback AND release. Defects and interruptions are not receipts.
+        dbState.debug.head = previousDebugHead
+        if (
+          Cause.hasDies(materialized.cause) === true ||
+          Cause.hasInterrupts(materialized.cause) === true ||
+          materialized.cause.reasons.some(
+            (reason) =>
+              Cause.isFailReason(reason) === true &&
+              SqliteDbHelper.containsSavepointCleanupFailure(reason.error) === true,
+          ) === true
+        ) {
+          return yield* Effect.failCause(materialized.cause)
+        }
+        return { _tag: 'RejectedBeforeEnqueue' as const, cause: materialized.cause }
+      }
+      const { writeTables, hashes } = materialized.value
+      for (const [key, hash] of hashes) pendingMaterializerHashes.set(key, hash)
       model = {
         ...model,
         syncState: result.newSyncState,
@@ -255,7 +283,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
       }
       addToOutbox(PubSub.publish(syncStateUpdates, model.syncState))
       reserveNextPush()
-      return { writeTables }
+      return { _tag: 'AcceptedLocally' as const, writeTables }
     })
 
   const acceptPull = (
@@ -548,11 +576,14 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
     events: EventBatch,
   ) {
     const writeTables = new Set<string>()
+    const hashes = new Map<string, number>()
     for (const event of events) {
       const { writeTables: newWriteTables, materializerHash } = yield* materializeEvent(event, {
         materializerHashLeader: Option.none(),
       })
-      recordPendingHash(event, materializerHash)
+      if (materializerHash._tag === 'Some') {
+        hashes.set(EventSequenceNumber.Client.toString(event.seqNum), materializerHash.value)
+      }
       for (const table of newWriteTables) {
         writeTables.add(table)
       }
@@ -560,7 +591,7 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
     // One head write per batch: the savepoint commits the events and the head together.
     const last = events.at(-1)
     if (last !== undefined) yield* stateHead.set(last.seqNum)
-    return { writeTables }
+    return { writeTables, hashes }
   })
 
   /** Complete the SQLite step before the owner installs its matching model or delivers its outbox. */
@@ -834,7 +865,16 @@ export const makeClientSessionSyncProcessor = Effect.fn('makeClientSessionSyncPr
         Effect.withSpan('client-session-sync-processor:shutdown'),
       ),
     commit: Effect.fn('client-session-sync-processor:commit')((events: ReadonlyArray<LiveStoreEvent.Input.Decoded>) =>
-      owned(commitLocalEvents(events)),
+      owned(commitLocalEvents(events)).pipe(
+        Effect.flatMap((outcome) =>
+          outcome._tag === 'AcceptedLocally'
+            ? Effect.succeed({ writeTables: outcome.writeTables })
+            : Effect.failCause(outcome.cause),
+        ),
+      ),
+    ),
+    commitWithOutcome: Effect.fn('client-session-sync-processor:commit')(
+      (events: ReadonlyArray<LiveStoreEvent.Input.Decoded>) => owned(commitLocalEvents(events)),
     ),
     syncState: Subscribable.make({
       get: Effect.sync(() => model.syncState),

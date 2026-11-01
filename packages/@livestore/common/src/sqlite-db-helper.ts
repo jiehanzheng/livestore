@@ -61,6 +61,36 @@ export const withSavepoint: {
 } = Function.dual(
   2,
   <A, E, R>(self: Effect.Effect<A, E, R>, db: SqliteDb): Effect.Effect<A, E | SqliteError, R> =>
+    withSavepointResult(self, db).pipe(Effect.flatten),
+)
+
+/** Cleanup uncertainty must survive wrappers and an enclosing savepoint's later successful rollback. */
+export class SavepointCleanupError extends SqliteError {}
+
+/** Follows structured cause wrappers without interpreting SQL text or looping on cyclic errors. */
+export const containsSavepointCleanupFailure = (error: unknown): boolean => {
+  const visited = new Set<object>()
+  let current = error
+  while (typeof current === 'object' && current !== null) {
+    if (current instanceof SavepointCleanupError) return true
+    if (visited.has(current) === true) return false
+    visited.add(current)
+    current = 'cause' in current ? current.cause : undefined
+  }
+  return false
+}
+
+/**
+ * Returns the wrapped exit only after SQLite has completed the corresponding savepoint cleanup.
+ * Acquisition and cleanup failures stay in the error channel: callers must not mistake them for a confirmed rollback.
+ * A failed exit can still contain an interruption or defect and is not itself a local nonadmission receipt.
+ */
+export const withSavepointResult: {
+  (db: SqliteDb): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<Exit.Exit<A, E>, SqliteError, R>
+  <A, E, R>(self: Effect.Effect<A, E, R>, db: SqliteDb): Effect.Effect<Exit.Exit<A, E>, SqliteError, R>
+} = Function.dual(
+  2,
+  <A, E, R>(self: Effect.Effect<A, E, R>, db: SqliteDb): Effect.Effect<Exit.Exit<A, E>, SqliteError, R> =>
     Effect.uninterruptibleMask((restore) =>
       Effect.sync(generateSavepointName).pipe(
         Effect.flatMap((savepointName) => {
@@ -72,7 +102,7 @@ export const withSavepoint: {
             Effect.andThen(
               restore(self).pipe(
                 Effect.exit,
-                Effect.flatMap((exit) => {
+                Effect.tap((exit) => {
                   const cleanup =
                     Exit.isSuccess(exit) === true
                       ? executeSavepointSql(db, releaseSql)
@@ -81,7 +111,15 @@ export const withSavepoint: {
                         )
 
                   // Cleanup failures supersede the wrapped exit because the connection state is uncertain.
-                  return cleanup.pipe(Effect.andThen(exit))
+                  return cleanup.pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new SavepointCleanupError({
+                          cause,
+                          ...(cause.query === undefined ? {} : { query: cause.query }),
+                        }),
+                    ),
+                  )
                 }),
               ),
             ),

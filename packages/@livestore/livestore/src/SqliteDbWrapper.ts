@@ -154,15 +154,22 @@ export class SqliteDbWrapper implements SqliteDb {
     changeset: Uint8Array<ArrayBuffer> | null
   } {
     const session = this.db.session()
-    const result = callback()
-    const changeset = session.changeset()
-
-    session.finish()
-
-    return {
-      result,
-      changeset,
+    let outcome:
+      | { readonly ok: true; readonly value: { result: TRes; changeset: Uint8Array<ArrayBuffer> | null } }
+      | { readonly ok: false; readonly cause: unknown }
+    try {
+      outcome = { ok: true, value: { result: callback(), changeset: session.changeset() } }
+    } catch (cause) {
+      outcome = { ok: false, cause }
     }
+    // Cleanup uncertainty supersedes even a known execution failure: rollback cannot certify a leaked native session.
+    try {
+      session.finish()
+    } catch (cause) {
+      throw new ChangesetCleanupError({ cause })
+    }
+    if (outcome.ok === false) throw outcome.cause
+    return outcome.value
   }
 
   getTablesUsed(query: string) {
@@ -215,19 +222,28 @@ export class SqliteDbWrapper implements SqliteDb {
       (span) => {
         const startTimePerfNow = performance.now()
 
+        // Only native SQLite calls produce SqliteError. Cache/telemetry defects remain indeterminate.
+        const runSqlite = <T>(operation: () => T): T => {
+          try {
+            return operation()
+          } catch (cause) {
+            throw new SqliteError({ cause, query: { bindValues: bindValues ?? {}, sql: queryStr } })
+          }
+        }
         try {
           if (isSavepointStatement(queryStr) === true) {
             // Savepoint statements carry a unique name per use (see `SqliteDbHelper.withSavepoint`). Caching them
             // would fill the bounded statement cache with single-use entries and evict the reusable statements.
-            this.db.execute(queryStr, bindValues)
+            runSqlite(() => this.db.execute(queryStr, bindValues))
           } else {
             let stmt = this.cachedStmts.get(queryStr)
             if (stmt === undefined) {
-              stmt = this.db.prepare(queryStr)
+              stmt = runSqlite(() => this.db.prepare(queryStr))
               this.cachedStmts.set(queryStr, stmt)
             }
 
-            stmt.execute(bindValues)
+            const prepared = stmt
+            runSqlite(() => prepared.execute(bindValues))
           }
 
           if (/^\s*rollback\b/i.test(queryStr) === true) {
@@ -265,7 +281,7 @@ export class SqliteDbWrapper implements SqliteDb {
             // oxlint-disable-next-line no-debugger -- intentional breakpoint for SQL errors during development
             debugger
           }
-          throw new SqliteError({ cause, query: { bindValues: bindValues ?? {}, sql: queryStr } })
+          throw cause
         }
       },
     )
@@ -393,3 +409,10 @@ const tryGetTableNameFromPlainDeleteQuery = (query: string) => {
 }
 
 const isSavepointStatement = (query: string) => /^\s*(?:savepoint|release|rollback\s+to)\b/i.test(query)
+
+/** Internal marker: SQLite rollback cannot certify native-session cleanup after this failure. */
+export class ChangesetCleanupError extends Error {
+  constructor(options: ErrorOptions) {
+    super('Failed to finish SQLite changeset session', options)
+  }
+}

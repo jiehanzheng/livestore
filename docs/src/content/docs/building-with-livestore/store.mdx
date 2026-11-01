@@ -167,3 +167,22 @@ __debugLiveStore.default._dev.hardReset()
 // See the current sync state
 __debugLiveStore.default._dev.syncStates()
 ```
+
+## Observing a local commit outcome
+
+`store.commitWithOutcome(...)` accepts the same event, synchronous batch-builder
+and options forms as `commit`, and returns a `LocalCommitOutcome` for that call:
+
+- `AcceptedLocally` means local application/admission completed, including an
+  empty no-op. It does **not** mean the event is durable or acknowledged by a server.
+- `RejectedBeforeEnqueue` means the batch failed, its SQLite rollback and
+  savepoint release completed, and none of that invocation entered propagation.
+- `Indeterminate` means no such determination is available. Preserve uncertainty.
+
+A failed commit still shuts down the Store, even when rejection is known. Use
+normal Store lifecycle recovery before any later operation. Argument validation,
+batch-builder exceptions and calls after shutdown can still throw; a throw is not
+a rejection receipt. Bind the returned value to the original invocation in your
+application. It cannot resolve a historical `commit` call or be recovered by
+looking for missing rows. The outcome is not persisted and changes no event or
+transport format. Ordinary `commit` continues to return `void`.

@@ -81,3 +81,34 @@ Vitest.describe('SqliteDbWrapper', () => {
     )
   })
 })
+
+Vitest.live('finishes native changeset sessions when the callback throws', () =>
+  Effect.gen(function* () {
+    const store = yield* makeTodoMvc()
+    const internals = store[StoreInternalsSymbol]
+    const native = internals.clientSession.sqliteDb
+    const originalSession = native.session.bind(native)
+    let finishes = 0
+    native.session = () => {
+      const session = originalSession()
+      return {
+        ...session,
+        finish: () => {
+          finishes++
+          session.finish()
+        },
+      }
+    }
+    const failure = new Error('materializer failed')
+    try {
+      expect(() =>
+        internals.sqliteDbWrapper.withChangeset(() => {
+          throw failure
+        }),
+      ).toThrow(failure)
+      expect(finishes).toBe(1)
+    } finally {
+      native.session = originalSession
+    }
+  }),
+)

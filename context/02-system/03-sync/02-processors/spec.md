@@ -509,3 +509,14 @@ checks it.
 - `cachedPullItems` in the leader's session pull path can grow without bound
   (`:1243-1244`; issue #1423).
 - Metrics for retry/queue health are not emitted (LS.SYS.OBS-DQ2).
+
+## Local admission result
+
+The synchronous client-session owner may certify `RejectedBeforeEnqueue` only
+after a failed local batch has completed rollback and savepoint release, and
+before installing its model or delivering its outbox. Execution hashes are staged
+until the complete batch succeeds. The state head and materialization journal
+share the SQLite savepoint; cached query results are invalidated by rollback.
+Native changeset-session cleanup failure, interruption, defects and any uncertain
+owner/admission boundary cannot produce rejection evidence. This local result
+does not alter leader persistence, backend acknowledgement or wire/event formats.

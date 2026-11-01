@@ -4,7 +4,7 @@ import { SqliteDbHelper, SqliteError } from '@livestore/common'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
-import { Deferred, Effect, Fiber } from '@livestore/utils/effect'
+import { Cause, Deferred, Effect, Exit, Fiber } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
 const setup = Effect.gen(function* () {
@@ -15,6 +15,120 @@ const setup = Effect.gen(function* () {
   db.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)')
 
   return { db, sqlite3 }
+})
+
+Vitest.describe('withSavepointResult', () => {
+  Vitest.it('recognizes structured cleanup causes and stops at cycles', () => {
+    const cleanup = new SqliteDbHelper.SavepointCleanupError({ cause: new Error('denied cleanup') })
+    expect(SqliteDbHelper.containsSavepointCleanupFailure(new Error('outer', { cause: cleanup }))).toBe(true)
+    expect(SqliteDbHelper.containsSavepointCleanupFailure(new SqliteError({ cause: 'ROLLBACK failed' }))).toBe(false)
+    const cycle = new Error('cycle')
+    cycle.cause = cycle
+    expect(SqliteDbHelper.containsSavepointCleanupFailure(cycle)).toBe(false)
+  })
+
+  Vitest.live('returns a failed body exit only after actual SQL rollback and release', (test) =>
+    Effect.gen(function* () {
+      const { db, sqlite3 } = yield* setup
+      const operations: string[] = []
+      sqlite3.set_authorizer(
+        db.metadata.dbPointer,
+        (_userData, actionCode, operation) => {
+          if (actionCode === 32) operations.push(operation ?? '')
+          return 0
+        },
+        undefined,
+      )
+
+      const result = yield* SqliteDbHelper.withSavepointResult(
+        Effect.try({
+          try: () => {
+            db.execute("INSERT INTO test VALUES (1, 'prefix')")
+            db.execute("INSERT INTO test VALUES (1, 'duplicate')")
+          },
+          catch: (cause) => new SqliteError({ cause }),
+        }),
+        db,
+      )
+
+      expect(Exit.isFailure(result)).toBe(true)
+      if (Exit.isFailure(result) === true) expect(Cause.squash(result.cause)).toBeInstanceOf(SqliteError)
+      expect(operations).toEqual(['BEGIN', 'ROLLBACK', 'RELEASE'])
+      expect(db.select('SELECT * FROM test')).toEqual([])
+
+      const success = yield* Effect.sync(() => {
+        db.execute("INSERT INTO test VALUES (2, 'after-rollback')")
+        return 'committed'
+      }).pipe(SqliteDbHelper.withSavepointResult(db))
+      expect(success).toEqual(Exit.succeed('committed'))
+      expect(db.select('SELECT * FROM test')).toEqual([{ id: 2, value: 'after-rollback' }])
+    }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
+  )
+
+  for (const deniedOperation of ['BEGIN', 'ROLLBACK', 'RELEASE']) {
+    Vitest.live(`does not return a confirmed failed-body exit when ${deniedOperation} is denied`, (test) =>
+      Effect.gen(function* () {
+        const { db, sqlite3 } = yield* setup
+        const operations: string[] = []
+        let bodyRan = false
+        sqlite3.set_authorizer(
+          db.metadata.dbPointer,
+          (_userData, actionCode, operation) => {
+            if (actionCode !== 32) return 0
+            operations.push(operation ?? '')
+            return operation === deniedOperation ? 1 : 0
+          },
+          undefined,
+        )
+
+        const error = yield* Effect.gen(function* () {
+          bodyRan = true
+          db.execute("INSERT INTO test VALUES (1, 'prefix')")
+          return yield* Effect.fail('body failed')
+        }).pipe(SqliteDbHelper.withSavepointResult(db), Effect.flip)
+
+        expect(error).toBeInstanceOf(SqliteError)
+        expect(error instanceof SqliteDbHelper.SavepointCleanupError).toBe(deniedOperation !== 'BEGIN')
+        expect(bodyRan).toBe(deniedOperation !== 'BEGIN')
+        expect(operations).toEqual(
+          deniedOperation === 'BEGIN'
+            ? ['BEGIN']
+            : deniedOperation === 'ROLLBACK'
+              ? ['BEGIN', 'ROLLBACK']
+              : ['BEGIN', 'ROLLBACK', 'RELEASE'],
+        )
+        expect(db.select('SELECT * FROM test')).toEqual(
+          deniedOperation === 'ROLLBACK' ? [{ id: 1, value: 'prefix' }] : [],
+        )
+      }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
+    )
+  }
+
+  Vitest.live('does not return a successful body exit when release fails', (test) =>
+    Effect.gen(function* () {
+      const { db, sqlite3 } = yield* setup
+      const operations: string[] = []
+      sqlite3.set_authorizer(
+        db.metadata.dbPointer,
+        (_userData, actionCode, operation) => {
+          if (actionCode !== 32) return 0
+          operations.push(operation ?? '')
+          return operation === 'RELEASE' ? 1 : 0
+        },
+        undefined,
+      )
+
+      const error = yield* Effect.sync(() => {
+        db.execute("INSERT INTO test VALUES (1, 'not-confirmed')")
+        return 'body succeeded'
+      }).pipe(SqliteDbHelper.withSavepointResult(db), Effect.flip)
+
+      expect(error).toBeInstanceOf(SqliteError)
+      expect(error).toBeInstanceOf(SqliteDbHelper.SavepointCleanupError)
+      expect(operations).toEqual(['BEGIN', 'RELEASE'])
+      expect(db.select('SELECT * FROM test')).toEqual([{ id: 1, value: 'not-confirmed' }])
+    }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
+  )
 })
 
 Vitest.describe('withSavepoint', () => {

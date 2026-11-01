@@ -47,6 +47,7 @@ export {
   isLiveQueryDef,
   isLiveQueryInstance,
   isQueryable,
+  type LocalCommitOutcome,
   type LiveStoreContext,
   type LiveStoreContextRunning,
   makeShutdownDeferred,

@@ -315,3 +315,13 @@ strict observer or close-error fix was found there. Full Nix/precommit/type/test
 qualification, canonical preview subprocess crash cases and immutable commit
 readiness remain required. Temporary supported-toolchain bootstrap investigation
 is separate from this source candidate and is not a gate waiver.
+
+## Local commit outcomes
+
+The fork adds public `Store.commitWithOutcome` / `LocalCommitOutcome` without
+changing legacy `commit`, durable events or transport messages. One shared
+savepoint implementation retains rollback/release completion evidence; the
+client-session owner supplies rejection only before admission. Local execution
+hashes are staged, rollback restores the diagnostic head, and native changeset
+sessions finish even on materializer failure. Session-cleanup failure remains
+indeterminate. Local acceptance is not durability or server acknowledgement.

@@ -15,7 +15,15 @@ import {
 } from '@livestore/common'
 import type { StreamEventsOptions } from '@livestore/common/leader-thread'
 import type { LiveStoreEvent, LiveStoreSchema } from '@livestore/common/schema'
-import { type Context, Deferred, type Effect, Predicate, type Schema, type Scope } from '@livestore/utils/effect'
+import {
+  type Cause,
+  type Context,
+  Deferred,
+  type Effect,
+  Predicate,
+  type Schema,
+  type Scope,
+} from '@livestore/utils/effect'
 
 import type {
   LiveQuery,
@@ -30,6 +38,12 @@ import type { SqliteDbWrapper } from '../SqliteDbWrapper.ts'
 import type { ReferenceCountedSet } from '../utils/data-structures.ts'
 import type { StackInfo } from '../utils/stack-info.ts'
 import type { Store } from './store.ts'
+
+/** Per-call local admission evidence. Never a durability or remote acknowledgement receipt. */
+export type LocalCommitOutcome =
+  | { readonly _tag: 'AcceptedLocally' }
+  | { readonly _tag: 'RejectedBeforeEnqueue'; readonly cause: Cause.Cause<unknown> }
+  | { readonly _tag: 'Indeterminate'; readonly cause: Cause.Cause<unknown> }
 
 /**
  * Union type representing the possible states of a LiveStore context.

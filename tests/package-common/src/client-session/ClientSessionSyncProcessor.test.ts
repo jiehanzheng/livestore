@@ -11,8 +11,10 @@ import {
   MaterializationJournal,
   StateHead,
   StateSqliteDb,
+  SqliteDbHelper,
+  type SqliteDb,
   SyncState,
-  type UnknownError,
+  UnknownError,
 } from '@livestore/common'
 import { Eventlog, makeMaterializeEvent, recreateDb } from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
@@ -188,12 +190,218 @@ const makeClientProcessorHarness = Effect.fn(function* ({
   const close = (exit: Exit.Exit<unknown, unknown> = Exit.void) =>
     processor.shutdown(exit).pipe(Effect.ensuring(Scope.close(scope, exit)))
 
-  return { processor, pushIds, close, scope }
+  return { processor, pushIds, close, scope, sqliteDb, sqlite3 }
 })
 
 // TODO use property tests for simulation params
 /** Verifies: LS.SYS.SYNC.SS-R01, LS.SYS.SYNC.SS-R04, LS.SYS.SYNC.PROC-R03, LS.SYS.SYNC.PROC-R04 */
 Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
+  Vitest.live('rejects a real failed SQL batch without admitting its successful prefix', (test) =>
+    Effect.gen(function* () {
+      const { makeStore } = yield* TestContext
+      const pushed: ReadonlyArray<LiveStoreEvent.Client.Encoded>[] = []
+      const previousPushed = yield* Deferred.make<void>()
+      const store = yield* makeStore({
+        testing: {
+          overrides: {
+            clientSession: {
+              leaderThreadProxy: () => ({
+                events: {
+                  pull: () => Stream.empty,
+                  push: (batch) =>
+                    Effect.sync(() => pushed.push(batch)).pipe(
+                      Effect.andThen(Deferred.succeed(previousPushed, undefined)),
+                    ),
+                  stream: () => Stream.empty,
+                },
+              }),
+            },
+          },
+        },
+      })
+      store.commit(events.todoCreated({ id: 'previous', text: 'already admitted' }))
+      yield* Deferred.await(previousPushed)
+      const { syncProcessor, sqliteDbWrapper: db } = store[StoreInternalsSymbol]
+      const baselineState = yield* syncProcessor.syncState.get
+      const baselineRows = db.select('SELECT * FROM todos ORDER BY id')
+      const baselineHead = yield* getStateHead(db)
+      const baselineJournal = db.select(`SELECT * FROM ${SystemTables.MATERIALIZATION_JOURNAL_META_TABLE}`)
+      const baselineDebugHead = db.debug.head
+      const published: SyncState.SyncState[] = []
+      const observer = yield* syncProcessor.syncState.changes.pipe(
+        Stream.runForEach((state) => Effect.sync(() => published.push(state))),
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+
+      // Call the processor directly so this test can inspect the owner before Store's fatal-error teardown.
+      const outcome = yield* syncProcessor.commitWithOutcome([
+        events.todoCreated({ id: 'failed-prefix', text: 'must roll back' }),
+        events.todoCreated({ id: 'failed-prefix', text: 'actual UNIQUE failure' }),
+      ])
+      expect(outcome._tag).toBe('RejectedBeforeEnqueue')
+      expect(yield* syncProcessor.syncState.get).toEqual(baselineState)
+      expect(db.select('SELECT * FROM todos ORDER BY id')).toEqual(baselineRows)
+      expect(yield* getStateHead(db)).toEqual(baselineHead)
+      expect(db.select(`SELECT * FROM ${SystemTables.MATERIALIZATION_JOURNAL_META_TABLE}`)).toEqual(baselineJournal)
+      expect(db.debug.head).toEqual(baselineDebugHead)
+      yield* Effect.yieldNow
+      expect(published.every((state) => state.pending.every((event) => event.args.id === 'previous'))).toBe(true)
+      expect(pushed.flatMap((batch) => batch.map((event) => event.args.id))).toEqual(['previous'])
+      yield* Fiber.interrupt(observer)
+    }).pipe(withTestCtx(test)),
+  )
+
+  Vitest.it.effect('does not retain a failed prefix hash for a later confirmation at the same position', (test) =>
+    Effect.gen(function* () {
+      const pulls = yield* Queue.unbounded<typeof ClientSessionLeaderThreadProxy.PullItem.Type>()
+      const stopped = yield* Deferred.make<void>()
+      let failedBatch = true
+      const { processor, close } = yield* makeClientProcessorHarness({
+        pull: () => Stream.fromQueue(pulls),
+        push: () => Effect.void,
+        shutdown: () => Deferred.succeed(stopped, undefined).pipe(Effect.asVoid),
+        materializeEvent: (event) =>
+          failedBatch === true && event.args.id === 'failure'
+            ? Effect.fail(
+                new MaterializationJournal.MaterializationJournalError({
+                  method: 'record',
+                  cause: 'typed materialization failure',
+                }),
+              )
+            : Effect.succeed({
+                writeTables: new Set<string>(),
+                materializerHash: failedBatch === true ? Option.some(11) : Option.none<number>(),
+              }),
+      })
+      const rejected = yield* processor.commitWithOutcome([
+        events.todoCreated({ id: 'failed-prefix', text: 'first' }),
+        events.todoCreated({ id: 'failure', text: 'second' }),
+      ])
+      expect(rejected._tag).toBe('RejectedBeforeEnqueue')
+      failedBatch = false
+      yield* processor.commitWithOutcome([events.todoCreated({ id: 'healthy', text: 'new invocation' })])
+      const pending = (yield* processor.syncState.get).pending[0]!
+      const confirmed = yield* processor.syncState.changes.pipe(
+        Stream.filter((state) => state.pending.length === 0 && state.upstreamHead.global === 1),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.raceFirst(Deferred.await(stopped).pipe(Effect.andThen(Effect.die('Unexpected hash mismatch shutdown')))),
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+      yield* Queue.offer(
+        pulls,
+        ClientSessionLeaderThreadProxy.PullItem.make({
+          payload: SyncState.PayloadUpstreamAdvance.make({ newEvents: [pending] }),
+          globalHead: pending.seqNum,
+          materializerHashes: [
+            LiveStoreEvent.Client.MaterializerHash.make({ eventNum: pending.seqNum, hash: Option.some(99) }),
+          ],
+        }),
+      )
+      yield* Fiber.join(confirmed)
+      expect((yield* processor.syncState.get).pending).toEqual([])
+      yield* close()
+    }).pipe(withTestCtx(test)),
+  )
+
+  for (const failure of ['defect', 'interruption', 'rollback', 'release'] as const) {
+    Vitest.it.effect(`never certifies ${failure} as rejected before enqueue`, (test) =>
+      Effect.gen(function* () {
+        const { processor, close, sqliteDb, sqlite3 } = yield* makeClientProcessorHarness({
+          push: () => Effect.void,
+          materializeEvent: () =>
+            failure === 'defect'
+              ? Effect.die(new Error('materializer defect'))
+              : failure === 'interruption'
+                ? Effect.interrupt
+                : Effect.fail(
+                    new MaterializationJournal.MaterializationJournalError({
+                      method: 'record',
+                      cause: 'typed materialization failure',
+                    }),
+                  ),
+        })
+        if (failure === 'rollback' || failure === 'release') {
+          sqlite3.set_authorizer(
+            sqliteDb.metadata.dbPointer,
+            (_data, action, operation) => (action === 32 && operation === failure.toUpperCase() ? 1 : 0),
+            undefined,
+          )
+        }
+        const exit = yield* processor
+          .commitWithOutcome([events.todoCreated({ id: failure, text: failure })])
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(exit)).toBe(true)
+        expect((yield* processor.syncState.get).pending).toEqual([])
+        // Remove only this test's authorizer before exercising normal scoped cleanup.
+        sqlite3.set_authorizer(sqliteDb.metadata.dbPointer, () => 0, undefined)
+        yield* close()
+      }).pipe(withTestCtx(test)),
+    )
+  }
+
+  for (const deniedOperation of ['ROLLBACK', 'RELEASE']) {
+    Vitest.it.effect(`does not certify nested ${deniedOperation} failure after successful outer cleanup`, (test) =>
+      Effect.gen(function* () {
+        let nestedDb: SqliteDb | undefined
+        const { processor, close, sqliteDb, sqlite3 } = yield* makeClientProcessorHarness({
+          push: () => Effect.die('The failed batch must never be pushed'),
+          materializeEvent: () =>
+            Effect.suspend(() => {
+              assert(nestedDb !== undefined)
+              const db = nestedDb
+              return Effect.gen(function* () {
+                db.execute("INSERT INTO nested_cleanup VALUES (1, 'prefix')")
+                return yield* new UnknownError({ cause: 'body failed' })
+              }).pipe(
+                SqliteDbHelper.withSavepoint(nestedDb),
+                Effect.mapError(
+                  (cause) =>
+                    new MaterializationJournal.MaterializationJournalError({
+                      method: 'record',
+                      cause: new UnknownError({ cause }),
+                    }),
+                ),
+              )
+            }),
+        })
+        nestedDb = sqliteDb
+        sqliteDb.execute('CREATE TABLE nested_cleanup (id INTEGER PRIMARY KEY, value TEXT)')
+        let denied = false
+        const operations: string[] = []
+        sqlite3.set_authorizer(
+          sqliteDb.metadata.dbPointer,
+          (_data, action, operation) => {
+            if (action !== 32) return 0
+            operations.push(operation ?? '')
+            if (denied === false && operation === deniedOperation) {
+              denied = true
+              return 1
+            }
+            return 0
+          },
+          undefined,
+        )
+
+        const exit = yield* processor
+          .commitWithOutcome([events.todoCreated({ id: 'nested-cleanup', text: 'must stay indeterminate' })])
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(exit)).toBe(true)
+        expect(operations).toEqual(
+          deniedOperation === 'ROLLBACK'
+            ? ['BEGIN', 'BEGIN', 'ROLLBACK', 'ROLLBACK', 'RELEASE']
+            : ['BEGIN', 'BEGIN', 'ROLLBACK', 'RELEASE', 'ROLLBACK', 'RELEASE'],
+        )
+        expect(sqliteDb.select('SELECT * FROM nested_cleanup')).toEqual([])
+        expect((yield* processor.syncState.get).pending).toEqual([])
+        sqlite3.set_authorizer(sqliteDb.metadata.dbPointer, () => 0, undefined)
+        yield* close()
+      }).pipe(withTestCtx(test)),
+    )
+  }
+
   Vitest.it.effect('recovers a rejection received between prefixes that confirm the same pending batch', (test) =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>()

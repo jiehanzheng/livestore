@@ -167,3 +167,23 @@ RFC 0001, the implementation is the contract:
   shutdown drain (LS.SYS.SYNC.PROC-R03); it is gated by LS-DQ1 and tracked as
   #1425. Until then, the orderly-shutdown flush is the accepted durability
   contract (Q2), not a stopgap for a specific release.
+
+## Per-invocation local commit outcome
+
+`commitWithOutcome` shares the synchronous `commit` pipeline and overloads. Its
+`LocalCommitOutcome` is bound to that invocation, not a later query or shutdown:
+
+- `AcceptedLocally`: the local batch completed application/admission, or was an
+  empty no-op. This is neither local durability nor server acknowledgement.
+- `RejectedBeforeEnqueue`: materialization failed and both SQLite rollback and
+  savepoint release completed before this invocation changed the admitted model,
+  propagation queue or push reservation. No event from this invocation was admitted.
+- `Indeterminate`: the SDK cannot certify either boundary, including interruption,
+  defects, cleanup failure or failure after admission.
+
+A failed commit still shuts down its Store; rejection does not permit continued
+use. Argument validation, callback exceptions and calls after shutdown still
+throw, as with `commit`. Consumers retain uncertainty for throws. Receipts are
+in-memory per-call values, not durable event fields, replay records, or a way to
+resolve a historical void commit. Legacy `commit` remains void with its existing
+logging and shutdown behavior.

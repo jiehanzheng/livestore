@@ -17,6 +17,7 @@ import {
   prepareBindValues,
   QueryBuilderAstSymbol,
   resolveSessionIdSymbolInBindValues,
+  SqliteError,
   StateSqliteDb,
   StateHead,
   type StorageMode,
@@ -54,6 +55,7 @@ import * as ReactiveStateSqliteDb from '../ReactiveStateSqliteDb.ts'
 import { SqliteDbWrapper } from '../SqliteDbWrapper.ts'
 import { ReferenceCountedSet } from '../utils/data-structures.ts'
 import { downloadBlob, exposeDebugUtils } from '../utils/dev.ts'
+import type { LocalCommitOutcome } from './store-types.ts'
 import {
   type Queryable,
   type RefreshReason,
@@ -284,20 +286,16 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
           const otelContext = otel.trace.setSpan(otel.context.active(), span)
 
           const writeTablesForEvent = new Set<string>()
+          let executionFailure: SqliteError | undefined
 
           const exec = () => {
             for (const { statementSql, bindValues, writeTables = dbState.getTablesUsed(statementSql) } of execArgsArr) {
               try {
-                dbState.cachedExecute(statementSql, bindValues, {
-                  otelContext,
-                  writeTables,
-                })
+                dbState.cachedExecute(statementSql, bindValues, { otelContext, writeTables })
               } catch (cause) {
-                // TOOD refactor with `SqliteError`
-                throw UnknownError.make({
-                  cause,
-                  note: `Error executing materializer for event "${eventEncoded.name}".\nStatement: ${statementSql}\nBind values: ${JSON.stringify(bindValues)}`,
-                })
+                // Only this statement's native SQL failure is eligible for rollback evidence.
+                if (cause instanceof SqliteError) executionFailure = cause
+                throw cause
               }
 
               // durationMsTotal += durationMs
@@ -309,7 +307,16 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
             }
           }
 
-          const changeset = dbState.withChangeset(exec).changeset
+          const changeset = yield* Effect.try({
+            try: () => dbState.withChangeset(exec).changeset,
+            catch: (cause) => new UnknownError({ cause }),
+          }).pipe(
+            Effect.catch((error) =>
+              error.cause === executionFailure && executionFailure !== undefined
+                ? Effect.fail(executionFailure)
+                : Effect.die(error.cause),
+            ),
+          )
           yield* materializationJournal.record({ key: eventEncoded.seqNum, changeset })
 
           return { writeTables: writeTablesForEvent, materializerHash }
@@ -876,19 +883,46 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
     ): void
     (options: StoreCommitOptions, buildEvents: CommitBatchBuilder<TSchema>): void
   } = (firstEventOrBatchBuilderOrOptions: any, ...restEvents: any[]) => {
+    this.executeCommit(firstEventOrBatchBuilderOrOptions, restEvents)
+  }
+
+  /**
+   * Reports this invocation's local admission only, never durability or server acknowledgement.
+   * Failed commits still shut down the Store. Argument/callback errors and calls after shutdown still throw.
+   */
+  commitWithOutcome: {
+    <const TCommitArg extends ReadonlyArray<LiveStoreEvent.Input.ForSchema<TSchema>>>(
+      ...list: TCommitArg
+    ): LocalCommitOutcome
+    (buildEvents: CommitBatchBuilder<TSchema>): LocalCommitOutcome
+    <const TCommitArg extends ReadonlyArray<LiveStoreEvent.Input.ForSchema<TSchema>>>(
+      options: StoreCommitOptions,
+      ...list: TCommitArg
+    ): LocalCommitOutcome
+    (options: StoreCommitOptions, buildEvents: CommitBatchBuilder<TSchema>): LocalCommitOutcome
+  } = (firstEventOrBatchBuilderOrOptions: any, ...restEvents: any[]) =>
+    this.executeCommit(firstEventOrBatchBuilderOrOptions, restEvents)
+
+  private executeCommit = (firstEventOrBatchBuilderOrOptions: unknown, restEvents: any[]): LocalCommitOutcome => {
     this.checkShutdown('commit')
 
     const { events, options } = this.getCommitArgs(firstEventOrBatchBuilderOrOptions, restEvents)
 
-    Effect.gen({ self: this }, function* () {
+    let rejection: LocalCommitOutcome | undefined
+    return Effect.gen({ self: this }, function* () {
       const commitsSpan = otel.trace.getSpan(this[StoreInternalsSymbol].otel.commitsSpanContext)
       commitsSpan?.addEvent('commit')
       const currentSpan = yield* OtelTracer.currentOtelSpan.pipe(Effect.orDie)
       commitsSpan?.addLink({ context: currentSpan.spanContext() })
 
-      if (events.length === 0) return
+      if (events.length === 0) return { _tag: 'AcceptedLocally' } as const
 
-      const { writeTables } = yield* this[StoreInternalsSymbol].syncProcessor.commit(events)
+      const outcome = yield* this[StoreInternalsSymbol].syncProcessor.commitWithOutcome(events)
+      if (outcome._tag === 'RejectedBeforeEnqueue') {
+        rejection = outcome
+        return yield* Effect.failCause(outcome.cause)
+      }
+      const { writeTables } = outcome
 
       const tablesToUpdate: [Ref<null, ReactivityGraphContext, RefreshReason>, null][] = []
       for (const tableName of writeTables) {
@@ -910,6 +944,7 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
         skipRefresh,
         otelContext: otel.trace.setSpan(otel.context.active(), currentSpan),
       })
+      return { _tag: 'AcceptedLocally' } as const
     }).pipe(
       Effect.withSpan('LiveStore:commit', {
         root: true,
@@ -930,7 +965,15 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
       Effect.tapCause(Effect.logError),
       // This synchronous commit fiber ends immediately. Its child would be interrupted before the shutdown
       // request is accepted, losing the original failure and notification. The request owns its cleanup once started.
-      Effect.catchCause((cause) => Effect.forkDetach(this.shutdown(cause))),
+      Effect.catchCause((cause) =>
+        Effect.forkDetach(this.shutdown(cause)).pipe(
+          Effect.as(
+            rejection !== undefined && Cause.hasDies(cause) === false && Cause.hasInterrupts(cause) === false
+              ? rejection
+              : { _tag: 'Indeterminate' as const, cause },
+          ),
+        ),
+      ),
       Effect.runSyncWith(this[StoreInternalsSymbol].effectContext.services),
     )
   }
