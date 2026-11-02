@@ -4,6 +4,48 @@ import { Context, Effect, Layer, Option, Schema, type Scope, Stream } from 'effe
 
 import * as WebError from '../WebError.ts'
 
+export const nativeOperations = [
+  'StorageManager.getDirectory',
+  'FileSystemDirectoryHandle.getFileHandle',
+  'FileSystemDirectoryHandle.getDirectoryHandle',
+  'FileSystemDirectoryHandle.removeEntry',
+  'FileSystemDirectoryHandle.values',
+  'FileSystemDirectoryHandle.values.next',
+  'FileSystemDirectoryHandle.resolve',
+  'FileSystemFileHandle.getFile',
+  'FileSystemFileHandle.createWritable',
+  'FileSystemFileHandle.createSyncAccessHandle',
+  'FileSystemWritableFileStream.write',
+  'FileSystemWritableFileStream.seek',
+  'FileSystemWritableFileStream.truncate',
+  'FileSystemWritableFileStream.close',
+  'FileSystemSyncAccessHandle.close',
+  'FileSystemSyncAccessHandle.read',
+  'FileSystemSyncAccessHandle.write',
+  'FileSystemSyncAccessHandle.truncate',
+  'FileSystemSyncAccessHandle.getSize',
+  'FileSystemSyncAccessHandle.flush',
+] as const
+
+export type NativeOperation = (typeof nativeOperations)[number]
+
+// VFS initialization crosses runPromise/Effect.promise, which keeps the failure
+// object but drops Cause annotations. Weak identity keys bridge that boundary
+// without mutating errors or retaining handles/data; conflicting reuse stays unknown.
+const failureOperations = new WeakMap<object, NativeOperation | 'unknown'>()
+
+/** Realm-local evidence only: undefined is untracked, and unknown means conflicting identity reuse. */
+export const getNativeFailureOperation = (failure: unknown): NativeOperation | 'unknown' | undefined =>
+  typeof failure === 'object' && failure !== null ? failureOperations.get(failure) : undefined
+
+const recordNativeFailure = <T>(operation: NativeOperation, failure: T): T => {
+  if (typeof failure === 'object' && failure !== null) {
+    const previous = failureOperations.get(failure)
+    failureOperations.set(failure, previous === undefined || previous === operation ? operation : 'unknown')
+  }
+  return failure
+}
+
 /**
  * Effect service that exposes ergonomic wrappers around Origin Private File System (OPFS) operations.
  *
@@ -226,41 +268,51 @@ export const layer = Layer.succeed(
   Opfs.of({
     getRootDirectoryHandle: Effect.tryPromise({
       try: () => navigator.storage.getDirectory(),
-      catch: (u) => WebError.classifyWebError(u, [WebError.SecurityError]),
+      catch: (u) =>
+        recordNativeFailure('StorageManager.getDirectory', WebError.classifyWebError(u, [WebError.SecurityError])),
     }),
     getFileHandle: (parent: FileSystemDirectoryHandle, name: string, options?: FileSystemGetFileOptions) =>
       Effect.tryPromise({
         try: () => parent.getFileHandle(name, options),
         catch: (u) =>
-          WebError.classifyWebError(u, [
-            WebError.NotAllowedError,
-            WebError.TypeError,
-            WebError.TypeMismatchError,
-            WebError.NotFoundError,
-          ]),
+          recordNativeFailure(
+            'FileSystemDirectoryHandle.getFileHandle',
+            WebError.classifyWebError(u, [
+              WebError.NotAllowedError,
+              WebError.TypeError,
+              WebError.TypeMismatchError,
+              WebError.NotFoundError,
+            ]),
+          ),
       }),
     getDirectoryHandle: (parent: FileSystemDirectoryHandle, name: string, options?: FileSystemGetDirectoryOptions) =>
       Effect.tryPromise({
         try: () => parent.getDirectoryHandle(name, options),
         catch: (u) =>
-          WebError.classifyWebError(u, [
-            WebError.NotAllowedError,
-            WebError.TypeError,
-            WebError.TypeMismatchError,
-            WebError.NotFoundError,
-          ]),
+          recordNativeFailure(
+            'FileSystemDirectoryHandle.getDirectoryHandle',
+            WebError.classifyWebError(u, [
+              WebError.NotAllowedError,
+              WebError.TypeError,
+              WebError.TypeMismatchError,
+              WebError.NotFoundError,
+            ]),
+          ),
       }),
     removeEntry: (parent: FileSystemDirectoryHandle, name: string, options?: FileSystemRemoveOptions) =>
       Effect.tryPromise({
         try: () => parent.removeEntry(name, options),
         catch: (u) =>
-          WebError.classifyWebError(u, [
-            WebError.TypeError,
-            WebError.NotAllowedError,
-            WebError.InvalidModificationError,
-            WebError.NotFoundError,
-            WebError.NoModificationAllowedError,
-          ]),
+          recordNativeFailure(
+            'FileSystemDirectoryHandle.removeEntry',
+            WebError.classifyWebError(u, [
+              WebError.TypeError,
+              WebError.NotAllowedError,
+              WebError.InvalidModificationError,
+              WebError.NotFoundError,
+              WebError.NoModificationAllowedError,
+            ]),
+          ),
       }),
     values: (
       directory: FileSystemDirectoryHandle,
@@ -268,19 +320,33 @@ export const layer = Layer.succeed(
       FileSystemHandle,
       WebError.NotAllowedError | WebError.NotFoundError | WebError.UnknownError,
       never
-    > =>
-      Stream.fromAsyncIterable(directory.values(), (u) =>
-        WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
-      ),
+    > => {
+      let iterator: ReturnType<FileSystemDirectoryHandle['values']>
+      try {
+        iterator = directory.values()
+      } catch (failure) {
+        throw recordNativeFailure('FileSystemDirectoryHandle.values', failure)
+      }
+      return Stream.fromAsyncIterable(iterator, (u) =>
+        recordNativeFailure(
+          'FileSystemDirectoryHandle.values.next',
+          WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
+        ),
+      )
+    },
     resolve: (parent: FileSystemDirectoryHandle, child: FileSystemHandle) =>
       Effect.tryPromise({
         try: () => parent.resolve(child),
-        catch: (u) => WebError.classifyWebError(u),
+        catch: (u) => recordNativeFailure('FileSystemDirectoryHandle.resolve', WebError.classifyWebError(u)),
       }).pipe(Effect.map((path) => (path === null ? Option.none() : Option.some(path)))),
     getFile: (handle: FileSystemFileHandle) =>
       Effect.tryPromise({
         try: () => handle.getFile(),
-        catch: (u) => WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
+        catch: (u) =>
+          recordNativeFailure(
+            'FileSystemFileHandle.getFile',
+            WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
+          ),
       }),
     writeFile: (
       handle: FileSystemFileHandle,
@@ -291,23 +357,37 @@ export const layer = Layer.succeed(
         Effect.tryPromise({
           try: () => handle.createWritable(options),
           catch: (u) =>
-            WebError.classifyWebError(u, [
-              WebError.NotAllowedError,
-              WebError.NotFoundError,
-              WebError.NoModificationAllowedError,
-              WebError.AbortError,
-            ]),
+            recordNativeFailure(
+              'FileSystemFileHandle.createWritable',
+              WebError.classifyWebError(u, [
+                WebError.NotAllowedError,
+                WebError.NotFoundError,
+                WebError.NoModificationAllowedError,
+                WebError.AbortError,
+              ]),
+            ),
         }),
         (stream) =>
           Effect.tryPromise({
             try: () => stream.write(data),
             catch: (u) =>
-              WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.QuotaExceededError, WebError.TypeError]),
+              recordNativeFailure(
+                'FileSystemWritableFileStream.write',
+                WebError.classifyWebError(u, [
+                  WebError.NotAllowedError,
+                  WebError.QuotaExceededError,
+                  WebError.TypeError,
+                ]),
+              ),
           }),
         (stream) =>
           Effect.tryPromise({
             try: () => stream.close(),
-            catch: (u) => WebError.classifyWebError(u, [WebError.TypeError]),
+            catch: (u) =>
+              recordNativeFailure(
+                'FileSystemWritableFileStream.close',
+                WebError.classifyWebError(u, [WebError.TypeError]),
+              ),
           }).pipe(Effect.ignoreCause),
       ),
     appendToFile: (handle: FileSystemFileHandle, data: FileSystemWriteChunkType) =>
@@ -315,37 +395,55 @@ export const layer = Layer.succeed(
         Effect.tryPromise({
           try: () => handle.createWritable({ keepExistingData: true }),
           catch: (u) =>
-            WebError.classifyWebError(u, [
-              WebError.NotAllowedError,
-              WebError.NotFoundError,
-              WebError.NoModificationAllowedError,
-              WebError.AbortError,
-            ]),
+            recordNativeFailure(
+              'FileSystemFileHandle.createWritable',
+              WebError.classifyWebError(u, [
+                WebError.NotAllowedError,
+                WebError.NotFoundError,
+                WebError.NoModificationAllowedError,
+                WebError.AbortError,
+              ]),
+            ),
         }),
         (stream) =>
           Effect.gen(function* () {
             const file = yield* Effect.tryPromise({
               try: () => handle.getFile(),
-              catch: (u) => WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
+              catch: (u) =>
+                recordNativeFailure(
+                  'FileSystemFileHandle.getFile',
+                  WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.NotFoundError]),
+                ),
             })
             yield* Effect.tryPromise({
               try: () => stream.seek(file.size),
-              catch: (u) => WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.TypeError]),
+              catch: (u) =>
+                recordNativeFailure(
+                  'FileSystemWritableFileStream.seek',
+                  WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.TypeError]),
+                ),
             })
             yield* Effect.tryPromise({
               try: () => stream.write(data),
               catch: (u) =>
-                WebError.classifyWebError(u, [
-                  WebError.NotAllowedError,
-                  WebError.QuotaExceededError,
-                  WebError.TypeError,
-                ]),
+                recordNativeFailure(
+                  'FileSystemWritableFileStream.write',
+                  WebError.classifyWebError(u, [
+                    WebError.NotAllowedError,
+                    WebError.QuotaExceededError,
+                    WebError.TypeError,
+                  ]),
+                ),
             })
           }),
         (stream) =>
           Effect.tryPromise({
             try: () => stream.close(),
-            catch: (u) => WebError.classifyWebError(u, [WebError.TypeError]),
+            catch: (u) =>
+              recordNativeFailure(
+                'FileSystemWritableFileStream.close',
+                WebError.classifyWebError(u, [WebError.TypeError]),
+              ),
           }).pipe(Effect.ignoreCause),
       ),
     truncateFile: (handle: FileSystemFileHandle, size: number) =>
@@ -353,23 +451,37 @@ export const layer = Layer.succeed(
         Effect.tryPromise({
           try: () => handle.createWritable({ keepExistingData: true }),
           catch: (u) =>
-            WebError.classifyWebError(u, [
-              WebError.NotAllowedError,
-              WebError.NotFoundError,
-              WebError.NoModificationAllowedError,
-              WebError.AbortError,
-            ]),
+            recordNativeFailure(
+              'FileSystemFileHandle.createWritable',
+              WebError.classifyWebError(u, [
+                WebError.NotAllowedError,
+                WebError.NotFoundError,
+                WebError.NoModificationAllowedError,
+                WebError.AbortError,
+              ]),
+            ),
         }),
         (stream) =>
           Effect.tryPromise({
             try: () => stream.truncate(size),
             catch: (u) =>
-              WebError.classifyWebError(u, [WebError.NotAllowedError, WebError.TypeError, WebError.QuotaExceededError]),
+              recordNativeFailure(
+                'FileSystemWritableFileStream.truncate',
+                WebError.classifyWebError(u, [
+                  WebError.NotAllowedError,
+                  WebError.TypeError,
+                  WebError.QuotaExceededError,
+                ]),
+              ),
           }),
         (stream) =>
           Effect.tryPromise({
             try: () => stream.close(),
-            catch: (u) => WebError.classifyWebError(u, [WebError.TypeError]),
+            catch: (u) =>
+              recordNativeFailure(
+                'FileSystemWritableFileStream.close',
+                WebError.classifyWebError(u, [WebError.TypeError]),
+              ),
           }).pipe(Effect.ignoreCause),
       ),
     createSyncAccessHandle: (handle: FileSystemFileHandle) =>
@@ -377,14 +489,24 @@ export const layer = Layer.succeed(
         Effect.tryPromise({
           try: () => handle.createSyncAccessHandle(),
           catch: (u) =>
-            WebError.classifyWebError(u, [
-              WebError.NotAllowedError,
-              WebError.InvalidStateError,
-              WebError.NotFoundError,
-              WebError.NoModificationAllowedError,
-            ]),
+            recordNativeFailure(
+              'FileSystemFileHandle.createSyncAccessHandle',
+              WebError.classifyWebError(u, [
+                WebError.NotAllowedError,
+                WebError.InvalidStateError,
+                WebError.NotFoundError,
+                WebError.NoModificationAllowedError,
+              ]),
+            ),
         }),
-        (syncHandle) => Effect.sync(() => syncHandle.close()),
+        (syncHandle) =>
+          Effect.sync(() => {
+            try {
+              syncHandle.close()
+            } catch (failure) {
+              throw recordNativeFailure('FileSystemSyncAccessHandle.close', failure)
+            }
+          }),
       ),
     syncRead: (
       handle: FileSystemSyncAccessHandle,
@@ -394,7 +516,10 @@ export const layer = Layer.succeed(
       Effect.try({
         try: () => handle.read(buffer, options),
         catch: (u) =>
-          WebError.classifyWebError(u, [WebError.RangeError, WebError.InvalidStateError, WebError.TypeError]),
+          recordNativeFailure(
+            'FileSystemSyncAccessHandle.read',
+            WebError.classifyWebError(u, [WebError.RangeError, WebError.InvalidStateError, WebError.TypeError]),
+          ),
       }),
     syncWrite: (
       handle: FileSystemSyncAccessHandle,
@@ -403,22 +528,22 @@ export const layer = Layer.succeed(
     ) =>
       Effect.try({
         try: () => handle.write(buffer, options),
-        catch: (u) => WebError.classifyWebError(u),
+        catch: (u) => recordNativeFailure('FileSystemSyncAccessHandle.write', WebError.classifyWebError(u)),
       }),
     syncTruncate: (handle: FileSystemSyncAccessHandle, size: number) =>
       Effect.try({
         try: () => handle.truncate(size),
-        catch: (u) => WebError.classifyWebError(u),
+        catch: (u) => recordNativeFailure('FileSystemSyncAccessHandle.truncate', WebError.classifyWebError(u)),
       }),
     syncGetSize: (handle: FileSystemSyncAccessHandle) =>
       Effect.try({
         try: () => handle.getSize(),
-        catch: (u) => WebError.classifyWebError(u),
+        catch: (u) => recordNativeFailure('FileSystemSyncAccessHandle.getSize', WebError.classifyWebError(u)),
       }),
     syncFlush: (handle: FileSystemSyncAccessHandle) =>
       Effect.try({
         try: () => handle.flush(),
-        catch: (u) => WebError.classifyWebError(u),
+        catch: (u) => recordNativeFailure('FileSystemSyncAccessHandle.flush', WebError.classifyWebError(u)),
       }),
   }),
 )
