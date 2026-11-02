@@ -24,6 +24,18 @@ chat owns only this checkout; the ECBKS lead owns application integration.
 - User instructions override conflicting upstream guidance below, including its
   CI requirements, issue-filing defaults and ASCII diagram suggestion.
 
+## Exact local SDK82 source checkpoint exception
+
+The coordinating lead's November 2, 2026 LOCAL WIP disposition is recorded in
+[`contributor-docs/sdk82-local-source-checkpoint.md`](contributor-docs/sdk82-local-source-checkpoint.md).
+After final lead review of the exact policy patch, that disposition replaces
+the inherited devenv/precommit condition ONLY for its policy-only commit and
+exact two-file SDK82 source checkpoint, using the already-qualified focused
+checks plus private bounded source/index/evidence verification. It is a lead
+exception, not a new human approval. Preserve the known Safari acceptance FAIL,
+all adoption/release gates, and the existing `--commit` refusal unchanged.
+No checker mode, hook bypass, artifact rebuild or publication is authorized.
+
 # Project-Specific Instructions for Coding Agents
 
 ## Setup
