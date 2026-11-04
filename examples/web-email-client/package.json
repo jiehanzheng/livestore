@@ -33,7 +33,7 @@
     "deploy": "pnpm build && wrangler deploy",
     "dev": "vite",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.worker.json"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

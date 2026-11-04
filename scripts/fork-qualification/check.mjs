@@ -5,109 +5,31 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
+import { inspectCommitEvidence, finishCommitEvidence, commitVerdict } from './commit-evidence.mjs'
+import { digest, git, sourceState, toolInputs } from './commit-files.mjs'
+import { sdkIdentity } from './commit-source.mjs'
+import { declaredCommands, createSourcePolicy, PROJECTS, SOURCE_EXTENSIONS } from './qualification-policy.mjs'
+import { verifyRuntimeTests } from './qualification-runtime.mjs'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const profilePath = path.join(root, 'scripts/fork-qualification/tool-profile.json')
 const toolsPath = path.join(root, 'temp_nocommit/fork-qualification/tools.json')
 const qualificationConfig = path.join(root, 'scripts/fork-qualification/vitest.config.ts')
-
-const PROJECTS = [
-  'packages/@livestore/adapter-expo',
-  'packages/@livestore/adapter-node',
-  'packages/@livestore/adapter-cloudflare',
-  'packages/@livestore/adapter-web',
-  'packages/@livestore/common-cf',
-  'packages/@livestore/common',
-  'packages/@livestore/effect-playwright',
-  'packages/@livestore/framework-toolkit',
-  'packages/@livestore/livestore',
-  'packages/@livestore/react',
-  'packages/@livestore/sqlite-wasm',
-  'packages/@livestore/sync-cf',
-  'packages/@livestore/utils-dev',
-  'packages/@livestore/utils',
-  'packages/@livestore/wa-sqlite',
-  'packages/@livestore/webmesh',
-  'tests/package-common',
-  'tests/integration',
-  'tests/wa-sqlite',
-]
-
-const OWNER_ROOTS = [...PROJECTS]
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
-
-const GENERATOR_SOURCES = [
-  '.oxfmtrc.json.genie.ts',
-  '.oxlintrc.json.genie.ts',
-  'package.json.genie.ts',
-  'pnpm-install-contract.json.genie.ts',
-  'pnpm-workspace.yaml.genie.ts',
-  'tsconfig.dev.json.genie.ts',
-  'tsconfig.json.genie.ts',
-  'tsconfig.fork.json.genie.ts',
-]
-
-// These helpers are imported by generators outside the qualified package owners.
-const ROOT_SUPPORT_SOURCES = new Set([
-  'genie/external.ts',
-  'genie/repo.ts',
-  'genie/repo-topology.ts',
-  'genie/release-topology.ts',
-  'genie/docs-effect-api-policy.ts',
-])
-
-const PROJECT_TEST_ROOTS = [
-  'tests/wa-sqlite',
-  'packages/@livestore/adapter-node',
-  'packages/@livestore/adapter-expo',
-  'packages/@livestore/react',
-  'packages/@livestore/common',
-  'packages/@livestore/livestore',
-  'packages/@livestore/adapter-web',
-  'tests/package-common',
-]
-
-const TEST_OVERRIDE_PROJECTS = new Set([
-  'packages/@livestore/adapter-web',
-  'packages/@livestore/common',
-  'packages/@livestore/common-cf',
-  'packages/@livestore/livestore',
-  'packages/@livestore/react',
-  'packages/@livestore/sync-cf',
-  'packages/@livestore/utils',
-  'packages/@livestore/utils-dev',
-  'packages/@livestore/webmesh',
-])
-
-const REQUIRED_CRASH_CASES = [
-  'crash-before-state',
-  'crash-after-state',
-  'crash-after-eventlog',
-  'crash-after-completion',
-]
-
-const APPROVED_DIAGNOSTIC_EXCEPTIONS = new Map([
-  [
-    'packages/@livestore/common',
-    new Map([
-      ['src/sync/syncstate.ts', 'schemaClassMissingBrand'],
-      ['src/schema/state/sqlite/db-schema/ast/fingerprint.test.ts', 'schemaNumber'],
-    ]),
-  ],
-  [
-    'tests/package-common',
-    new Map([
-      ['src/client-session/ClientSessionReconciliation.test.ts', 'runEffectInsideEffect'],
-      ['src/client-session/ClientSessionSyncProcessor.test.ts', 'runEffectInsideEffect'],
-    ]),
-  ],
-])
+const { validateSourceInventory, sourceInventory, authoredSourceInventory, validateCompilerPolicy } =
+  createSourcePolicy(root)
 
 const parseArgs = (args) => {
   if (args.length === 0 || (args.length === 1 && args[0] === '--check')) return { mode: 'check' }
   if (args.length === 1 && args[0] === '--fix') return { mode: 'fix' }
-  if (args.length === 1 && args[0] === '--commit') return { mode: 'commit' }
+  if (args[0] === '--commit') {
+    const rest = args[1] === '--' ? args.slice(2) : args.slice(1)
+    if (rest.length === 0) return { mode: 'commit' }
+    if (rest.length === 2 && rest[0] === '--evidence') return { mode: 'commit', evidenceFile: rest[1] }
+  }
   if (args.length === 1 && ['--help', '-h'].includes(args[0]) === true) return { mode: 'help' }
-  throw new Error('Usage: node scripts/fork-qualification/check.mjs [--check | --fix | --commit]')
+  throw new Error(
+    'Usage: node scripts/fork-qualification/check.mjs [--check | --fix | --commit --evidence <manifest.json>]',
+  )
 }
 
 const readJson = (file) => {
@@ -144,9 +66,20 @@ const validateToolchain = (profile, tools, env) => {
     throw new Error('Prepared tool descriptor does not match the checked-in tool profile; rerun fork:bootstrap')
   }
 
+  if (isDeepStrictEqual(tools.commands, declaredCommands(tools.profile, profile.packages.typescript)) === false)
+    throw new Error('Prepared tool commands differ from the declared recipe')
   const pnpm = path.join(tools.profile, 'node_modules/.bin/pnpm')
   if (captured(pnpm, ['--version'], root, env) !== profile.pnpm) throw new Error(`pnpm ${profile.pnpm} is required`)
 
+  const expectedEnvironment = {
+    GENIE_EXPORT_TYPE_PROOF_COMPILER: captured(tools.commands.compiler[0], ['get-exe-path'], tools.profile, env),
+    GENIE_TYPESCRIPT_API_SERVER: path.join(
+      tools.profile,
+      '.canonical-genie/typescript-api-server/bin/typescript-api-server',
+    ),
+  }
+  if (isDeepStrictEqual(tools.environment, expectedEnvironment) === false)
+    throw new Error('Prepared generator/consumer tool paths differ')
   const bunVersion = captured(tools.commands.genie[0], ['--version'], root, env)
   if (bunVersion !== profile.packages['@oven/bun-darwin-aarch64'])
     throw new Error('Prepared Bun version does not match tool-profile.json')
@@ -180,71 +113,6 @@ const validateToolchain = (profile, tools, env) => {
   return { pnpm, bunVersion, compilerVersion, lintVersion, formatVersion }
 }
 
-const validateSourceInventory = () => {
-  const missing = [
-    ...GENERATOR_SOURCES,
-    ...ROOT_SUPPORT_SOURCES,
-    ...PROJECTS.map((project) => `${project}/tsconfig.json.genie.ts`),
-  ].filter((file) => existsSync(path.join(root, file)) === false)
-  if (missing.length > 0) throw new Error(`Qualification source inventory is incomplete: ${missing.join(', ')}`)
-
-  const forkConfig = readJson(path.join(root, 'tsconfig.fork.json'))
-  const references = (forkConfig.references ?? []).map((reference) => path.normalize(reference.path))
-  const expected = PROJECTS.map((project) => path.normalize(`./${project}`))
-  if (
-    references.length !== expected.length ||
-    new Set(references).size !== references.length ||
-    expected.some((project) => references.includes(project) === false) === true
-  ) {
-    throw new Error('tsconfig.fork.json references differ from the explicit 19-project qualification inventory')
-  }
-}
-
-const gitFiles = (cwd) => {
-  const result = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  if (result.error !== undefined || result.status !== 0) {
-    throw new Error(`Could not inventory source files with git ls-files: ${result.stderr || result.error?.message}`)
-  }
-  return result.stdout.split('\0').filter(Boolean)
-}
-
-const isGeneratedOrBuildOutput = (file) => {
-  const segments = file.split('/')
-  return (
-    segments.some((segment) =>
-      ['node_modules', '.yarn', 'dist', 'build', 'out', '.turbo', '.vite'].includes(segment),
-    ) ||
-    /(?:\.gen|\.generated)\.tsx?$/.test(file) ||
-    file.endsWith('/routeTree.gen.ts')
-  )
-}
-
-const sourceInventory = () => {
-  const generatorFiles = new Set(GENERATOR_SOURCES)
-  const ownerConfigSources = new Set(PROJECTS.map((project) => `${project}/tsconfig.json.genie.ts`))
-  const files = gitFiles(root)
-    .filter((file) => {
-      if (generatorFiles.has(file) === true || ownerConfigSources.has(file) === true) return true
-      if (ROOT_SUPPORT_SOURCES.has(file) === true) return true
-      if (file.startsWith('scripts/fork-qualification/') === true) return SOURCE_EXTENSIONS.has(path.extname(file))
-      return (
-        OWNER_ROOTS.some((owner) => file.startsWith(`${owner}/`)) &&
-        SOURCE_EXTENSIONS.has(path.extname(file)) &&
-        isGeneratedOrBuildOutput(file) === false
-      )
-    })
-    .toSorted()
-
-  const missing = files.filter((file) => existsSync(path.join(root, file)) === false)
-  if (missing.length > 0) throw new Error(`Source inventory includes missing files: ${missing.join(', ')}`)
-  if (files.length === 0) throw new Error('Source inventory is empty')
-  return files
-}
-
 const effectiveLintConfig = (run, tools) => {
   const canonicalConfig = readJson(path.join(root, '.oxlintrc.json'))
   const { jsPlugins } = canonicalConfig
@@ -262,48 +130,6 @@ const effectiveLintConfig = (run, tools) => {
   }
   if (existsSync(expectedPlugin) === false) throw new Error(`Prepared Oxlint plugin is missing: ${expectedPlugin}`)
   return configPath
-}
-
-const validateCompilerPolicy = () => {
-  for (const project of PROJECTS) {
-    const tsconfig = readJson(path.join(root, project, 'tsconfig.json'))
-    const plugin = tsconfig.compilerOptions?.plugins?.find((item) => item.name === '@effect/language-service')
-    if (plugin === undefined) throw new Error(`${project}/tsconfig.json is missing the Effect language-service plugin`)
-    for (const flag of [
-      'ignoreEffectSuggestionsInTscExitCode',
-      'ignoreEffectWarningsInTscExitCode',
-      'ignoreEffectErrorsInTscExitCode',
-    ]) {
-      if (plugin[flag] !== false) throw new Error(`${project} must keep ${flag}=false`)
-    }
-    if (plugin.includeSuggestionsInTsc !== true)
-      throw new Error(`${project} must keep Effect suggestions visible to tsc`)
-
-    if (TEST_OVERRIDE_PROJECTS.has(project) === true) {
-      const expectedPatterns = ['src/**/*.test.ts', 'src/**/*.spec.ts', 'src/**/*.test.tsx', 'src/**/*.spec.tsx']
-      const hasTestOverride = (plugin.overrides ?? []).some((override) =>
-        expectedPatterns.every((pattern) => override.include?.includes(pattern) === true),
-      )
-      if (hasTestOverride === false) throw new Error(`${project} must scope test-only APIs to TS and TSX test files`)
-    }
-
-    const observedExceptions = new Map()
-    for (const override of plugin.overrides ?? []) {
-      const severities = override.options?.diagnosticSeverity ?? {}
-      for (const [rule, severity] of Object.entries(severities)) {
-        if (severity !== 'off') continue
-        for (const include of override.include ?? []) observedExceptions.set(include, rule)
-      }
-    }
-    const expectedExceptions = APPROVED_DIAGNOSTIC_EXCEPTIONS.get(project) ?? new Map()
-    const compareEntries = ([left], [right]) => left.localeCompare(right)
-    if (
-      JSON.stringify([...observedExceptions].toSorted(compareEntries)) !==
-      JSON.stringify([...expectedExceptions].toSorted(compareEntries))
-    ) {
-      throw new Error(`${project} has missing or unapproved per-file diagnostic exceptions`)
-    }
-  }
 }
 
 const runGate = (run, name, command, args, cwd, env) => {
@@ -328,74 +154,26 @@ const runGate = (run, name, command, args, cwd, env) => {
   const output = readFileSync(logPath, 'utf8')
   const lines = output.length === 0 ? 0 : output.trimEnd().split(/\r?\n/).length
   console.log(`PASS ${name}${lines === 0 ? '' : ` (${lines} log lines; ${logPath})`}`)
-}
-
-const verifyRuntimeTests = (reportFile) => {
-  const report = JSON.parse(readFileSync(reportFile, 'utf8'))
-  const suites = report.testResults
-  if (Array.isArray(suites) === false) throw new Error('Vitest JSON report lacks runtime-discovered testResults')
-
-  const assertions = []
-  const collect = (value) => {
-    if (Array.isArray(value) === true) {
-      for (const entry of value) collect(entry)
-      return
-    }
-    if (value === null || typeof value !== 'object') return
-    if (typeof value.fullName === 'string' && typeof value.status === 'string') assertions.push(value)
-    for (const entry of Object.values(value)) collect(entry)
+  return {
+    name,
+    command: [command, ...args],
+    exitCode: 0,
+    joined: true,
+    log: { path: logPath, sha256: sha256(readFileSync(logPath)) },
   }
-  collect(suites)
-
-  const passed = assertions.filter((item) => item.status === 'passed').length
-  const failed = assertions.filter((item) => item.status === 'failed').length
-  const skipped = assertions.filter((item) => ['pending', 'skipped', 'todo'].includes(item.status)).length
-  if (passed < 904 || failed !== 0 || skipped !== 3 || suites.length < 96) {
-    throw new Error(
-      `Runtime Vitest report did not meet the floor (passed=${passed}, failed=${failed}, skipped=${skipped}, files=${suites.length})`,
-    )
-  }
-
-  const expectedSkippedCases = [
-    'LeaderSyncProcessor clears databases on BackendIdMismatchError pull with reset',
-    'StoreRegistry time-dependent (using TestClock) keeps the longest unusedCacheTime seen for a store when options vary across calls',
-    'experimental useStore should load store with unusedCacheTime set to 0',
-  ]
-  const skippedCases = assertions
-    .filter((item) => ['pending', 'skipped', 'todo'].includes(item.status))
-    .map((item) => item.fullName)
-  const byName = (left, right) => left.localeCompare(right)
-  if (JSON.stringify(skippedCases.toSorted(byName)) !== JSON.stringify(expectedSkippedCases.toSorted(byName))) {
-    throw new Error('Runtime skipped cases differ from the explicitly retained pre-existing gaps')
-  }
-
-  const suiteNames = suites.map((suite) => path.resolve(suite.name ?? ''))
-  for (const project of PROJECT_TEST_ROOTS) {
-    if (suiteNames.some((name) => name.startsWith(`${path.join(root, project)}${path.sep}`)) === false) {
-      throw new Error(`Runtime Vitest discovery omitted project ${project}`)
-    }
-  }
-
-  const crashCases = REQUIRED_CRASH_CASES.map((crashCase) => {
-    const matches = assertions.filter((item) => item.fullName.includes(`eventlog COMMIT ${crashCase}`))
-    if (matches.length !== 1 || matches[0].status !== 'passed') {
-      throw new Error(`Required real SIGKILL case was not runtime-discovered and passed: ${crashCase}`)
-    }
-    return { name: crashCase, status: 'passed', executed: true }
-  })
-
-  return { passed, failed, skipped, files: suites.length, projects: PROJECT_TEST_ROOTS, crashCases }
 }
 
 const printHelp = () => {
-  console.log('Usage: node scripts/fork-qualification/check.mjs [--check | --fix | --commit]')
+  console.log(
+    'Usage: node scripts/fork-qualification/check.mjs [--check | --fix | --commit --evidence <manifest.json>]',
+  )
   console.log('  --check   Run local qualification gates without changing source (default)')
   console.log('  --fix     Run canonical Genie generation and Oxfmt source formatting, then check')
-  console.log('  --commit  Run local gates, then require approved policy and app acceptance receipts')
+  console.log('  --commit  Require reviewed evidence, run local gates, then recheck conditional eligibility')
 }
 
 const main = () => {
-  const { mode } = parseArgs(process.argv.slice(2))
+  const { mode, evidenceFile } = parseArgs(process.argv.slice(2))
   if (mode === 'help') return printHelp()
 
   const profile = JSON.parse(readFileSync(profilePath, 'utf8'))
@@ -421,11 +199,22 @@ const main = () => {
 
   const run = path.join(temporary, 'fork-qualification', `run-${Date.now()}-${process.pid}`)
   mkdirSync(run, { recursive: true })
+  const gateRecords = []
+  const gate = (...args) => gateRecords.push(runGate(...args))
+  const decide = (decision) => {
+    const file = path.join(run, 'commit-decision.json')
+    writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`)
+    for (const issue of decision.blocking) console.error(`BLOCK ${issue.code}: ${issue.detail}`)
+    if (decision.eligible === false) throw new Error(`Commit eligibility blocked. Decision: ${file}`)
+    console.log(`Conditional scoped eligibility verified. No commit performed. Decision: ${file}`)
+  }
+  const commit = mode === 'commit' ? inspectCommitEvidence({ root, tools, evidenceFile }) : undefined
+  if (commit?.issues.length > 0) decide(commitVerdict(commit))
   const generator = tools.commands.genie
   const runGenie = (name, cwd, extraArgs = []) =>
-    runGate(run, name, generator[0], [...generator.slice(1), '--check', '--cwd', cwd, ...extraArgs], root, env)
+    gate(run, name, generator[0], [...generator.slice(1), '--check', '--cwd', cwd, ...extraArgs], root, env)
   const runGenieFix = (name, cwd, extraArgs = []) =>
-    runGate(run, name, generator[0], [...generator.slice(1), '--cwd', cwd, ...extraArgs], root, env)
+    gate(run, name, generator[0], [...generator.slice(1), '--cwd', cwd, ...extraArgs], root, env)
 
   console.log(
     `Toolchain ready: Node ${process.version}, pnpm ${profile.pnpm}, Bun ${versions.bunVersion}, Oxlint ${versions.lintVersion}, Oxfmt ${versions.formatVersion}, TS ${profile.packages.typescript}/tsgo ${profile.packages['@effect/tsgo']}`,
@@ -437,20 +226,26 @@ const main = () => {
   if (mode === 'fix') {
     runGenieFix('genie-root-bootstrap', root, ['--phase', 'bootstrap'])
     for (const area of ['packages', 'tests', 'scripts', 'docs']) runGenieFix(`genie-${area}`, path.join(root, area))
-    runGate(run, 'oxfmt-fix', tools.commands.format[0], sourceInventory(), root, env)
+    gate(run, 'oxfmt-fix', tools.commands.format[0], authoredSourceInventory(), root, env)
   }
 
+  gateRecords.length = 0
+  const base = git(root, ['rev-parse', 'HEAD']).trim()
+  const before = sourceState(root, base)
+  const external = sourceState(path.join(root, 'repos/effect-utils'), profile.effectUtilsRevision)
+  if (external.changed.length > 0) throw new Error('Pinned generator source changed')
   validateSourceInventory()
   validateCompilerPolicy()
-  const sourceFiles = sourceInventory()
-  const lintFiles = sourceFiles.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file)))
+  sourceInventory()
+  const authoredFiles = authoredSourceInventory()
+  const lintFiles = authoredFiles.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file)))
   const lintConfig = effectiveLintConfig(run, tools)
 
   runGenie('genie-root-bootstrap', root, ['--phase', 'bootstrap'])
   for (const area of ['packages', 'tests', 'scripts', 'docs']) runGenie(`genie-${area}`, path.join(root, area))
 
-  runGate(run, 'source-format', tools.commands.format[0], ['--check', ...sourceFiles], root, env)
-  runGate(
+  gate(run, 'source-format', tools.commands.format[0], ['--check', ...authoredFiles], root, env)
+  gate(
     run,
     'source-lint-type-aware',
     tools.commands.lint[0],
@@ -467,7 +262,29 @@ const main = () => {
     root,
     env,
   )
-  runGate(
+  gate(
+    run,
+    'package-files-policy',
+    process.execPath,
+    ['--test', path.join(root, 'scripts/fork-qualification/package-files.test.mjs')],
+    root,
+    env,
+  )
+  gate(
+    run,
+    'commit-evidence-tests',
+    process.execPath,
+    [
+      '--test',
+      path.join(root, 'scripts/fork-qualification/bootstrap.test.mjs'),
+      path.join(root, 'scripts/fork-qualification/upstream-source-inputs.test.mjs'),
+      path.join(root, 'scripts/fork-qualification/commit-evidence.test.mjs'),
+      path.join(root, 'scripts/fork-qualification/commit-consumer.test.mjs'),
+    ],
+    root,
+    env,
+  )
+  gate(
     run,
     'typecheck-19-projects',
     tools.commands.compiler[0],
@@ -477,7 +294,7 @@ const main = () => {
   )
 
   const reportFile = path.join(run, 'vitest-runtime-report.json')
-  runGate(
+  gate(
     run,
     'vitest-eight-project-runtime-suite',
     path.join(root, 'node_modules/.bin/vitest'),
@@ -485,18 +302,35 @@ const main = () => {
     root,
     env,
   )
-  const testSummary = verifyRuntimeTests(reportFile)
+  const testSummary = verifyRuntimeTests(root, reportFile)
   console.log(
     `Runtime tests passed: ${testSummary.passed}; skipped ${testSummary.skipped}; ${testSummary.files} files; all four process-kill controls passed.`,
   )
 
+  // The full inventory retains upstream bytes and modes even though authored style excludes their exact paths.
+  sourceInventory()
+  const after = sourceState(root, base)
+  if (
+    digest(after.tree) !== digest(before.tree) ||
+    after.indexDigest !== before.indexDigest ||
+    after.physicalDigest !== before.physicalDigest
+  )
+    throw new Error('Authored source or index changed while qualification ran')
+  const local = {
+    contract: 'livestore-fork-local-qualification-v1',
+    root,
+    base,
+    sourceTreeSha256: digest(before.tree),
+    externalTreeSha256: digest(external.tree),
+    sdkSourceSeal: digest(sdkIdentity(root, before.tree)),
+    toolInputsSha256: digest(toolInputs(tools)),
+    gates: gateRecords,
+    runtime: testSummary,
+  }
+  writeFileSync(path.join(run, 'local-qualification.json'), `${JSON.stringify(local, null, 2)}\n`)
   console.log(`Local checks passed. Full log directory: ${run}`)
   console.log('No SDK qualification or commit eligibility is implied without the approved scope and app receipts.')
-  if (mode === 'commit') {
-    throw new Error(
-      'commit check blocked: approved policy/source identity and lead-owned web/iOS acceptance receipts are unavailable; no commit authority is active',
-    )
-  }
+  if (commit !== undefined) decide(finishCommitEvidence(commit, local))
 }
 
 try {

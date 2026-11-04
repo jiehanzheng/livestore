@@ -2,6 +2,7 @@ import { effectV4Catalog, livestoreOnlyCatalog } from './genie/external.ts'
 // @genie-bootstrap
 import {
   commonPnpmPolicySettings,
+  forkCompilerMinimumReleaseAgeExclude,
   pnpmWorkspaceYaml,
   repoPnpmAllowBuilds,
   repoPackageExtensions,
@@ -9,7 +10,12 @@ import {
 import { rootWorkspacePackages } from './package.json.genie.ts'
 
 // The exact reviewed registry family is shared by all supported owners.
-const effectV4MinimumReleaseAgeExclude = Object.entries(effectV4Catalog).map(([name, version]) => `${name}@${version}`)
+// pnpm removes exact entries already covered by a package-wide inherited rule.
+// Emit the same canonical policy so a frozen install does not rewrite it.
+const inheritedAgeExclusions = new Set<string>(commonPnpmPolicySettings.minimumReleaseAgeExclude)
+const effectV4MinimumReleaseAgeExclude = Object.entries(effectV4Catalog)
+  .filter(([name]) => inheritedAgeExclusions.has(name) === false)
+  .map(([name, version]) => `${name}@${version}`)
 
 // The supported CF runtime was reviewed as one exact official release cohort, including its recent beta runtime.
 const hostMinimumReleaseAgeExclude = (['miniflare', 'wrangler', '@cloudflare/workers-types'] as const).map(
@@ -47,6 +53,7 @@ export default pnpmWorkspaceYaml.root({
     ...effectV4MinimumReleaseAgeExclude,
     ...hostMinimumReleaseAgeExclude,
     ...docsMinimumReleaseAgeExclude,
+    ...forkCompilerMinimumReleaseAgeExclude,
   ],
   // Supported owners must declare mutually compatible peers during normal installs.
   strictPeerDependencies: true,

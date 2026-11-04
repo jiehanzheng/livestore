@@ -5,7 +5,7 @@
     "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "skipLibCheck": true,
-    "types": ["vite/client", "@cloudflare/workers-types"],
+    "types": ["vite/client"],
 
     /* Bundler mode */
     "allowImportingTsExtensions": true,
@@ -22,6 +22,7 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src/**/*", "vite.config.ts"],
+  "exclude": ["src/cf-worker"],
   "references": [
     { "path": "../../packages/@livestore/adapter-cloudflare" },
     { "path": "../../packages/@livestore/adapter-web" },

@@ -29,6 +29,7 @@
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
   "files": [
+    "vendor/source-ced5652e/**",
     "src/sqlite-constants.js",
     "src/sqlite-api.js",
     "src/types/*",
@@ -37,7 +38,8 @@
     "src/WebLocksMixin.js",
     "src/examples/*",
     "dist/*",
-    "test/*"
+    "test/*",
+    "!**/*.tsbuildinfo"
   ],
   "scripts": {
     "build-docs": "typedoc",

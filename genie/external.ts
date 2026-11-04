@@ -8,7 +8,7 @@
 import { livestoreCurrentPackageNames, workspaceCatalogForPackageNames } from './repo-topology.ts'
 
 /** One maintained runtime cohort is shared by all supported repository owners. */
-export const effectVersion = '4.1.0'
+export const effectVersion = '4.1.2'
 export const effectV4Catalog = {
   effect: effectVersion,
   '@effect/ai-openai': effectVersion,
@@ -48,8 +48,8 @@ export const livestoreContribPackageJsonNames = [
 
 /** Native modules and their renderer are qualified as one consumer-owned Expo cohort. */
 export const nativeExpoQualificationCatalog = {
-  expo: '58.0.21',
-  'expo-sqlite': '58.0.14',
+  expo: '58.0.22',
+  'expo-sqlite': '58.0.15',
   'expo-file-system': '58.0.13',
   'react-native': '0.88.1',
   react: '19.3.0',
@@ -83,7 +83,7 @@ export const livestoreOnlyCatalog = {
   '@babel/parser': '7.29.11',
   miniflare: '5.20261023.3-beta',
   scheduler: '0.28.0',
-  '@effect/atom-react': '4.1.0',
+  '@effect/atom-react': effectVersion,
   '@vue/compiler-sfc': '3.5.44',
   vue: '3.5.44',
   'twoslash-vue': '0.3.9',

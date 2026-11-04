@@ -14,7 +14,9 @@ const fs = vi.hoisted(() => ({
   errors: new Map<string, Error>(),
   creates: vi.fn(),
   creationError: undefined as Error | undefined,
+  legacyCreates: vi.fn(),
 }))
+vi.mock('expo-file-system/legacy', () => ({ makeDirectoryAsync: fs.legacyCreates }))
 vi.mock('expo-sqlite', () => ({ defaultDatabaseDirectory: '/sqlite' }))
 vi.mock('expo-file-system', () => {
   const uri = (parts: (string | { uri: string })[]) => {
@@ -54,7 +56,7 @@ vi.mock('expo-file-system', () => {
 })
 import { createExpoLeader } from './leader.ts'
 import { expoPersistencePaths } from './paths.ts'
-import { prepareExpoSourceLayout } from './source-layout.ts'
+import { allocateExpoSource, prepareExpoSourceLayout } from './source-layout.ts'
 
 const root = 'file:///sqlite',
   target = `${root}/fixture`
@@ -66,6 +68,14 @@ beforeEach(() => {
   fs.errors.clear()
   fs.creates.mockClear()
   fs.creationError = undefined
+  fs.legacyCreates.mockReset()
+  fs.legacyCreates.mockImplementation(async (uri: string, options: { intermediates: boolean }) => {
+    expect(options).toEqual({ intermediates: false })
+    if (fs.entries.has(uri) === true) throw new Error('Native target already exists')
+    const parent = uri.slice(0, uri.lastIndexOf('/'))
+    fs.entries.get(parent)?.push({ name: uri.slice(uri.lastIndexOf('/') + 1), kind: 'directory' })
+    fs.entries.set(uri, [])
+  })
 })
 const retained = function (rows: { name: string; kind: 'file' | 'directory'; uri?: string }[]) {
   fs.entries.set(root, [{ name: 'fixture', kind: 'directory' }])
@@ -141,4 +151,27 @@ test('declared base creation failure refuses before source or state IO', async (
   if (Exit.isFailure(exit) === true) expect(Cause.pretty(exit.cause)).toContain('base cannot be established')
   expect(factory).not.toHaveBeenCalled()
   expect([...fs.entries]).toEqual(before)
+})
+
+test('only successful exact legacy mkdir issues a new allocation; retained empty namespace refuses', async () => {
+  const result = await allocateExpoSource(paths())
+  expect(result.kind).toBe('new')
+  expect(fs.legacyCreates).toHaveBeenCalledExactlyOnceWith(target, { intermediates: false })
+  await expect(allocateExpoSource(paths())).rejects.toMatchObject({
+    reason: expect.stringContaining('Retained native namespace'),
+  })
+  expect(fs.legacyCreates).toHaveBeenCalledTimes(1)
+})
+
+test('retained source returns no allocation and does not invoke namespace creation', async () => {
+  retained([file(source), file('opaque-backup')])
+  expect(await allocateExpoSource(paths())).toEqual({ kind: 'retained' })
+  expect(fs.legacyCreates).not.toHaveBeenCalled()
+})
+
+test('native creation failure cannot become freshness or a fallback retained open', async () => {
+  fs.legacyCreates.mockRejectedValueOnce(new Error('competing creator or native uncertainty'))
+  await expect(allocateExpoSource(paths())).rejects.toThrow('competing creator or native uncertainty')
+  expect(fs.legacyCreates).toHaveBeenCalledTimes(1)
+  expect(fs.entries.has(target)).toBe(false)
 })

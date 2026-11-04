@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { makeSchema, State } from '@livestore/common/schema'
+import * as WasmLoader from '@livestore/sqlite-wasm/load-wasm'
 import {
   Cause,
   Deferred,
@@ -17,6 +18,7 @@ import { BrowserWorker } from '@livestore/utils/effect/browser'
 
 import type { SingleTabAdapterOptions } from '../../single-tab/single-tab-adapter.ts'
 import type { WebAdapterOptions } from '../client-session/persisted-adapter.ts'
+import { makePhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
 import { makeWorkerEffect, type WorkerOptions } from './make-leader-worker.ts'
 
@@ -97,19 +99,28 @@ describe('owned worker MessagePort transport', () => {
 
           const parentScope = yield* Scope.make()
           yield* Effect.addFinalizer((exit) => Scope.close(parentScope, exit))
+          const lifetime = yield* makePhysicalWorkerLifetime
           const outerContext = yield* Layer.buildWithScope(
             RpcClient.layerProtocolWorker({ size: 1 }).pipe(
               Layer.provide(BrowserWorker.layer(() => data.port1)),
               Layer.provide(
                 RpcWorker.layerInitialMessage(
                   WorkerSchema.LeaderWorkerOuterInitialMessage.payloadSchema,
-                  Effect.succeed({ port: inner.port1, storeId: 'transport-test', clientId: 'client' }),
+                  lifetime.initialPort.pipe(
+                    Effect.map((lifetimePort) => ({
+                      port: inner.port1,
+                      lifetimePort,
+                      storeId: 'transport-test',
+                      clientId: 'client',
+                    })),
+                  ),
                 ),
               ),
             ),
             parentScope,
           )
           yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(Effect.provide(outerContext))
+          yield* lifetime.ready
 
           // The inner runner becomes ready only after the SDK has received and
           // decoded its normal transferable outer InitialMessage.
@@ -122,6 +133,7 @@ describe('owned worker MessagePort transport', () => {
           yield* Deferred.await(ready)
 
           yield* Scope.close(parentScope, Exit.void)
+          yield* lifetime.close
           const exit = yield* Fiber.await(fiber)
           expect(yield* Deferred.await(receipt)).toEqual({ finalized: true, failed: failFinalizer })
           expect(closeGlobal).not.toHaveBeenCalled()
@@ -132,3 +144,43 @@ describe('owned worker MessagePort transport', () => {
       ))
   }
 })
+
+it('cannot begin native database boot before the outer initial message is consumed', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const data = new MessageChannel()
+        vi.stubGlobal('self', data.port2)
+        const load = vi.spyOn(WasmLoader, 'loadSqlite3Wasm')
+        const ready = yield* Deferred.make<void>()
+        data.port1.onmessage = (event) => {
+          if (event.data[0] === 0) Deferred.doneUnsafe(ready, Effect.void)
+        }
+        data.port1.start()
+        const receiverScope = yield* Scope.make()
+        yield* Effect.addFinalizer(() =>
+          Scope.close(receiverScope, Exit.void).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                data.port1.close()
+                data.port2.close()
+                load.mockRestore()
+              }),
+            ),
+          ),
+        )
+        const receiver = yield* makeWorkerEffect({ schema, transport: data.port2, logLevel: 'None' }).pipe(
+          Effect.forkIn(receiverScope),
+        )
+        yield* Deferred.await(ready)
+        const lifetime = yield* makePhysicalWorkerLifetime
+        yield* lifetime.close
+        expect(load).not.toHaveBeenCalled()
+        // Cancel the still-uninitialized SDK runner. It has received no initial
+        // payload and therefore cannot have constructed its physical owner or DB.
+        yield* Scope.close(receiverScope, Exit.void)
+        yield* Fiber.await(receiver)
+        expect(load).not.toHaveBeenCalled()
+      }),
+    ),
+  ))

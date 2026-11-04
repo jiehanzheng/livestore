@@ -68,7 +68,7 @@ export const runAndGetExit = <S extends Schema.Decoder<{ readonly exit: unknown 
           const result = Schema.decodeOption(schema)(message)
           // console.log('onMessageReceived', message, result)
           if (result._tag === 'Some') {
-            Deferred.succeed(deferred, result.value.exit).pipe(Effect.runSync)
+            Deferred.doneUnsafe(deferred, Effect.succeed(result.value.exit))
           }
         }),
       )

@@ -1,19 +1,13 @@
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 
 /**
- * Browser sessions benefit from downloading and compiling the wasm binary as soon as
- * possible to hide network and IO latency behind the rest of the boot process. We kick
- * that work off eagerly on the client while still returning the shared promise.
- *
- * The Cloudflare / Workerd runtime has stricter rules: async fetches during module
- * evaluation are blocked, so we defer loading until the worker asks for it.
+ * Frontend snapshot/session databases share one memory-only API. Physical leaders
+ * load their own native API directly inside their dedicated worker context.
+ * Eager browser loading hides download/compilation latency; Workerd forbids
+ * asynchronous module-evaluation fetches, so server loading remains deferred.
  */
 const isServerRuntime = String(import.meta.env?.SSR) === 'true' || typeof window === 'undefined'
+const memoryPromise = isServerRuntime === false ? loadSqlite3Wasm() : undefined
 
-let sqlite3Promise: ReturnType<typeof loadSqlite3Wasm> | undefined
-
-if (isServerRuntime === false) {
-  sqlite3Promise = loadSqlite3Wasm()
-}
-
-export const loadSqlite3 = () => (isServerRuntime === true ? loadSqlite3Wasm() : (sqlite3Promise ?? loadSqlite3Wasm()))
+export const loadInMemorySqlite3 = () =>
+  isServerRuntime === true ? loadSqlite3Wasm() : (memoryPromise ?? loadSqlite3Wasm())

@@ -15,11 +15,14 @@ import {
 import * as MaterializationJournal from '../MaterializationJournal.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
 import { EventSequenceNumber, SystemTables } from '../schema/mod.ts'
+import { sourceLifecycle } from '../source-db/lifecycle.ts'
+import type { SourceDbError, SourceHandle } from '../source-db/role.ts'
 import * as SourceIdentity from '../SourceIdentity.ts'
 import * as StateHead from '../StateHead.ts'
 import * as StateSnapshot from '../StateSnapshot.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
-import { configureConnection, execSql } from './connection.ts'
+import { prepareBindValues } from '../util.ts'
+import { configureConnection } from './connection.ts'
 import * as Eventlog from './eventlog.ts'
 import type { MaterializeEvent } from './types.ts'
 import { STATE_REBUILD_BATCH_SIZE_DEFAULT } from './types.ts'
@@ -55,37 +58,69 @@ export const hasCompletedState = (
 /** Reconstruction publishes only a source-bound projection after every hook has completed. */
 export const markStateAsCompleted = (
   db: SqliteDb,
-  { schema, sourceIdentity }: { schema: LiveStoreSchema; sourceIdentity: SourceIdentity.SourceIdentity },
+  {
+    schema,
+    sourceIdentity,
+    source,
+    sourceEpoch,
+  }: {
+    schema: LiveStoreSchema
+    sourceIdentity: SourceIdentity.SourceIdentity
+    source: SourceHandle
+    sourceEpoch: number
+  },
 ): Effect.Effect<void, SqliteError> =>
   Effect.try({
-    try: () =>
+    try: () => {
+      const current = () => source[sourceLifecycle].phase === 'open' && source[sourceLifecycle].epoch === sourceEpoch
+      const transitionId = nanoid()
+      if (current() === false) throw new Error('SOURCE changed before rebuild completion')
       StateSnapshot.writeProvenance(db, {
         proofVersion: StateSnapshot.PROOF_VERSION,
         ownerId: nanoid(),
-        transitionId: nanoid(),
+        transitionId,
         sourceIncarnation: sourceIdentity.incarnation,
         projection: StateSnapshot.getProjectionIdentity(schema),
-      }),
+      })
+      if (current() === false) {
+        const failure = new Error('SOURCE changed during rebuild completion')
+        try {
+          // A reentrant replacement cannot leave this attempted completion proof available to a later owner.
+          const statement = `DELETE FROM ${SystemTables.REBUILD_META_TABLE} WHERE id = 1 AND transitionId = ?`
+          db.execute(statement, prepareBindValues([transitionId], statement))
+        } catch (cleanup) {
+          throw new AggregateError([failure, cleanup], 'Rebuild SOURCE changed and attempted proof cleanup failed', {
+            cause: cleanup,
+          })
+        }
+        throw failure
+      }
+    },
     catch: (cause) => new SqliteError({ cause }),
   })
 
 export const recreateDb = ({
   schema,
+  initializedSource,
   bootStatusQueue,
   materializeEvent,
   stateRebuildBatchSize = STATE_REBUILD_BATCH_SIZE_DEFAULT,
 }: {
   schema: LiveStoreSchema
+  initializedSource: SourceIdentity.InitializedSource
   bootStatusQueue: Queue.Queue<BootStatus>
   materializeEvent: MaterializeEvent
   stateRebuildBatchSize?: number
 }): Effect.Effect<
   { migrationsReport: MigrationsReport },
-  UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError | SqliteError,
+  UnknownError | MaterializeError | MaterializationJournal.MaterializationJournalError | SqliteError | SourceDbError,
   EventlogSqliteDb.EventlogSqliteDb | StateSqliteDb.StateSqliteDb
 > =>
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
+    const source = yield* EventlogSqliteDb.EventlogSqliteDb
+    const sourceEpoch = source.handle[sourceLifecycle].epoch
+    yield* SourceIdentity.assertInitialized(source.handle, initializedSource)
     const hooks = schema.state.sqlite.migrations.hooks
 
     yield* Effect.addFinalizer(
@@ -121,7 +156,10 @@ export const recreateDb = ({
     const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
     const journal = yield* MaterializationJournal.make
     yield* journal.discardUpTo(
-      EventSequenceNumber.Client.Composite.make({ global: Eventlog.getBackendHeadFromDb(dbEventlog), client: 0 }),
+      EventSequenceNumber.Client.Composite.make({
+        global: yield* Eventlog.getBackendHeadFromDb(dbEventlog.handle),
+        client: 0,
+      }),
     )
 
     // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
@@ -130,7 +168,9 @@ export const recreateDb = ({
     // Keep this out of finalizers, which also run on failure and interruption.
     yield* markStateAsCompleted(dbState, {
       schema,
-      sourceIdentity: SourceIdentity.read(yield* EventlogSqliteDb.EventlogSqliteDb),
+      source: source.handle,
+      sourceEpoch,
+      sourceIdentity: yield* SourceIdentity.assertInitialized(source.handle, initializedSource),
     })
 
     return { migrationsReport }

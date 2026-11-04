@@ -10,17 +10,13 @@ import {
   type AdapterArgs,
   type SyncOptions,
 } from '@livestore/common'
-import {
-  Eventlog,
-  LeaderThreadCtx,
-  makeLeaderThreadLayer,
-  streamEventsWithSyncState,
-} from '@livestore/common/leader-thread'
-import { Effect, FetchHttpClient, Fiber, Layer, Queue, Stream } from '@livestore/utils/effect'
+import { LeaderThreadCtx, makeLeaderThreadLayer, streamEventsWithSyncState } from '@livestore/common/leader-thread'
+import { fromSyncSource, initializeSource } from '@livestore/common/source-db'
+import { Effect, Exit, FetchHttpClient, Fiber, Layer, Queue, Stream } from '@livestore/utils/effect'
 
 import { expoPersistencePaths, type ExpoStorage } from './paths.ts'
 import { createExpoShutdownChannel } from './shutdown.ts'
-import { prepareExpoSourceLayout } from './source-layout.ts'
+import { allocateExpoSource } from './source-layout.ts'
 import type { createSqliteFactory } from './sqlite.ts'
 
 type Options = { clientId: string; storage?: ExpoStorage; sync?: SyncOptions }
@@ -32,12 +28,27 @@ export const createExpoLeader = function (
 ) {
   return Effect.gen(function* () {
     const paths = expoPersistencePaths(args.storeId, args.schema, options.storage)
-    const { sourceIsNew } = yield* Effect.try({ try: () => prepareExpoSourceLayout(paths), catch: toAdapterError })
+    const allocation = yield* Effect.tryPromise({ try: () => allocateExpoSource(paths), catch: toAdapterError })
     const dbEventlog = yield* Effect.acquireRelease(
-      makeSqliteDb({ _tag: 'file', databaseName: paths.eventlogDatabaseName, directory: paths.directory }),
-      (db) => Effect.sync(() => db.close()),
+      Effect.gen(function* () {
+        const native = yield* makeSqliteDb({
+          _tag: 'file',
+          databaseName: paths.eventlogDatabaseName,
+          directory: paths.directory,
+          sourceOwner: 'exclusive',
+          ...(allocation.kind === 'new' ? { sourceAllocation: allocation.allocation } : {}),
+        })
+        return yield* Effect.gen(function* () {
+          const lease = native.metadata.sourceLease
+          if (lease === undefined) return yield* toAdapterError('Native SOURCE exclusive lease is unavailable')
+          return yield* fromSyncSource(native, native.metadata.sourceCreation, lease.isHeld)
+        }).pipe(
+          Effect.onExit((exit) => (Exit.isFailure(exit) === true ? Effect.sync(() => native.close()) : Effect.void)),
+        )
+      }),
+      (owner) => owner.close.pipe(Effect.orDie),
     )
-    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
+    const initializedSource = yield* initializeSource(dbEventlog)
     const dbState = yield* Effect.acquireRelease(
       makeSqliteDb({ _tag: 'file', databaseName: paths.stateDatabaseName, directory: paths.directory }),
       (db) => Effect.sync(() => db.close()),
@@ -98,11 +109,20 @@ export const createExpoLeader = function (
         events: {
           pull: () => pull,
           push: (batch) => syncProcessor.push(batch),
-          stream: (options) => streamEventsWithSyncState({ dbEventlog, syncState: syncProcessor.syncState, options }),
+          stream: (options) =>
+            streamEventsWithSyncState({ dbEventlog, syncState: syncProcessor.syncState, options }).pipe(
+              Stream.mapError(toAdapterError),
+            ),
         },
         initialState: { leaderHead, migrationsReport, storageMode: 'persisted' },
         export: exportSnapshot,
-        getEventlogData: Effect.sync(() => dbEventlog.export()),
+        getEventlogData:
+          dbEventlog.image === undefined
+            ? Effect.fail(toAdapterError('SOURCE image export is unavailable'))
+            : dbEventlog.image.export.pipe(
+                Effect.map((bytes) => bytes.slice()),
+                Effect.mapError(toAdapterError),
+              ),
         syncState: syncProcessor.syncState,
         sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
         networkStatus,

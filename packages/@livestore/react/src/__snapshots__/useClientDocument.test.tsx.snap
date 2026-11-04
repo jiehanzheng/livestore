@@ -27,16 +27,16 @@ exports[`useClientDocument > otel > should update the data based on component ke
       "_name": "client-session-sync-processor:boot",
       "children": [
         {
+          "_name": "client-session-sync-processor:pull",
+          "attributes": {
+            "effect.fiber.interrupted": true,
+          },
+        },
+        {
           "_name": "@livestore/common:LeaderSyncProcessor:push",
           "attributes": {
             "batch": "undefined",
             "batchSize": 1,
-          },
-        },
-        {
-          "_name": "client-session-sync-processor:pull",
-          "attributes": {
-            "effect.fiber.interrupted": true,
           },
         },
         {
@@ -318,16 +318,16 @@ exports[`useClientDocument > otel > should update the data based on component ke
       "_name": "client-session-sync-processor:boot",
       "children": [
         {
+          "_name": "client-session-sync-processor:pull",
+          "attributes": {
+            "effect.fiber.interrupted": true,
+          },
+        },
+        {
           "_name": "@livestore/common:LeaderSyncProcessor:push",
           "attributes": {
             "batch": "undefined",
             "batchSize": 1,
-          },
-        },
-        {
-          "_name": "client-session-sync-processor:pull",
-          "attributes": {
-            "effect.fiber.interrupted": true,
           },
         },
         {

@@ -1,5 +1,6 @@
 import {
   ClientSessionLeaderThreadProxy,
+  toAdapterError,
   EventlogSqliteDb,
   MaterializationJournal,
   StateSnapshot,
@@ -9,12 +10,7 @@ import {
   type AdapterArgs,
   type SyncOptions,
 } from '@livestore/common'
-import {
-  Eventlog,
-  LeaderThreadCtx,
-  makeLeaderThreadLayer,
-  streamEventsWithSyncState,
-} from '@livestore/common/leader-thread'
+import { LeaderThreadCtx, makeLeaderThreadLayer, streamEventsWithSyncState } from '@livestore/common/leader-thread'
 import type { MakeNodeSqliteDb } from '@livestore/sqlite-wasm/node'
 import { Effect, Fiber, Layer, Queue, Stream } from '@livestore/utils/effect'
 
@@ -84,7 +80,10 @@ export const createLeader = (args: AdapterArgs, options: Options, makeSqliteDb: 
           events: {
             pull: () => pull,
             push: (batch) => syncProcessor.push(batch).pipe(Effect.uninterruptible),
-            stream: (options) => streamEventsWithSyncState({ dbEventlog, syncState: syncProcessor.syncState, options }),
+            stream: (options) =>
+              streamEventsWithSyncState({ dbEventlog, syncState: syncProcessor.syncState, options }).pipe(
+                Stream.mapError(toAdapterError),
+              ),
           },
           initialState: {
             leaderHead,
@@ -92,7 +91,13 @@ export const createLeader = (args: AdapterArgs, options: Options, makeSqliteDb: 
             storageMode: options.storage.type === 'fs' ? 'persisted' : 'in-memory',
           },
           export: exportSnapshot,
-          getEventlogData: Effect.sync(() => dbEventlog.export()),
+          getEventlogData:
+            dbEventlog.image === undefined
+              ? Effect.fail(toAdapterError('SOURCE image export is unavailable'))
+              : dbEventlog.image.export.pipe(
+                  Effect.map((bytes) => bytes.slice()),
+                  Effect.mapError(toAdapterError),
+                ),
           syncState: syncProcessor.syncState,
           sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
           networkStatus,

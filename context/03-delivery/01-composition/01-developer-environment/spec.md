@@ -156,3 +156,27 @@ Setup captures are local diagnostic artifacts under the ignored `tmp/` tree.
 They are not uploaded automatically. This keeps machine-local paths and command
 metadata in a private-by-default evidence path while stable task names,
 outcomes, cache decisions, and durations remain queryable.
+
+## Focused fork conditional source gate
+
+[Decision 0004](./.decisions/0004-focused-fork-qualification.md) authorizes the
+focused maintained-fork workflow conditionally, not a new commit exemption.
+The SDK-owned `fork:commit-check --evidence <private-manifest>` must prove the
+reviewed complete source/index/scope, unchanged excluded and classified shared
+inputs, concrete maintained tools, joined local gates, actual package/consumer
+identity and source-matched lead web/iOS acceptance. Missing, failed or stale
+proof refuses eligibility. The command never stages, commits or publishes.
+
+The required platform scope preserves multi-context/offline/persistent recovery
+and independent physical-close authority. An explicitly accepted fresh runtime
+boundary must preserve/refuse old files, but does not imply transparent pending
+migration. Ordinary local passes do not replace the missing cases. Full V1 or
+repository-wide/release parity is not inferred from this finite gate.
+
+The versioned private evidence schema and exact failure rules are documented in
+[`scripts/fork-qualification/README.md`](../../../../scripts/fork-qualification/README.md).
+Portable source/payload identity remains separate from current physical
+observations; harmless later inode/time churn requires fresh content/resolution
+validation, not editing historical build evidence. Actual candidate and consumer
+bytes and modes must match. Immutable source/artifact directories are not
+rewritten when checker-only recipe inputs change.

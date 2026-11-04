@@ -2,6 +2,7 @@ import { Cause, Effect, Layer, Option, Schema, Stream, Struct } from '@livestore
 
 import { ProjectionIdentity } from './ProjectionIdentity.ts'
 import * as LiveStoreEvent from './schema/LiveStoreEvent/mod.ts'
+import { SourceDbError } from './source-db/role.ts'
 
 export class UnknownError extends Schema.TaggedError<UnknownError, { readonly brand: unique symbol }>(
   '~@livestore/common/UnknownError',
@@ -139,13 +140,14 @@ export const AdapterError = Schema.Union([
 export type AdapterError = typeof AdapterError.Type
 
 export const toAdapterError = (cause: unknown): AdapterError => {
+  const refusal = cause instanceof SourceDbError ? cause.cause : cause
   if (
-    Schema.is(UnknownError)(cause) === true ||
-    Schema.is(LegacyStorageFormatError)(cause) === true ||
-    Schema.is(ProjectionMismatchError)(cause) === true ||
-    Schema.is(LiveDatabaseImportRefusedError)(cause) === true
+    Schema.is(UnknownError)(refusal) === true ||
+    Schema.is(LegacyStorageFormatError)(refusal) === true ||
+    Schema.is(ProjectionMismatchError)(refusal) === true ||
+    Schema.is(LiveDatabaseImportRefusedError)(refusal) === true
   )
-    return cause
+    return refusal
   return UnknownError.make({ cause })
 }
 

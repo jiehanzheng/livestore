@@ -125,8 +125,16 @@ const listenToDevtools = ({
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
     const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-    const { schema, syncBackend, shutdownStateSubRef, shutdownChannel, syncProcessor, clientId, devtools } =
-      yield* LeaderThreadCtx
+    const {
+      schema,
+      syncBackend,
+      shutdownStateSubRef,
+      shutdownChannel,
+      syncProcessor,
+      clientId,
+      devtools,
+      resetSource,
+    } = yield* LeaderThreadCtx
 
     type SubscriptionId = string
     const subscriptionFiberMap = yield* FiberMap.make<SubscriptionId>()
@@ -207,11 +215,8 @@ const listenToDevtools = ({
 
               yield* SubscriptionRef.set(shutdownStateSubRef, 'shutting-down')
 
-              dbState.destroy()
-
-              if (mode === 'all-data') {
-                dbEventlog.destroy()
-              }
+              if (mode === 'all-data') yield* resetSource
+              else dbState.destroy()
 
               yield* sendMessage(Devtools.Leader.ResetAllData.Success.make({ ...reqPayload }))
 
@@ -227,7 +232,7 @@ const listenToDevtools = ({
 
               const dbSizeQuery = `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();`
               const dbFileSize = dbState.select<{ size: number }>(dbSizeQuery, undefined)[0]!.size
-              const eventlogFileSize = dbEventlog.select<{ size: number }>(dbSizeQuery, undefined)[0]!.size
+              const eventlogFileSize = (yield* dbEventlog.handle.select<{ size: number }>(dbSizeQuery))[0]!.size
 
               yield* sendMessage(
                 Devtools.Leader.DatabaseFileInfoRes.make({
@@ -240,7 +245,11 @@ const listenToDevtools = ({
               return
             }
             case 'LSD.Leader.EventlogReq': {
-              const eventlog = dbEventlog.export()
+              if (dbEventlog.image === undefined)
+                return yield* UnknownError.make({
+                  cause: 'This SOURCE provider does not support database image export',
+                })
+              const eventlog = yield* dbEventlog.image.export
 
               yield* sendMessage(Devtools.Leader.EventlogRes.make({ eventlog, ...reqPayload }))
 

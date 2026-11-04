@@ -1,4 +1,4 @@
-import { Schema } from '@livestore/utils/effect'
+import { Option, Schema } from '@livestore/utils/effect'
 
 import * as EventSequenceNumber from '../../../EventSequenceNumber/mod.ts'
 import { SqliteDsl } from '../db-schema/mod.ts'
@@ -14,6 +14,10 @@ import { table } from '../table-def.ts'
  */
 
 export const EVENTLOG_META_TABLE = 'eventlog'
+
+export const syncMetadataJsonCodec = Schema.fromJsonString(Schema.toCodecJson(Schema.Option(Schema.Json)))
+/** The same encoder as the persisted column; maintenance must not invent a second None representation. */
+export const encodedSyncMetadataNone = (): string => Schema.encodeSync(syncMetadataJsonCodec)(Option.none())
 
 /**
  * Main client-side event log storing all events (global and local/rebased).
@@ -34,7 +38,7 @@ export const eventlogMetaTable = table({
     clientId: SqliteDsl.text({}),
     sessionId: SqliteDsl.text({}),
     schemaHash: SqliteDsl.integer({}),
-    syncMetadataJson: SqliteDsl.text({ schema: Schema.fromJsonString(Schema.toCodecJson(Schema.Option(Schema.Json))) }),
+    syncMetadataJson: SqliteDsl.text({ schema: syncMetadataJsonCodec }),
   },
   indexes: [
     { columns: ['seqNumGlobal'], name: 'idx_eventlog_seqNumGlobal' },

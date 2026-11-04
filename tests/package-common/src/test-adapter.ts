@@ -25,6 +25,7 @@ import {
 } from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
 import { LiveStoreEvent } from '@livestore/common/schema'
+import { type SourceOwner, type SourceDbError } from '@livestore/common/source-db'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { omitUndefineds } from '@livestore/utils'
@@ -44,7 +45,7 @@ import {
 } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { makeSqliteServicesLayer } from './leader-thread/fixture.ts'
+import { makeSqliteServicesLayer, newMemorySource } from './leader-thread/fixture.ts'
 
 export type TestingOverrides = {
   clientSession?: {
@@ -54,11 +55,11 @@ export type TestingOverrides = {
   }
   makeLeaderThread?: (makeSqliteDb: MakeSqliteDb) => Effect.Effect<
     {
-      dbEventlog: SqliteDb
+      source: SourceOwner
       dbState: SqliteDb
       initializedSource: SourceIdentity.InitializedSource
     },
-    AdapterError | SqliteError,
+    AdapterError | SqliteError | SourceDbError,
     Scope.Scope
   >
 }
@@ -108,7 +109,7 @@ export const makeTestAdapter = ({
         syncPayloadEncoded,
         syncPayloadSchema,
         params,
-        testing,
+        ...omitUndefineds({ testing }),
         shutdownChannel,
       }).pipe(mapToAdapterError)
 
@@ -195,11 +196,12 @@ const makeLocalLeaderThread = ({
                   configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
               })
             const dbEventlog = yield* makeDb()
-            const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
-            const dbState = yield* makeDb()
-            return { dbState, dbEventlog, initializedSource }
+            const source = yield* newMemorySource(dbEventlog)
+            const initializedSource = yield* Eventlog.initializeSource(source)
+            const dbState = yield* Effect.acquireRelease(makeDb(), (db) => Effect.sync(() => db.close()))
+            return { dbState, source, initializedSource }
           })
-    const { dbState, dbEventlog, initializedSource } = databases
+    const { dbState, source, initializedSource } = databases
 
     const layer = yield* Layer.build(
       makeLeaderThreadLayer({
@@ -214,14 +216,14 @@ const makeLocalLeaderThread = ({
         syncPayloadEncoded,
         syncPayloadSchema,
         params,
-      }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog }))),
+      }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source }))),
     )
 
     return yield* Effect.gen(function* () {
       const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
         yield* LeaderThreadCtx
 
-      const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
+      const initialLeaderHead = yield* Eventlog.getClientHeadFromDb(source.handle)
 
       const leaderThread = ClientSessionLeaderThreadProxy.of(
         {
@@ -230,10 +232,10 @@ const makeLocalLeaderThread = ({
             push: syncProcessor.push,
             stream: (options) =>
               streamEventsWithSyncState({
-                dbEventlog,
+                dbEventlog: source,
                 syncState: syncProcessor.syncState,
                 options,
-              }),
+              }).pipe(Stream.mapError((cause) => new UnknownError({ cause }))),
           },
           initialState: {
             leaderHead: initialLeaderHead,
@@ -241,7 +243,11 @@ const makeLocalLeaderThread = ({
             storageMode: 'in-memory',
           },
           export: exportSnapshot,
-          getEventlogData: Effect.sync(() => dbEventlog.export()),
+          getEventlogData: Effect.suspend(
+            () =>
+              source.image?.export.pipe(Effect.mapError((cause) => new UnknownError({ cause }))) ??
+              Effect.fail(new UnknownError({ cause: 'SOURCE image export unavailable' })),
+          ).pipe(Effect.map((bytes) => Uint8Array.from(bytes))),
           syncState: syncProcessor.syncState,
           sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
           networkStatus,

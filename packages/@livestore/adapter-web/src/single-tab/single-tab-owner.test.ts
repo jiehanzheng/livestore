@@ -4,11 +4,11 @@ import type { BootStatus } from '@livestore/common'
 import { makeSchema, State } from '@livestore/common/schema'
 import { Effect, Queue } from '@livestore/utils/effect'
 
-import { loadSqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
+import { loadInMemorySqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
 import { makeSingleTabAdapter } from './single-tab-adapter.ts'
 
 vi.mock('../web-worker/client-session/sqlite-loader.ts', () => ({
-  loadSqlite3: vi.fn(() => {
+  loadInMemorySqlite3: vi.fn(() => {
     throw new Error('Database factory reached before physical ownership')
   }),
 }))
@@ -57,6 +57,6 @@ it('refuses an occupied single-tab owner without waiting or opening storage', ()
         expect.anything(),
       )
       expect(worker).not.toHaveBeenCalled()
-      expect(loadSqlite3).not.toHaveBeenCalled()
+      expect(loadInMemorySqlite3).not.toHaveBeenCalled()
     }).pipe(Effect.scoped),
   ))

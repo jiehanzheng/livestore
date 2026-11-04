@@ -1,5 +1,4 @@
-import { mapToAdapterError } from '@livestore/common'
-import { openSnapshotSession, StateSnapshot } from '@livestore/common'
+import { mapToAdapterError, openSnapshotSession, StateSnapshot } from '@livestore/common'
 /**
  * Single-tab adapter for browsers without SharedWorker support (e.g. Android Chrome).
  *
@@ -14,7 +13,7 @@ import { openSnapshotSession, StateSnapshot } from '@livestore/common'
  *
  * @module
  */
-import type { Adapter, BootWarningReason, ClientSession, LockStatus } from '@livestore/common'
+import type { Adapter, ClientSession, LockStatus } from '@livestore/common'
 import {
   IntentionalShutdownCause,
   makeClientSession,
@@ -23,8 +22,8 @@ import {
   StoreInterrupted,
   UnknownError,
 } from '@livestore/common'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
-import { shouldNeverHappen, tryAsFunctionAndNew } from '@livestore/utils'
+import { inMemorySqliteDbFactory } from '@livestore/sqlite-wasm/browser'
+import { tryAsFunctionAndNew } from '@livestore/utils'
 import {
   Cause,
   Effect,
@@ -39,15 +38,20 @@ import {
   Subscribable,
   SubscriptionRef,
 } from '@livestore/utils/effect'
-import { BrowserWorker, Opfs, WebError } from '@livestore/utils/effect/browser'
-import { nanoid } from '@livestore/utils/nanoid'
+import { BrowserWorker, Opfs } from '@livestore/utils/effect/browser'
 
 import { makeLeaderElectionLock } from '../web-worker/client-session/leader-election-lock.ts'
-import { loadSqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
+import { loadInMemorySqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
+import {
+  checkOpfsAvailability,
+  ensureBrowserRequirements,
+  getPersistedId,
+} from '../web-worker/common/browser-environment.ts'
 import {
   readPersistedStateDbFromClientSession,
   resetPersistedDataFromClientSession,
 } from '../web-worker/common/persisted-sqlite.ts'
+import * as PhysicalWorker from '../web-worker/common/physical-worker-lifetime.ts'
 import {
   type WithoutRpcClientError,
   dieOnRpcClientError,
@@ -55,73 +59,9 @@ import {
 } from '../web-worker/common/rpc-worker.ts'
 import { makeShutdownChannel } from '../web-worker/common/shutdown-channel.ts'
 import * as WorkerSchema from '../web-worker/common/worker-schema.ts'
+import type { SingleTabAdapterOptions } from './single-tab-adapter-options.ts'
 
-/**
- * Options for the single-tab adapter.
- *
- * This adapter is designed for browsers without SharedWorker support (e.g. Android Chrome).
- * It provides OPFS persistence but without multi-tab synchronization.
- *
- * @see https://github.com/livestorejs/livestore/issues/321
- * @see https://issues.chromium.org/issues/40290702
- */
-export type SingleTabAdapterOptions = {
-  /**
-   * The dedicated web worker that runs the LiveStore leader thread.
-   *
-   * @example
-   * ```ts
-   * import LiveStoreWorker from './livestore.worker.ts?worker'
-   *
-   * const adapter = makeSingleTabAdapter({
-   *   worker: LiveStoreWorker,
-   *   storage: { type: 'opfs' },
-   * })
-   * ```
-   *
-   * A factory may return a dedicated Worker or an application-owned MessagePort.
-   * For a MessagePort, configure the worker runner with the paired transport port;
-   * the application owns and terminates the underlying Worker after joining cleanup.
-   */
-  worker:
-    | ((options: { name: string }) => globalThis.Worker | MessagePort)
-    | (new (options: { name: string }) => globalThis.Worker)
-
-  /**
-   * Storage configuration. Currently only OPFS is supported.
-   */
-  storage: WorkerSchema.StorageTypeEncoded
-
-  /**
-   * Warning: This will reset both the app and eventlog database.
-   * This should only be used during development.
-   *
-   * @default false
-   */
-  resetPersistence?: boolean
-
-  /**
-   * By default the adapter will initially generate a random clientId (via `nanoid(5)`),
-   * store it in `localStorage` and restore it for subsequent client sessions.
-   */
-  clientId?: string
-
-  /**
-   * By default the adapter will initially generate a random sessionId (via `nanoid(5)`),
-   * store it in `sessionStorage` and restore it for subsequent client sessions in the same tab.
-   */
-  sessionId?: string
-
-  experimental?: {
-    /**
-     * When set to `true`, the adapter will always start with a snapshot from the leader
-     * instead of trying to load a snapshot from storage.
-     *
-     * @default false
-     */
-    disableFastPath?: boolean
-  }
-}
+export type { SingleTabAdapterOptions } from './single-tab-adapter-options.ts'
 
 /**
  * Creates a single-tab web adapter with OPFS persistence.
@@ -165,7 +105,11 @@ export const makeSingleTabAdapter =
 
       // This mode cannot join an existing owner. Refuse immediately instead of waiting
       // forever behind a private worker, while sharing the normal physical owner lock.
-      const ownership = yield* makeLeaderElectionLock(`livestore-tab-lock-${storeId}`)
+      let physicalLifetime: PhysicalWorker.PhysicalWorkerLifetime | undefined
+      const ownership = yield* makeLeaderElectionLock(
+        `livestore-tab-lock-${storeId}`,
+        () => physicalLifetime?.close ?? Effect.void,
+      )
       if ((yield* ownership.tryAcquire) === false) {
         return yield* new UnknownError({
           cause: 'Single-tab storage already has an active owner; close it before opening another store',
@@ -174,8 +118,8 @@ export const makeSingleTabAdapter =
 
       yield* Queue.offer(bootStatusQueue, { stage: 'loading' })
 
-      const sqlite3 = yield* Effect.promise(() => loadSqlite3())
-      const makeSqliteDb = sqliteDbFactory({ sqlite3 })
+      const sqlite3 = yield* Effect.promise(() => loadInMemorySqlite3())
+      const makeSqliteDb = yield* inMemorySqliteDbFactory({ sqlite3 })
 
       const storageOptions = yield* Schema.decodeEffect(WorkerSchema.StorageType)(options.storage)
 
@@ -230,6 +174,15 @@ export const makeSingleTabAdapter =
       // Create MessageChannel for direct communication with the dedicated worker
       const mc = new MessageChannel()
 
+      const lifetime = yield* PhysicalWorker.makePhysicalWorkerLifetime.pipe(
+        Effect.tap((owner) =>
+          Effect.sync(() => {
+            physicalLifetime = owner
+          }),
+        ),
+        Effect.uninterruptible,
+      )
+
       // Create the dedicated worker directly (no SharedWorker proxy)
       const worker = tryAsFunctionAndNew(options.worker, { name: `livestore-worker-${storeId}-${sessionId}` })
 
@@ -240,7 +193,9 @@ export const makeSingleTabAdapter =
           Layer.provide(
             RpcWorker.layerInitialMessage(
               WorkerSchema.LeaderWorkerOuterInitialMessage.payloadSchema,
-              Effect.succeed({ port: mc.port1, storeId, clientId }),
+              lifetime.initialPort.pipe(
+                Effect.map((lifetimePort) => ({ port: mc.port1, lifetimePort, storeId, clientId })),
+              ),
             ),
           ),
         ),
@@ -252,6 +207,8 @@ export const makeSingleTabAdapter =
         Effect.withSpan('@livestore/adapter-web:single-tab:setupDedicatedWorker'),
         Effect.tapCauseLogPretty,
       )
+
+      yield* lifetime.ready
 
       // Set up the inner worker communication via port2 (like SharedWorker would do)
       // BrowserWorker.layer accepts a MessagePort as well as a Worker
@@ -439,70 +396,3 @@ export const makeSingleTabAdapter =
     }).pipe(Effect.provide(Opfs.layer), mapToAdapterError)
 
 /** Persists clientId/sessionId to storage */
-const getPersistedId = (key: string, storageType: 'session' | 'local') => {
-  const makeId = () => nanoid(5)
-
-  const storage =
-    typeof window === 'undefined'
-      ? undefined
-      : storageType === 'session'
-        ? sessionStorage
-        : storageType === 'local'
-          ? localStorage
-          : shouldNeverHappen(`[@livestore/adapter-web] Invalid storage type: ${String(storageType)}`)
-
-  if (storage === undefined) {
-    return makeId()
-  }
-
-  const fullKey = `livestore:${key}`
-  const storedKey = storage.getItem(fullKey)
-
-  if (storedKey !== null) return storedKey
-
-  const newKey = makeId()
-  storage.setItem(fullKey, newKey)
-
-  return newKey
-}
-
-const ensureBrowserRequirements = Effect.gen(function* () {
-  const validate = (condition: boolean, label: string) =>
-    Effect.gen(function* () {
-      if (condition === true) {
-        return yield* UnknownError.make({
-          cause: `[@livestore/adapter-web] Browser not supported. The LiveStore web adapter needs '${label}' to work properly`,
-        })
-      }
-    })
-
-  yield* Effect.all([
-    validate(typeof navigator === 'undefined', 'navigator'),
-    validate(navigator.locks === undefined, 'navigator.locks'),
-    validate(navigator.storage === undefined, 'navigator.storage'),
-    validate(crypto.randomUUID === undefined, 'crypto.randomUUID'),
-    validate(typeof window === 'undefined', 'window'),
-    validate(typeof sessionStorage === 'undefined', 'sessionStorage'),
-  ])
-})
-
-/**
- * Attempts to access OPFS and returns a warning if unavailable.
- */
-const checkOpfsAvailability = Effect.gen(function* () {
-  const opfs = yield* Opfs.Opfs
-  return yield* opfs.getRootDirectoryHandle.pipe(
-    Effect.as(undefined),
-    Effect.catch((error) => {
-      const reason: BootWarningReason =
-        Schema.is(WebError.SecurityError)(error) === true || Schema.is(WebError.NotAllowedError)(error) === true
-          ? 'private-browsing'
-          : 'storage-unavailable'
-      const message =
-        reason === 'private-browsing'
-          ? 'Storage unavailable in private browsing mode. LiveStore will continue without persistence.'
-          : 'Storage access denied. LiveStore will continue without persistence.'
-      return Effect.succeed({ reason, message } as const)
-    }),
-  )
-})

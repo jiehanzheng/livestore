@@ -130,4 +130,9 @@ const materializers = State.SQLite.materializers(mailboxEvents, {
 
 const state = State.SQLite.makeState({ tables: mailboxTables, materializers })
 
-export const schema = makeSchema({ events: mailboxEvents, state, devtools: { alias: 'mailbox' } })
+export const schema = makeSchema({
+  events: mailboxEvents,
+  state,
+  projectionRevision: 'email-mailbox-v1',
+  devtools: { alias: 'mailbox' },
+})

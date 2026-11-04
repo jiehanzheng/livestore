@@ -3,7 +3,7 @@ import docsPkg from './docs/package.json.genie.ts'
 import docsNativeCodePkg from './docs/src/content/_assets/code/native/package.json.genie.ts'
 import docsCodeSnippetsPkg from './docs/src/content/_assets/code/package.json.genie.ts'
 import { effectV4Catalog } from './genie/external.ts'
-import { catalog, packageJson } from './genie/repo.ts'
+import { catalog, forkEffectTsgoVersion, packageJson } from './genie/repo.ts'
 import adapterCloudflarePkg from './packages/@livestore/adapter-cloudflare/package.json.genie.ts'
 import adapterExpoPkg from './packages/@livestore/adapter-expo/package.json.genie.ts'
 import adapterNodePkg from './packages/@livestore/adapter-node/package.json.genie.ts'
@@ -90,7 +90,7 @@ const rootWorkspaceExtraFields = {
     // The qualification root materializes all nine maintained cohort members for identity checks.
     ...effectV4Catalog,
     '@changesets/cli': '^2.31.0',
-    '@effect/tsgo': '0.63.0',
+    '@effect/tsgo': forkEffectTsgoVersion,
     oxfmt: '0.61.0',
     oxlint: '1.82.0',
     ...catalog.pick('@types/node', 'typescript'),

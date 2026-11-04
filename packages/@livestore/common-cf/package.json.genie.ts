@@ -2,6 +2,7 @@ import {
   catalog,
   getUtilsPeerDeps,
   livestorePackageDefaults,
+  livestorePackageFiles,
   packageJson,
   workspaceMember,
 } from '../../../genie/repo.ts'
@@ -31,7 +32,7 @@ export default packageJson(
       '.': './src/mod.ts',
       './declare': './src/declare/mod.ts',
     },
-    files: [...livestorePackageDefaults.files, 'README.md'],
+    files: livestorePackageFiles('README.md'),
     publishConfig: {
       access: 'public',
       exports: {

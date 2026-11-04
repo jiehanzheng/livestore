@@ -5,12 +5,14 @@ import {
   type MakeSqliteDb,
 } from '@livestore/common'
 import { getStateDbBaseName, type LiveStoreSchema } from '@livestore/common/schema'
+import type { OpfsSourceNamespace } from '@livestore/sqlite-wasm/browser'
 import {
   decodeAccessHandlePoolFilename,
-  decodeAccessHandlePoolFilenameStrict,
+  readOpfsSourceInventory,
   HEADER_OFFSET_DATA,
   type WebDatabaseMetadataOpfs,
 } from '@livestore/sqlite-wasm/browser'
+import { certifyOpfsSourceInventory } from '@livestore/sqlite-wasm/browser/internal-source'
 import { isDevEnv } from '@livestore/utils'
 import {
   Effect,
@@ -166,11 +168,18 @@ export const sanitizeOpfsDir = Effect.fn('@livestore/adapter-web:sanitizeOpfsDir
 export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discoverPersistedSource')(function* ({
   storageOptions,
   storeId,
+  namespace,
 }: {
   storageOptions: WorkerSchema.StorageType
   storeId: string
+  namespace?: OpfsSourceNamespace
 }) {
   const directory = yield* sanitizeOpfsDir(storageOptions.directory, storeId)
+  const certify = (sourceWasAbsent: boolean) =>
+    namespace === undefined ? undefined : certifyOpfsSourceInventory(namespace, directory, sourceWasAbsent)
+  if (namespace !== undefined && (namespace.directory !== directory || namespace.isHeld() === false)) {
+    return yield* Effect.die(new Error('OPFS discovery requires its exact live namespace authority'))
+  }
   const storageBase = directory.slice(0, directory.lastIndexOf('@'))
   const unreadableStorage = () =>
     new LegacyStorageFormatError({
@@ -191,37 +200,28 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
     })
   }
   if (entries.some((entry) => entry.kind === 'directory' && entry.name === directory) === false) {
-    return { sourceIsNew: true }
+    const inventory = certify(true)
+    return { sourceIsNew: true, ...(inventory === undefined ? {} : { inventory }) }
   }
   const current = yield* opfs.getDirectoryHandle(root, directory).pipe(Effect.mapError(unreadableStorage))
-  const filenames = yield* opfs.values(current).pipe(
-    Stream.filter((handle): handle is FileSystemFileHandle => handle.kind === 'file'),
-    Stream.mapEffect((handle) =>
-      opfs.getFile(handle).pipe(
-        Effect.flatMap((file) =>
-          Effect.tryPromise({
-            try: () => decodeAccessHandlePoolFilenameStrict(file),
-            catch: () =>
-              new LegacyStorageFormatError({
-                expectedFormatVersion: liveStoreStorageFormatVersion,
-                storageBase,
-                reason: 'Cannot prove source origin from unreadable OPFS pool metadata',
-              }),
-          }),
-        ),
-      ),
-    ),
-    Stream.runCollect,
+  const { entries: currentEntries, filenames } = yield* readOpfsSourceInventory(current).pipe(
     Effect.mapError(
-      (cause) =>
+      () =>
         new LegacyStorageFormatError({
           expectedFormatVersion: liveStoreStorageFormatVersion,
           storageBase,
-          reason: `Cannot prove source origin from OPFS pool metadata: ${cause._tag}`,
+          reason: 'Cannot prove source origin from unreadable OPFS pool metadata',
         }),
     ),
   )
-  const sourceIsNew = !filenames.includes('/eventlog.db')
+  const sourceIsNew = filenames.includes('/eventlog.db') === false
+  if (sourceIsNew === true && currentEntries.some((entry) => entry.kind === 'directory') === true) {
+    return yield* new LegacyStorageFormatError({
+      expectedFormatVersion: liveStoreStorageFormatVersion,
+      storageBase,
+      reason: 'Retained OPFS directories exist without the authoritative eventlog',
+    })
+  }
   if (sourceIsNew === true && filenames.some((name) => name !== '') === true) {
     return yield* new LegacyStorageFormatError({
       expectedFormatVersion: liveStoreStorageFormatVersion,
@@ -229,7 +229,8 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
       reason: 'Retained database associations exist without the authoritative eventlog',
     })
   }
-  return { sourceIsNew }
+  const inventory = certify(sourceIsNew)
+  return { sourceIsNew, ...(inventory === undefined ? {} : { inventory }) }
 })
 
 export const getStateDbFileName = (schema: LiveStoreSchema) => `${getStateDbBaseName(schema)}.db`

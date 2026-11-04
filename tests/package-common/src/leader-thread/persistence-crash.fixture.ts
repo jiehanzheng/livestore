@@ -1,12 +1,14 @@
+import path from 'node:path'
+
 import { type BootStatus, type SqliteDb, SqliteDbHelper } from '@livestore/common'
 import { Eventlog, LeaderPersistence, makeMaterializeEvent, recreateDb } from '@livestore/common/leader-thread'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables } from '@livestore/common/schema'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
+import { reserveNodeSource, sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Effect, Queue } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { events, makeSqliteServicesLayer, schema } from './fixture.ts'
+import { ownSource, events, makeSqliteServicesLayer, schema } from './fixture.ts'
 
 const [directory, boundary] = process.argv.slice(2)
 if (directory === undefined || boundary === undefined) throw new Error('Expected directory and crash boundary')
@@ -16,7 +18,12 @@ await Effect.runPromise(
     const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
     const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
     const rawState = yield* makeSqliteDb({ _tag: 'fs', directory, fileName: 'state.db' })
-    const rawEventlog = yield* makeSqliteDb({ _tag: 'fs', directory, fileName: 'eventlog.db' })
+    const rawEventlog = yield* makeSqliteDb({
+      _tag: 'fs',
+      directory,
+      fileName: 'eventlog.db',
+      sourceCreation: reserveNodeSource(path.join(directory, 'eventlog.db')),
+    })
     let armed = false
     const crash = () => process.kill(process.pid, 'SIGKILL')
     const dbState: SqliteDb = {
@@ -42,11 +49,12 @@ await Effect.runPromise(
         return result
       }),
     }
-    yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
-    const services = makeSqliteServicesLayer({ dbState, dbEventlog })
+    const source = yield* ownSource(dbEventlog, rawEventlog.metadata.sourceCreation)
+    const initializedSource = yield* Eventlog.initializeSource(source)
+    const services = makeSqliteServicesLayer({ dbState, source })
     const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
     const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-    yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(services))
+    yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(services))
     const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(services))
     const todo = (id: string, rebaseGeneration: number) =>
       LiveStoreEvent.Client.Encoded.make({
@@ -69,5 +77,5 @@ await Effect.runPromise(
       backendHead: EventSequenceNumber.Client.ROOT,
     })
     throw new Error(`Did not reach ${boundary}`)
-  }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer)),
+  }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Effect.scoped),
 )

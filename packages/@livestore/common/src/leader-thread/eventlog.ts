@@ -1,348 +1,108 @@
-import { LS_DEV, shouldNeverHappen } from '@livestore/utils'
-import { Effect, Option, ReadonlyArray, Schema } from '@livestore/utils/effect'
+import { LS_DEV } from '@livestore/utils'
+import { Effect, Option, type Schema } from '@livestore/utils/effect'
 
-import type { SqliteDb } from '../adapter-types.ts'
-import { mapToAdapterError } from '../errors.ts'
-import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
-import { migrateTable } from '../schema-management/migrations.ts'
 import * as EventSequenceNumber from '../schema/EventSequenceNumber/mod.ts'
-import * as LiveStoreEvent from '../schema/LiveStoreEvent/mod.ts'
-import {
-  EVENTLOG_META_TABLE,
-  eventlogMetaTable,
-  eventlogSystemTables,
-  SYNC_STATUS_TABLE,
-} from '../schema/state/sqlite/system-tables/eventlog-tables.ts'
-import { bindInitializedSource } from '../source-initialization-context.ts'
-import * as SourceIdentity from '../SourceIdentity.ts'
-import { insertRow, updateRows } from '../sql-queries/sql-queries.ts'
-import * as SqliteDbHelper from '../sqlite-db-helper.ts'
-import type { PreparedBindValues } from '../util.ts'
-import { prepareBindValues, sql } from '../util.ts'
-import { execSql } from './connection.ts'
-import type { InitialSyncInfo, StreamEventsOptions } from './types.ts'
+import type * as LiveStoreEvent from '../schema/LiveStoreEvent/mod.ts'
+import * as Admission from '../source-db/admission.ts'
+import * as SourceEvents from '../source-db/events.ts'
+import { SourceContext, type SourceOwner } from '../source-db/owner.ts'
+import type { SourceHandle } from '../source-db/role.ts'
+import type { StreamEventsOptions } from './types.ts'
 import { STREAM_EVENTS_BATCH_SIZE_DEFAULT } from './types.ts'
 
-export const initEventlogDb = (dbEventlog: SqliteDb, { sourceIsNew }: { sourceIsNew: boolean }) =>
-  Effect.gen(function* () {
-    if (sourceIsNew !== true) {
-      return yield* Effect.sync(() => SourceIdentity.read(dbEventlog))
-    }
-    yield* Effect.sync(() => SourceIdentity.assertFresh(dbEventlog, sourceIsNew))
-    const initialize = Effect.gen(function* () {
-      for (const tableDef of eventlogSystemTables) {
-        yield* migrateTable({
-          db: dbEventlog,
-          behaviour: 'create-if-not-exists',
-          tableAst: tableDef.sqliteDef.ast,
-          skipMetaTable: true,
-        })
-      }
-      yield* execSql(
-        dbEventlog,
-        sql`INSERT INTO ${SYNC_STATUS_TABLE} (head) VALUES (${EventSequenceNumber.Client.ROOT.global})`,
-        {},
-      )
-      return yield* Effect.sync(() => SourceIdentity.initializeWithinTransaction(dbEventlog))
-    })
-    if (dbEventlog.transactionHost !== undefined) {
-      return yield* dbEventlog.transactionHost.runTransaction(initialize)
-    }
-    return yield* Effect.acquireUseRelease(
-      Effect.sync(() => dbEventlog.execute('BEGIN IMMEDIATE')),
-      () => initialize.pipe(Effect.tap(() => Effect.sync(() => dbEventlog.execute('COMMIT')))),
-      (_, exit) => (exit._tag === 'Failure' ? Effect.sync(() => dbEventlog.execute('ROLLBACK')) : Effect.void),
-    )
-  }).pipe(mapToAdapterError)
+/** Legacy entry-point name, with the same owner admission and no discovery-boolean authority. */
+export const initEventlogDb = (owner: SourceOwner) =>
+  Admission.initializeSource(owner).pipe(Effect.map((proof) => proof.identity))
+export const initializeSource = Admission.initializeSource
 
-/** Must finish under the physical owner before the derived database factory is called. */
-export const initializeSource = (dbEventlog: SqliteDb, options: { sourceIsNew: boolean }) =>
-  initEventlogDb(dbEventlog, options).pipe(
-    Effect.map((identity) => bindInitializedSource(dbEventlog, identity, options.sourceIsNew)),
-  )
-
-/**
- * Exclusive of the "since event"
- */
 export const getEventsSince = ({
   dbEventlog,
   since,
 }: {
-  dbEventlog: SqliteDb
+  dbEventlog: SourceHandle
   since: EventSequenceNumber.Client.Composite
-}): ReadonlyArray<LiveStoreEvent.Client.Encoded> => {
-  const pendingEvents = dbEventlog.select(eventlogMetaTable.where('seqNumGlobal', '>=', since.global))
+}) => SourceEvents.readAfterComposite(dbEventlog, since).pipe(Effect.map((rows) => rows.map((row) => row.event)))
 
-  return pendingEvents
-    .map((eventlogEvent) => {
-      return LiveStoreEvent.Client.Encoded.make({
-        name: eventlogEvent.name,
-        args: eventlogEvent.argsJson,
-        seqNum: {
-          global: eventlogEvent.seqNumGlobal,
-          client: eventlogEvent.seqNumClient,
-          rebaseGeneration: eventlogEvent.seqNumRebaseGeneration,
-        },
-        parentSeqNum: {
-          global: eventlogEvent.parentSeqNumGlobal,
-          client: eventlogEvent.parentSeqNumClient,
-          rebaseGeneration: eventlogEvent.parentSeqNumRebaseGeneration,
-        },
-        clientId: eventlogEvent.clientId,
-        sessionId: eventlogEvent.sessionId,
-      })
-    })
-    .filter((_) => EventSequenceNumber.Client.compare(_.seqNum, since) > 0)
-    .toSorted((a, b) => EventSequenceNumber.Client.compare(a.seqNum, b.seqNum))
-}
+export const deleteEvents = (owner: SourceOwner, eventNums: ReadonlyArray<EventSequenceNumber.Client.Composite>) =>
+  owner.write((transaction) => SourceEvents.deletePositions(transaction, eventNums))
 
-/**
- * Deletes eventlog entries at the requested logical event positions.
- *
- * @remarks
- * Positions are matched by their global and client components, so every rebase-generation incarnation at a matching
- * position is removed. Deletions are batched within one savepoint; if any batch fails, earlier batches are rolled back.
- *
- * @param dbEventlog - Eventlog database whose entries should be removed
- * @param eventNums - Logical event positions to remove
- */
-export const deleteEvents = (dbEventlog: SqliteDb, eventNums: ReadonlyArray<EventSequenceNumber.Client.Composite>) =>
-  Effect.gen(function* () {
-    // Split into batches to keep each DELETE statement and its bound parameter count manageable.
-    const eventNumChunks = ReadonlyArray.chunksOf(100)(eventNums)
-
-    for (const eventNumChunk of eventNumChunks) {
-      // A global/client pair identifies the logical event position. Deleting it intentionally purges
-      // every rebase-generation incarnation that may remain at that position.
-      const placeholders = eventNumChunk.map(() => '(?, ?)').join(', ')
-      const bindValues = eventNumChunk.flatMap((key) => [key.global, key.client])
-
-      yield* execSql(
-        dbEventlog,
-        sql`DELETE FROM ${EVENTLOG_META_TABLE}
-            WHERE (seqNumGlobal, seqNumClient) IN (${placeholders})`,
-        bindValues,
-      )
-    }
-  }).pipe((effect) =>
-    dbEventlog.transactionHost === undefined
-      ? SqliteDbHelper.withSavepoint(effect, dbEventlog)
-      : // Native host SQL has no savepoints. A failed nested operation poisons its enclosing host transaction.
-        dbEventlog.transactionHost.runTransaction(effect),
-  )
-
+/** Global bounds are fixed; continuation drains ties before the caller advances its global window. */
 export const getEventsFromEventlog = ({
   dbEventlog,
   options,
+  after,
 }: {
-  dbEventlog: SqliteDb
+  dbEventlog: SourceHandle
   options: StreamEventsOptions
-}): Effect.Effect<ReadonlyArray<LiveStoreEvent.Client.Encoded>> =>
-  Effect.gen(function* () {
-    const since = options.since ?? EventSequenceNumber.Client.ROOT
-    const batchSize = options.batchSize ?? STREAM_EVENTS_BATCH_SIZE_DEFAULT
+  after?: EventSequenceNumber.Client.Composite
+}) =>
+  SourceEvents.readGlobalWindowPage(dbEventlog, {
+    since: options.since?.global ?? EventSequenceNumber.Client.ROOT.global,
+    limit: options.batchSize ?? STREAM_EVENTS_BATCH_SIZE_DEFAULT,
+    includeClientOnly: options.includeClientOnly === true,
+    ...(options.until === undefined ? {} : { until: options.until.global }),
+    ...(options.filter === undefined ? {} : { names: options.filter }),
+    ...(options.clientIds === undefined ? {} : { clientIds: options.clientIds }),
+    ...(options.sessionIds === undefined ? {} : { sessionIds: options.sessionIds }),
+    ...(after === undefined ? {} : { after }),
+  }).pipe(Effect.map((rows) => rows.map((row) => row.event)))
 
-    const makeQuery = () => {
-      let query = eventlogMetaTable.where('seqNumGlobal', '>', since.global)
+export const getClientHeadFromDb = SourceEvents.readClientHead
+export const getBackendHeadFromDb = SourceEvents.readBackendHead
+export const getBackendIdFromDb = SourceEvents.readBackendId
 
-      if (options.until !== undefined) {
-        query = query.where('seqNumGlobal', '<=', options.until.global)
-      }
+export const updateBackendHead = (owner: SourceOwner, head: EventSequenceNumber.Client.Composite) =>
+  owner.write((transaction) => SourceEvents.updateBackendHead(transaction, head.global))
 
-      if (options.filter !== undefined && options.filter.length > 0) {
-        query = query.where({ name: { op: 'IN', value: options.filter } })
-      }
-
-      if (options.clientIds !== undefined && options.clientIds.length > 0) {
-        query = query.where({ clientId: { op: 'IN', value: options.clientIds } })
-      }
-
-      if (options.sessionIds !== undefined && options.sessionIds.length > 0) {
-        query = query.where({ sessionId: { op: 'IN', value: options.sessionIds } })
-      }
-
-      if (options.includeClientOnly !== true) {
-        query = query.where('seqNumClient', '<=', EventSequenceNumber.Client.DEFAULT)
-      }
-
-      return query
-        .orderBy([
-          { col: 'seqNumGlobal', direction: 'asc' },
-          { col: 'seqNumClient', direction: 'asc' },
-        ])
-        .limit(batchSize)
-    }
-
-    const eventlogEvents = yield* Effect.sync(() => dbEventlog.select(makeQuery()))
-
-    if (eventlogEvents.length === 0) {
-      return []
-    }
-
-    const spanAttributes = {
-      'livestore.eventLog.since': since.global,
-      'livestore.eventLog.until': options.until?.global,
-    }
-
-    return yield* Effect.sync(() => {
-      const encodedEvents = eventlogEvents.map((eventlogEvent) => {
-        return LiveStoreEvent.Client.Encoded.make({
-          name: eventlogEvent.name,
-          args: eventlogEvent.argsJson,
-          seqNum: {
-            global: eventlogEvent.seqNumGlobal,
-            client: eventlogEvent.seqNumClient,
-            rebaseGeneration: eventlogEvent.seqNumRebaseGeneration,
-          },
-          parentSeqNum: {
-            global: eventlogEvent.parentSeqNumGlobal,
-            client: eventlogEvent.parentSeqNumClient,
-            rebaseGeneration: eventlogEvent.parentSeqNumRebaseGeneration,
-          },
-          clientId: eventlogEvent.clientId,
-          sessionId: eventlogEvent.sessionId,
-        })
-      })
-
-      return encodedEvents
-    }).pipe(Effect.withSpan('@livestore/common:eventlog:getEventsFromEventlog', { attributes: spanAttributes }))
-  })
-
-export const getClientHeadFromDb = (dbEventlog: SqliteDb): EventSequenceNumber.Client.Composite => {
-  const res = dbEventlog.select<{
-    seqNumGlobal: EventSequenceNumber.Global.Type
-    seqNumClient: EventSequenceNumber.Client.Type
-    seqNumRebaseGeneration: number
-  }>(
-    sql`select seqNumGlobal, seqNumClient, seqNumRebaseGeneration from ${EVENTLOG_META_TABLE} order by seqNumGlobal DESC, seqNumClient DESC limit 1`,
-  )[0]
-
-  return res !== undefined
-    ? { global: res.seqNumGlobal, client: res.seqNumClient, rebaseGeneration: res.seqNumRebaseGeneration }
-    : EventSequenceNumber.Client.ROOT
-}
-
-export const getBackendHeadFromDb = (dbEventlog: SqliteDb): EventSequenceNumber.Global.Type =>
-  dbEventlog.select<{ head: EventSequenceNumber.Global.Type }>(sql`select head from ${SYNC_STATUS_TABLE}`)[0]?.head ??
-  EventSequenceNumber.Client.ROOT.global
-
-// TODO use prepared statements
-export const updateBackendHead = (dbEventlog: SqliteDb, head: EventSequenceNumber.Client.Composite) =>
-  dbEventlog.execute(sql`UPDATE ${SYNC_STATUS_TABLE} SET head = ${head.global}`)
-
-export const getBackendIdFromDb = (dbEventlog: SqliteDb): Option.Option<string> =>
-  Option.fromNullishOr(
-    dbEventlog.select<{ backendId: string | null }>(sql`select backendId from ${SYNC_STATUS_TABLE}`)[0]?.backendId,
-  )
-
-export const updateBackendId = (dbEventlog: SqliteDb, backendId: string) =>
-  dbEventlog.execute(`UPDATE ${SYNC_STATUS_TABLE} SET backendId = ?`, prepareBindValues([backendId], ''))
+export const updateBackendId = (owner: SourceOwner, backendId: string) =>
+  owner.write((transaction) => SourceEvents.updateBackendId(transaction, backendId))
 
 export const insertIntoEventlog = (
   eventEncoded: LiveStoreEvent.Client.Encoded,
-  dbEventlog: SqliteDb,
+  owner: SourceOwner,
   eventDefSchemaHash: number,
   clientId: string,
   sessionId: string,
   syncMetadata: Option.Option<Schema.Json> = Option.none(),
 ) =>
-  Effect.gen(function* () {
-    // Check history consistency during LS_DEV
-    if (LS_DEV === true && eventEncoded.parentSeqNum.global !== EventSequenceNumber.Client.ROOT.global) {
-      const parentEventExists =
-        dbEventlog.select<{ count: number }>(
-          `SELECT COUNT(*) as count FROM ${EVENTLOG_META_TABLE} WHERE seqNumGlobal = ? AND seqNumClient = ?`,
-          [eventEncoded.parentSeqNum.global, eventEncoded.parentSeqNum.client] as any as PreparedBindValues,
-        )[0]!.count === 1
-
-      if (parentEventExists === false) {
-        shouldNeverHappen(
-          `Parent event ${eventEncoded.parentSeqNum.global},${eventEncoded.parentSeqNum.client} does not exist in eventlog`,
-        )
-      }
-    }
-
-    // TODO use prepared statements
-    yield* execSql(
-      dbEventlog,
-      ...insertRow({
-        tableName: EVENTLOG_META_TABLE,
-        columns: eventlogMetaTable.sqliteDef.columns,
-        values: {
-          seqNumGlobal: eventEncoded.seqNum.global,
-          seqNumClient: eventEncoded.seqNum.client,
-          seqNumRebaseGeneration: eventEncoded.seqNum.rebaseGeneration,
-          parentSeqNumGlobal: eventEncoded.parentSeqNum.global,
-          parentSeqNumClient: eventEncoded.parentSeqNum.client,
-          parentSeqNumRebaseGeneration: eventEncoded.parentSeqNum.rebaseGeneration,
-          name: eventEncoded.name,
-          argsJson: eventEncoded.args ?? {},
-          clientId,
-          sessionId,
-          schemaHash: eventDefSchemaHash,
-          syncMetadataJson: syncMetadata,
-        },
+  owner
+    .write((transaction) =>
+      Effect.gen(function* () {
+        if (LS_DEV === true) yield* SourceEvents.assertParentExists(transaction, eventEncoded.parentSeqNum)
+        yield* SourceEvents.insert(transaction, [
+          SourceEvents.normalizeStoredEvent(eventEncoded, {
+            schemaHash: eventDefSchemaHash,
+            clientId,
+            sessionId,
+            syncMetadata,
+          }),
+        ])
       }),
     )
-
-    dbEventlog.debug.head = eventEncoded.seqNum
-  })
+    .pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          owner.debug.head = eventEncoded.seqNum
+        }),
+      ),
+    )
 
 export const updateSyncMetadata = (
   items: ReadonlyArray<{
     readonly event: LiveStoreEvent.Client.Encoded
     readonly syncMetadata: Option.Option<Schema.Json>
   }>,
-) => EventlogSqliteDb.EventlogSqliteDb.pipe(Effect.flatMap((dbEventlog) => updateSyncMetadataForDb(dbEventlog, items)))
+) => SourceContext.pipe(Effect.flatMap((owner) => updateSyncMetadataForDb(owner, items)))
 
 export const updateSyncMetadataForDb = (
-  dbEventlog: SqliteDb,
+  owner: SourceOwner,
   items: ReadonlyArray<{
     readonly event: LiveStoreEvent.Client.Encoded
     readonly syncMetadata: Option.Option<Schema.Json>
   }>,
-) =>
-  Effect.gen(function* () {
-    // TODO try to do this in a single query
-    for (let i = 0; i < items.length; i++) {
-      const { event, syncMetadata } = items[i]!
-
-      yield* execSql(
-        dbEventlog,
-        ...updateRows({
-          tableName: EVENTLOG_META_TABLE,
-          columns: eventlogMetaTable.sqliteDef.columns,
-          where: { seqNumGlobal: event.seqNum.global, seqNumClient: event.seqNum.client },
-          updateValues: { syncMetadataJson: syncMetadata },
-        }),
-      )
-    }
-  })
+) => owner.write((transaction) => SourceEvents.updateSyncMetadata(transaction, items))
 
 export const getSyncBackendCursorInfo = (args: { remoteHead: EventSequenceNumber.Global.Type }) =>
-  EventlogSqliteDb.EventlogSqliteDb.pipe(
-    Effect.flatMap((dbEventlog) => getSyncBackendCursorInfoForDb(dbEventlog, args)),
-  )
+  SourceContext.pipe(Effect.flatMap((owner) => getSyncBackendCursorInfoForDb(owner.handle, args)))
 
-export const getSyncBackendCursorInfoForDb = (
-  dbEventlog: SqliteDb,
-  { remoteHead }: { remoteHead: EventSequenceNumber.Global.Type },
-) =>
-  Effect.gen(function* () {
-    if (remoteHead === EventSequenceNumber.Client.ROOT.global) return Option.none()
-
-    const EventlogQuerySchema = Schema.Struct({
-      syncMetadataJson: Schema.fromJsonString(Schema.toCodecJson(Schema.Option(Schema.Json))),
-    }).pipe(Schema.pluck('syncMetadataJson'), Schema.Array, Schema.head)
-
-    const syncMetadataOption = yield* Effect.sync(() =>
-      dbEventlog.select<{ syncMetadataJson: string }>(
-        sql`SELECT syncMetadataJson FROM ${EVENTLOG_META_TABLE} WHERE seqNumGlobal = ${remoteHead} ORDER BY seqNumClient ASC LIMIT 1`,
-      ),
-    ).pipe(Effect.andThen(Schema.decodeEffect(EventlogQuerySchema)), Effect.map(Option.flatten), Effect.orDie)
-
-    return Option.some({
-      eventSequenceNumber: remoteHead,
-      metadata: syncMetadataOption,
-    }) satisfies InitialSyncInfo
-  }).pipe(Effect.withSpan('@livestore/common:eventlog:getSyncBackendCursorInfo', { attributes: { remoteHead } }))
+export const getSyncBackendCursorInfoForDb = SourceEvents.getSyncBackendCursorInfo

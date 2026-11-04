@@ -1,5 +1,4 @@
 import type {
-  MakeSqliteDb,
   PersistenceInfo,
   PreparedBindValues,
   PreparedStatement,
@@ -100,36 +99,21 @@ type CloudflareDatabaseInput =
       configureDb: (db: SqliteDb) => void
     }
 
-export type MakeCloudflareSqliteDb = MakeSqliteDb<Metadata, CloudflareDatabaseInput, { _tag: 'cloudflare' } & Metadata>
+export type MakeCloudflareSqliteDb = (input: CloudflareDatabaseInput) => Effect.Effect<SqliteDb<Metadata>>
 
-export const makeSqliteDb: MakeCloudflareSqliteDb = (input: CloudflareDatabaseInput) =>
-  Effect.gen(function* () {
-    if (input._tag === 'in-memory') {
-      return makeSqliteDb_<Metadata>({
-        sqlStorage: input.db,
-        metadata: {
-          _tag: 'file' as const,
-          dbPointer: 0,
-          persistenceInfo: { fileName: 'cf' },
-          input,
-          configureDb: input.configureDb,
-        },
-      }) as any
-    }
-
-    if (input._tag === 'file') {
-      return makeSqliteDb_<Metadata>({
-        sqlStorage: input.db,
-        metadata: {
-          _tag: 'file' as const,
-          dbPointer: 0,
-          persistenceInfo: { fileName: 'cf' },
-          input,
-          configureDb: input.configureDb,
-        },
-      }) as any
-    }
-  })
+export const makeSqliteDb: MakeCloudflareSqliteDb = (input) =>
+  Effect.sync(() =>
+    makeSqliteDb_<Metadata>({
+      sqlStorage: input.db,
+      metadata: {
+        _tag: 'file',
+        dbPointer: 0,
+        persistenceInfo: { fileName: 'cf' },
+        input,
+        configureDb: input.configureDb,
+      },
+    }),
+  )
 
 export const makeSqliteDb_ = <
   TMetadata extends {
@@ -168,14 +152,7 @@ export const makeSqliteDb_ = <
       }
     },
     export: () => {
-      // NOTE: Database export not supported with public API
-      // This functionality requires undocumented serialize() method
-      // throw new SqliteError({
-      //   query: { sql: 'export', bindValues: {} },
-      //   code: -1,
-      //   cause: 'Database export not supported with public SqlStorage API',
-      // })
-      return new Uint8Array()
+      throw new SqliteError({ cause: 'Native Durable Object SOURCE image export is unsupported' })
     },
     execute: SqliteDbHelper.makeExecute((queryStr, bindValues, options) => {
       const stmt = sqliteDb.prepare(queryStr)
@@ -210,13 +187,7 @@ export const makeSqliteDb_ = <
       isClosed = true
     },
     import: (_source) => {
-      // NOTE: Database import not supported with public API
-      // This functionality requires undocumented deserialize() and backup() methods
-      // throw new SqliteError({
-      //   query: { sql: 'import', bindValues: {} },
-      //   code: -1,
-      //   cause: 'Database import not supported with public SqlStorage API',
-      // })
+      throw new SqliteError({ cause: 'Native Durable Object SOURCE image import is unsupported' })
     },
     session: () => {
       // NOTE: Session tracking not supported with public API

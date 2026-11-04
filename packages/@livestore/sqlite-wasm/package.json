@@ -24,6 +24,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./browser": "./src/browser/mod.ts",
+    "./browser/internal-source": "./src/browser/opfs/source-allocation.ts",
+    "./browser/source-maintenance": "./src/browser/opfs/maintenance.ts",
     "./cf": "./src/cf/mod.ts",
     "./load-wasm": {
       "workerd": "./src/load-wasm/mod.workerd.ts",
@@ -37,7 +39,8 @@
   "files": [
     "dist",
     "package.json",
-    "src"
+    "src",
+    "!**/*.tsbuildinfo"
   ],
   "scripts": {
     "test": "vitest",
@@ -59,16 +62,16 @@
     "wrangler": "4.156.0"
   },
   "peerDependencies": {
-    "@effect/opentelemetry": "^4.1.0",
-    "@effect/platform-browser": "^4.1.0",
-    "@effect/platform-bun": "^4.1.0",
-    "@effect/platform-node": "^4.1.0",
-    "@effect/platform-node-shared": "^4.1.0",
-    "@effect/vitest": "^4.1.0",
+    "@effect/opentelemetry": "^4.1.2",
+    "@effect/platform-browser": "^4.1.2",
+    "@effect/platform-bun": "^4.1.2",
+    "@effect/platform-node": "^4.1.2",
+    "@effect/platform-node-shared": "^4.1.2",
+    "@effect/vitest": "^4.1.2",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/resources": "^2.2.0",
     "@standard-schema/spec": "^1.1.0",
-    "effect": "^4.1.0"
+    "effect": "^4.1.2"
   },
   "publishConfig": {
     "access": "public",
@@ -92,6 +95,14 @@
       "./cf": {
         "types": "./dist/cf/mod.d.ts",
         "default": "./dist/cf/mod.js"
+      },
+      "./browser/internal-source": {
+        "types": "./dist/browser/opfs/source-allocation.d.ts",
+        "default": "./dist/browser/opfs/source-allocation.js"
+      },
+      "./browser/source-maintenance": {
+        "types": "./dist/browser/opfs/maintenance.d.ts",
+        "default": "./dist/browser/opfs/maintenance.js"
       },
       "./browser": {
         "types": "./dist/browser/mod.d.ts",

@@ -1,9 +1,8 @@
 import { mapToAdapterError } from '@livestore/common'
 import { openSnapshotSession, StateSnapshot } from '@livestore/common'
-import type { Adapter, BootWarningReason, ClientSession, LockStatus } from '@livestore/common'
+import type { Adapter, ClientSession } from '@livestore/common'
 import {
   IntentionalShutdownCause,
-  liveStoreVersion,
   makeClientSession,
   StateSqliteDb,
   StateHead,
@@ -13,27 +12,13 @@ import {
 // TODO bring back - this currently doesn't work due to https://github.com/vitejs/vite/issues/8427
 // NOTE We're using a non-relative import here for Vite to properly resolve the import during app builds
 // import LiveStoreSharedWorker from '@livestore/adapter-web/internal-shared-worker?sharedworker'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
-import { isDevEnv, omitUndefineds, shouldNeverHappen, tryAsFunctionAndNew } from '@livestore/utils'
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Queue,
-  RpcClient,
-  RpcWorker,
-  Schema,
-  Stream,
-  Subscribable,
-  SubscriptionRef,
-} from '@livestore/utils/effect'
-import { BrowserWorker, Opfs, WebError, WebLock } from '@livestore/utils/effect/browser'
-import { nanoid } from '@livestore/utils/nanoid'
+import { inMemorySqliteDbFactory } from '@livestore/sqlite-wasm/browser'
+import { isDevEnv, omitUndefineds, tryAsFunctionAndNew } from '@livestore/utils'
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Schema, Stream, Subscribable } from '@livestore/utils/effect'
+import { Opfs } from '@livestore/utils/effect/browser'
 
 import { makeSingleTabAdapter } from '../../single-tab/single-tab-adapter.ts'
+import { checkOpfsAvailability, ensureBrowserRequirements, getPersistedId } from '../common/browser-environment.ts'
 import {
   readPersistedStateDbFromClientSession,
   resetPersistedDataFromClientSession,
@@ -45,11 +30,12 @@ import {
   makeWebmeshWorkerProxy,
 } from '../common/rpc-worker.ts'
 import { makeShutdownChannel } from '../common/shutdown-channel.ts'
-import { DedicatedWorkerDisconnectBroadcast, makeWorkerDisconnectChannel } from '../common/worker-disconnect-channel.ts'
+import { makeWorkerDisconnectChannel } from '../common/worker-disconnect-channel.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
 import { connectWebmeshNodeClientSession } from './client-session-devtools.ts'
-import { makeLeaderElectionLock } from './leader-election-lock.ts'
-import { loadSqlite3 } from './sqlite-loader.ts'
+import type { WebAdapterOptions } from './persisted-adapter-options.ts'
+import { loadInMemorySqlite3 } from './sqlite-loader.ts'
+import { makeWorkerLeadership } from './worker-leadership.ts'
 
 /**
  * Checks if SharedWorker API is available in the current browser context.
@@ -68,78 +54,7 @@ if (isDevEnv() === true) {
   }
 }
 
-export type WebAdapterOptions = {
-  /**
-   * A factory may return a dedicated Worker or an application-owned MessagePort.
-   * For a MessagePort, configure the worker runner with the paired transport port;
-   * the application owns and terminates the underlying Worker after joining cleanup.
-   */
-  worker:
-    | ((options: { name: string }) => globalThis.Worker | MessagePort)
-    | (new (options: { name: string }) => globalThis.Worker)
-  /**
-   * This is mostly an implementation detail and needed to be exposed into app code
-   * due to a current Vite limitation (https://github.com/vitejs/vite/issues/8427).
-   *
-   * In most cases this should look like:
-   * ```ts
-   * import LiveStoreSharedWorker from '@livestore/adapter-web/shared-worker?sharedworker'
-   *
-   * const adapter = makePersistedAdapter({
-   *   sharedWorker: LiveStoreSharedWorker,
-   *   // ...
-   * })
-   * ```
-   */
-  sharedWorker:
-    | ((options: { name: string }) => globalThis.SharedWorker)
-    | (new (options: { name: string }) => globalThis.SharedWorker)
-  /**
-   * Specifies where to persist data for this adapter
-   */
-  storage: WorkerSchema.StorageTypeEncoded
-  /**
-   * Warning: This will reset both the app and eventlog database.
-   * This should only be used during development.
-   *
-   * @default false
-   */
-  resetPersistence?: boolean
-  /**
-   * By default the adapter will initially generate a random clientId (via `nanoid(5)`),
-   * store it in `localStorage` and restore it for subsequent client sessions. It's the same across all tabs/windows.
-   */
-  clientId?: string
-  /**
-   * By default the adapter will initially generate a random sessionId (via `nanoid(5)`),
-   * store it in `sessionStorage` and restore it for subsequent client sessions in the same tab/window.
-   */
-  sessionId?: string
-  experimental?: {
-    /**
-     * When set to `true`, the adapter will always start with a snapshot from the leader
-     * instead of trying to load a snapshot from storage.
-     *
-     * @default false
-     */
-    disableFastPath?: boolean
-    /**
-     * Controls whether to wait for the shared worker to be terminated when LiveStore gets shut down.
-     * This prevents a race condition where a new LiveStore instance connects to a shutting-down shared
-     * worker from a previous instance.
-     *
-     * @default false
-     *
-     * @remarks
-     *
-     * In multi-tab scenarios, we don't want to await shared worker termination because the shared worker
-     * won't actually shut down when one tab closes - it stays alive to serve other tabs. Awaiting
-     * termination would cause unnecessary blocking since the termination will never happen until all
-     * tabs are closed.
-     */
-    awaitSharedWorkerTermination?: boolean
-  }
-}
+export type { WebAdapterOptions } from './persisted-adapter-options.ts'
 
 /**
  * Creates a web adapter with persistent storage (currently only supports OPFS).
@@ -214,11 +129,8 @@ export const makePersistedAdapter =
 
       yield* Queue.offer(bootStatusQueue, { stage: 'loading' })
 
-      const sqlite3 = yield* Effect.promise(() => loadSqlite3())
-      const makeSqliteDb = sqliteDbFactory({ sqlite3 })
-
-      const LIVESTORE_TAB_LOCK = `livestore-tab-lock-${storeId}`
-      const LIVESTORE_SHARED_WORKER_TERMINATION_LOCK = `livestore-shared-worker-termination-lock-${storeId}`
+      const sqlite3 = yield* Effect.promise(() => loadInMemorySqlite3())
+      const makeSqliteDb = yield* inMemorySqliteDbFactory({ sqlite3 })
 
       const storageOptions = yield* Schema.decodeEffect(WorkerSchema.StorageType)(options.storage)
 
@@ -279,121 +191,16 @@ export const makePersistedAdapter =
 
       const sharedWebWorker = tryAsFunctionAndNew(options.sharedWorker, { name: `livestore-shared-worker-${storeId}` })
 
-      if (options.experimental?.awaitSharedWorkerTermination === true) {
-        // Relying on the lock being available is currently the only mechanism we're aware of
-        // to know whether the shared worker has terminated.
-        yield* Effect.addFinalizer(() => WebLock.waitForLock(LIVESTORE_SHARED_WORKER_TERMINATION_LOCK))
-      }
-
-      const sharedWorkerContext = yield* Layer.build(
-        RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }).pipe(
-          Layer.provide(BrowserWorker.layer(() => sharedWebWorker)),
-        ),
-      )
-      const sharedWorker = yield* RpcClient.make(WorkerSchema.SharedWorkerRpcs).pipe(
-        Effect.provide(sharedWorkerContext),
-        Effect.tapCauseLogPretty,
-        mapToAdapterError,
-        Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
-        Effect.withSpan('@livestore/adapter-web:client-session:setupSharedWorker'),
-      )
-
-      const electionLock = yield* makeLeaderElectionLock(LIVESTORE_TAB_LOCK)
-      // It's important that we resolve the leader election in a blocking way, so there's always a leader.
-      // Otherwise events could end up being dropped.
-      //
-      // Sorry for this pun ...
-      let gotLocky = yield* electionLock.tryAcquire
-      const lockStatus = yield* SubscriptionRef.make<LockStatus>(gotLocky === true ? 'has-lock' : 'no-lock')
-
-      // Ideally we can come up with a simpler implementation that doesn't require this
-      const waitForSharedWorkerInitialized = yield* Deferred.make<void>()
-      if (gotLocky === false) {
-        // Don't need to wait if we're not the leader
-        yield* Deferred.succeed(waitForSharedWorkerInitialized, undefined)
-      }
-
-      const runLocked = Effect.gen(function* () {
-        yield* Effect.logDebug(
-          `[@livestore/adapter-web:client-session] ✅ Got lock '${LIVESTORE_TAB_LOCK}' (clientId: ${clientId}, sessionId: ${sessionId}).`,
-        )
-
-        yield* Effect.addFinalizer(() =>
-          Effect.logDebug(`[@livestore/adapter-web:client-session] Releasing lock for '${LIVESTORE_TAB_LOCK}'`),
-        )
-
-        yield* SubscriptionRef.set(lockStatus, 'has-lock')
-
-        const mc = new MessageChannel()
-
-        // NOTE we're adding the `storeId` to the worker name to make it unique
-        // and adding the `sessionId` to make it easier to debug which session a worker belongs to in logs
-        const worker = tryAsFunctionAndNew(options.worker, { name: `livestore-worker-${storeId}-${sessionId}` })
-
-        const outerWorkerContext = yield* Layer.build(
-          RpcClient.layerProtocolWorker({ size: 1 }).pipe(
-            Layer.provide(BrowserWorker.layer(() => worker)),
-            Layer.provide(
-              RpcWorker.layerInitialMessage(
-                WorkerSchema.LeaderWorkerOuterInitialMessage.payloadSchema,
-                Effect.succeed({ port: mc.port1, storeId, clientId }),
-              ),
-            ),
-          ),
-        )
-        yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(
-          Effect.provide(outerWorkerContext),
-          mapToAdapterError,
-          Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
-          Effect.withSpan('@livestore/adapter-web:client-session:setupDedicatedWorker'),
-          Effect.tapCauseLogPretty,
-        )
-
-        yield* workerDisconnectChannel.send(DedicatedWorkerDisconnectBroadcast.make({}))
-
-        yield* sharedWorker
-          .UpdateMessagePort({
-            port: mc.port2,
-            liveStoreVersion,
-            initial: {
-              storageOptions,
-              storeId,
-              clientId,
-              devtoolsEnabled,
-              debugInstanceId,
-              syncPayloadEncoded,
-              params,
-            },
-          })
-          .pipe(
-            mapToAdapterError,
-            Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
-          )
-
-        yield* Deferred.succeed(waitForSharedWorkerInitialized, undefined)
-
-        return yield* Effect.never
-      }).pipe(Effect.withSpan('@livestore/adapter-web:client-session:lock'))
-
-      // TODO take/give up lock when tab becomes active/passive
-      if (gotLocky === false) {
-        yield* Effect.logDebug(
-          `[@livestore/adapter-web:client-session] ⏳ Waiting for lock '${LIVESTORE_TAB_LOCK}' (sessionId: ${sessionId})`,
-        )
-
-        // TODO find a cleaner implementation for the lock handling as we don't make use of the deferred properly right now
-        yield* electionLock.wait.pipe(
-          Effect.andThen(() => {
-            gotLocky = true
-            return runLocked
-          }),
-          Effect.interruptible,
-          Effect.tapCauseLogPretty,
-          Effect.forkScoped,
-        )
-      } else {
-        yield* runLocked.pipe(Effect.interruptible, Effect.tapCauseLogPretty, Effect.forkScoped)
-      }
+      const leadership = yield* makeWorkerLeadership({
+        options,
+        adapterArgs,
+        clientId,
+        sessionId,
+        storageOptions,
+        sharedWebWorker,
+        workerDisconnectChannel,
+      })
+      const { sharedWorker, lockStatus, waitForSharedWorkerInitialized } = leadership
 
       const runInWorker = <A, E, R>(
         tag: string,
@@ -480,10 +287,18 @@ export const makePersistedAdapter =
             if (shouldLogAsError === true) {
               yield* Effect.logError('[@livestore/adapter-web:client-session] client-session shutdown', cause)
             } else {
-              yield* Effect.logDebug('[@livestore/adapter-web:client-session] client-session shutdown', gotLocky, ex)
+              yield* Effect.logDebug(
+                '[@livestore/adapter-web:client-session] client-session shutdown',
+                leadership.isLeader,
+                ex,
+              )
             }
           } else {
-            yield* Effect.logDebug('[@livestore/adapter-web:client-session] client-session shutdown', gotLocky, ex)
+            yield* Effect.logDebug(
+              '[@livestore/adapter-web:client-session] client-session shutdown',
+              leadership.isLeader,
+              ex,
+            )
           }
         }).pipe(Effect.tapCauseLogPretty, Effect.orDie),
       )
@@ -543,7 +358,7 @@ export const makePersistedAdapter =
         lockStatus,
         clientId,
         sessionId,
-        isLeader: gotLocky,
+        isLeader: leadership.isLeader,
         leaderThread,
         webmeshMode: 'direct',
         // Can be undefined in Node.js
@@ -568,79 +383,3 @@ export const makePersistedAdapter =
 
       return clientSession
     }).pipe(Effect.provide(Opfs.layer), mapToAdapterError)
-
-// NOTE for `local` storage we could also use the eventlog db to store the data
-const getPersistedId = (key: string, storageType: 'session' | 'local') => {
-  const makeId = () => nanoid(5)
-
-  const storage =
-    typeof window === 'undefined'
-      ? undefined
-      : storageType === 'session'
-        ? sessionStorage
-        : storageType === 'local'
-          ? localStorage
-          : shouldNeverHappen(`[@livestore/adapter-web] Invalid storage type: ${String(storageType)}`)
-
-  // in case of a worker, we need the id of the parent window, to keep the id consistent
-  // we also need to handle the case where there are multiple workers being spawned by the same window
-  if (storage === undefined) {
-    return makeId()
-  }
-
-  const fullKey = `livestore:${key}`
-  const storedKey = storage.getItem(fullKey)
-
-  if (storedKey !== null) return storedKey
-
-  const newKey = makeId()
-  storage.setItem(fullKey, newKey)
-
-  return newKey
-}
-
-const ensureBrowserRequirements = Effect.gen(function* () {
-  const validate = (condition: boolean, label: string) =>
-    Effect.gen(function* () {
-      if (condition === true) {
-        return yield* UnknownError.make({
-          cause: `[@livestore/adapter-web] Browser not supported. The LiveStore web adapter needs '${label}' to work properly`,
-        })
-      }
-    })
-
-  yield* Effect.all([
-    validate(typeof navigator === 'undefined', 'navigator'),
-    validate(navigator.locks === undefined, 'navigator.locks'),
-    validate(navigator.storage === undefined, 'navigator.storage'),
-    validate(crypto.randomUUID === undefined, 'crypto.randomUUID'),
-    validate(typeof window === 'undefined', 'window'),
-    validate(typeof sessionStorage === 'undefined', 'sessionStorage'),
-  ])
-})
-
-/**
- * Attempts to access OPFS and returns a warning if unavailable.
- *
- * Common failure scenarios:
- * - Safari/Firefox private browsing: SecurityError or NotAllowedError
- * - Permission denied: NotAllowedError
- * - Quota exceeded: QuotaExceededError
- */
-const checkOpfsAvailability = Effect.gen(function* () {
-  const opfs = yield* Opfs.Opfs
-  return yield* opfs.getRootDirectoryHandle.pipe(
-    Effect.as(undefined),
-    Effect.catch((error) => {
-      const reason: BootWarningReason =
-        Schema.is(WebError.SecurityError)(error) === true || Schema.is(WebError.NotAllowedError)(error) === true
-          ? 'private-browsing'
-          : 'storage-unavailable'
-      const message =
-        reason === 'private-browsing'
-          ? 'Storage unavailable in private browsing mode. LiveStore will continue without persistence.'
-          : 'Storage access denied. LiveStore will continue without persistence.'
-      return Effect.succeed({ reason, message } as const)
-    }),
-  )
-})

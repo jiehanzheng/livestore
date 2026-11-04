@@ -8,13 +8,16 @@ import { Vitest } from '@livestore/utils-dev/node-vitest'
 import { Effect } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
+import { newMemorySource } from './fixture.ts'
+
 Vitest.describe.concurrent('deleteEvents', () => {
   Vitest.live('deletes every rebase generation at a logical event position', (test) =>
     Effect.gen(function* () {
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+      const source = yield* newMemorySource(dbEventlog)
+      yield* Eventlog.initEventlogDb(source)
 
       const makeEvent = (rebaseGeneration: number) =>
         LiveStoreEvent.Client.Encoded.make({
@@ -29,11 +32,11 @@ Vitest.describe.concurrent('deleteEvents', () => {
       const generations = [makeEvent(0), makeEvent(1)]
       yield* Effect.forEach(
         generations,
-        (event) => Eventlog.insertIntoEventlog(event, dbEventlog, 0, event.clientId, event.sessionId),
+        (event) => Eventlog.insertIntoEventlog(event, source, 0, event.clientId, event.sessionId),
         { discard: true },
       )
 
-      yield* Eventlog.deleteEvents(dbEventlog, [generations[0]!.seqNum])
+      yield* Eventlog.deleteEvents(source, [generations[0]!.seqNum])
 
       expect(dbEventlog.select('SELECT * FROM eventlog')).toEqual([])
     }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),

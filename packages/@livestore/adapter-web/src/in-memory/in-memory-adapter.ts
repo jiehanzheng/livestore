@@ -12,7 +12,7 @@ import {
   StateSqliteDb,
   StateHead,
   type SyncOptions,
-  type UnknownError,
+  UnknownError,
 } from '@livestore/common'
 import type { DevtoolsOptions, LeaderSqliteDb } from '@livestore/common/leader-thread'
 import {
@@ -24,8 +24,8 @@ import {
 } from '@livestore/common/leader-thread'
 import type { LiveStoreSchema } from '@livestore/common/schema'
 import { LiveStoreEvent } from '@livestore/common/schema'
-import type { MakeWebSqliteDb } from '@livestore/sqlite-wasm/browser'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
+import { fromSyncSource, type SourceOwner } from '@livestore/common/source-db'
+import { inMemorySqliteDbFactory } from '@livestore/sqlite-wasm/browser'
 import { tryAsFunctionAndNew } from '@livestore/utils'
 import {
   type Scope,
@@ -36,6 +36,7 @@ import {
   RpcClient,
   type Schema,
   SubscriptionRef,
+  Stream,
 } from '@livestore/utils/effect'
 import { BrowserWorker } from '@livestore/utils/effect/browser'
 import { nanoid } from '@livestore/utils/nanoid'
@@ -43,7 +44,7 @@ import * as Webmesh from '@livestore/webmesh'
 import * as WebmeshWorker from '@livestore/webmesh/worker'
 
 import { connectWebmeshNodeClientSession } from '../web-worker/client-session/client-session-devtools.ts'
-import { loadSqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
+import { loadInMemorySqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
 import {
   dieOnRpcClientError,
   makeWebmeshWorkerProxy,
@@ -128,9 +129,10 @@ export const makeInMemoryAdapter =
         )
       : Effect.gen(function* () {
           const { schema, shutdown, syncPayloadEncoded, syncPayloadSchema, storeId, devtoolsEnabled } = adapterArgs
-          const sqlite3 = yield* Effect.promise(() => loadSqlite3())
+          const sqlite3 = yield* Effect.promise(() => loadInMemorySqlite3())
 
-          const sqliteDb = yield* Effect.acquireRelease(sqliteDbFactory({ sqlite3 })({ _tag: 'in-memory' }), (db) =>
+          const makeSqliteDb = yield* inMemorySqliteDbFactory({ sqlite3 })
+          const sqliteDb = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
             Effect.sync(() => db.close()),
           )
 
@@ -162,7 +164,7 @@ export const makeInMemoryAdapter =
             schema,
             storeId,
             clientId,
-            makeSqliteDb: sqliteDbFactory({ sqlite3 }),
+            makeSqliteDb,
             syncOptions: options.sync,
             syncPayloadEncoded,
             syncPayloadSchema,
@@ -218,7 +220,7 @@ export interface MakeLeaderThreadArgs {
   schema: LiveStoreSchema
   storeId: string
   clientId: string
-  makeSqliteDb: MakeWebSqliteDb
+  makeSqliteDb: Effect.Success<ReturnType<typeof inMemorySqliteDbFactory>>
   syncOptions: SyncOptions | undefined
   syncPayloadEncoded: Schema.Json | undefined
   syncPayloadSchema: Schema.Top | undefined
@@ -251,20 +253,42 @@ const makeLeaderThread = ({
 
     const shutdownChannel = yield* makeShutdownChannel(storeId)
 
-    const dbEventlog = yield* Effect.acquireRelease(makeDb('eventlog'), (db) => Effect.sync(() => db.close()))
-    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+    const source = yield* Effect.acquireRelease(
+      Effect.gen(function* () {
+        const database = yield* makeDb('eventlog')
+        let held = true
+        // This permit belongs to the connection allocated above, before any SOURCE schema or STATE allocation.
+        const owner = yield* fromSyncSource(database, {
+          storageName: `memory-source-${nanoid()}`,
+          kind: 'new-memory-connection',
+          isHeld: () => held,
+        })
+        return {
+          ...owner,
+          close: owner.close.pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                held = false
+              }),
+            ),
+          ),
+        }
+      }),
+      (owner) => owner.close.pipe(Effect.orDie),
+    )
+    const initializedSource = yield* Eventlog.initializeSource(source)
     const dbState = yield* Effect.acquireRelease(makeDb('state'), (db) => Effect.sync(() => db.close()))
 
     const devtoolsOptions = yield* makeDevtoolsOptions({
       devtoolsEnabled,
       sharedWorker,
       dbState,
-      dbEventlog,
+      source,
       storeId,
       clientId,
     })
 
-    const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
+    const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(source))
     const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
       Layer.provide(sqliteDbLayer),
     )
@@ -289,7 +313,7 @@ const makeLeaderThread = ({
       const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
         yield* LeaderThreadCtx
 
-      const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
+      const initialLeaderHead = yield* Eventlog.getClientHeadFromDb(source.handle)
 
       const leaderThread = ClientSessionLeaderThreadProxy.of({
         events: {
@@ -297,10 +321,10 @@ const makeLeaderThread = ({
           push: syncProcessor.push,
           stream: (options) =>
             streamEventsWithSyncState({
-              dbEventlog,
+              dbEventlog: source,
               syncState: syncProcessor.syncState,
               options,
-            }),
+            }).pipe(Stream.mapError((cause) => new UnknownError({ cause }))),
         },
         initialState: {
           leaderHead: initialLeaderHead,
@@ -308,7 +332,14 @@ const makeLeaderThread = ({
           storageMode: 'in-memory',
         },
         export: exportSnapshot,
-        getEventlogData: Effect.sync(() => dbEventlog.export()),
+        getEventlogData: Effect.suspend(
+          () =>
+            source.image?.export.pipe(Effect.mapError((cause) => new UnknownError({ cause }))) ??
+            Effect.fail(new UnknownError({ cause: 'SOURCE image export unavailable' })),
+        ).pipe(
+          Effect.map((bytes) => Uint8Array.from(bytes)),
+          mapToAdapterError,
+        ),
         syncState: syncProcessor.syncState,
         sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
         networkStatus,
@@ -324,14 +355,14 @@ const makeDevtoolsOptions = ({
   devtoolsEnabled,
   sharedWorker,
   dbState,
-  dbEventlog,
+  source,
   storeId,
   clientId,
 }: {
   devtoolsEnabled: boolean
   sharedWorker: WebmeshWorkerProxy | undefined
   dbState: LeaderSqliteDb
-  dbEventlog: LeaderSqliteDb
+  source: SourceOwner
   storeId: string
   clientId: string
 }): Effect.Effect<DevtoolsOptions, UnknownError, Scope.Scope> =>
@@ -345,7 +376,7 @@ const makeDevtoolsOptions = ({
       boot: Effect.gen(function* () {
         const persistenceInfo = {
           state: dbState.metadata.persistenceInfo,
-          eventlog: dbEventlog.metadata.persistenceInfo,
+          eventlog: source.persistenceInfo ?? { fileName: source.storageName },
         }
 
         const node = yield* Webmesh.makeMeshNode(Devtools.makeNodeName.client.leader({ storeId, clientId }))

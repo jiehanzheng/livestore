@@ -1,5 +1,5 @@
-import { DurableObject } from 'cloudflare:workers'
 import type { AlarmInvocationInfo } from '@cloudflare/workers-types'
+import { DurableObject } from 'cloudflare:workers'
 
 import { type ClientDoWithRpcCallback, createStoreDoPromise } from '@livestore/adapter-cloudflare'
 import { nanoid, type Store } from '@livestore/livestore'
@@ -35,7 +35,7 @@ export class LiveStoreClientDO extends DurableObject<Env> implements ClientDoWit
     }
 
     const storeId = this.storeId!
-    const store = await createStoreDoPromise({
+    const store = await createStoreDoPromise<typeof schema, Env>({
       schema,
       storeId,
       clientId: 'client-do',

@@ -3,11 +3,13 @@ import { Context, Effect, Option, Semaphore } from '@livestore/utils/effect'
 import { nanoid } from '@livestore/utils/nanoid'
 
 import { MaterializeError, ProjectionMismatchError, SqliteError, type SqliteDb } from '../adapter-types.ts'
-import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import * as MaterializationJournal from '../MaterializationJournal.ts'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables } from '../schema/mod.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
-import * as SourceIdentity from '../SourceIdentity.ts'
+import * as SourceIdentity from '../source-db/identity.ts'
+import { sourceLifecycle } from '../source-db/lifecycle.ts'
+import { SourceContext, type SourceOwner } from '../source-db/owner.ts'
+import { SourceDbError } from '../source-db/role.ts'
 import * as StateHead from '../StateHead.ts'
 import * as StateSnapshot from '../StateSnapshot.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
@@ -79,26 +81,35 @@ export class LeaderPersistence extends Context.Service<LeaderPersistence, Servic
 export const make = ({ materializeEvent, schema }: { materializeEvent: MaterializeEvent; schema: LiveStoreSchema }) =>
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
-    const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-    if (dbState.transactionHost !== dbEventlog.transactionHost) {
+    const source = yield* SourceContext
+    if (
+      (source.persistence.kind === 'native-shared-host' && dbState.transactionHost !== source.persistence.host) ||
+      (source.persistence.kind === 'independent' && dbState.transactionHost !== undefined)
+    ) {
       return yield* Effect.die('SOURCE and STATE must share the same physical transaction host')
     }
     const materializationJournal = yield* MaterializationJournal.MaterializationJournal
     const stateHead = yield* StateHead.StateHead
-    const sourceIdentity = SourceIdentity.read(dbEventlog)
+    const sourceEpoch = source.handle[sourceLifecycle].epoch
+    const sourceIdentity = yield* SourceIdentity.read(source.handle)
     const projection = StateSnapshot.getProjectionIdentity(schema)
     const prior = StateSnapshot.readProvenance(dbState)
     if (
+      source.handle[sourceLifecycle].epoch !== sourceEpoch ||
+      source.handle[sourceLifecycle].phase !== 'open' ||
       prior === undefined ||
       prior.sourceIncarnation !== sourceIdentity.incarnation ||
       StateSnapshot.isSameProjection(prior.projection, projection) === false ||
-      EventSequenceNumber.Client.isEqual(StateHead.readFromDb(dbState), Eventlog.getClientHeadFromDb(dbEventlog)) ===
-        false
+      EventSequenceNumber.Client.isEqual(
+        StateHead.readFromDb(dbState),
+        yield* Eventlog.getClientHeadFromDb(source.handle),
+      ) === false
     ) {
       return yield* Effect.die('Leader persistence requires a completed source-bound projection')
     }
     const fence: PersistenceFence = {
       failed: false,
+      sourceEpoch,
       proofVersion: StateSnapshot.PROOF_VERSION,
       ownerId: nanoid(),
       transitionId: nanoid(),
@@ -106,8 +117,34 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
       projection,
     }
     // A new owner cannot inherit another process's admission/catch-up identity.
-    yield* Effect.sync(() => StateSnapshot.writeProvenance(dbState, fence))
+    yield* Effect.sync(() => StateSnapshot.writeProvenance(dbState, provenanceFor(fence)))
     const semaphore = yield* Semaphore.make(1)
+
+    const outsideNativeFrame =
+      (operation: string) =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        Effect.gen(function* () {
+          if (
+            source.persistence.kind === 'native-shared-host' &&
+            (yield* source.persistence.host.inTransaction) === true
+          ) {
+            fence.failed = true
+            // Reenter only to taint the borrowed frame: catching this refusal must not let its host commit.
+            return yield* source.persistence.host
+              .runTransaction(
+                Effect.fail(
+                  MaterializeError.make({
+                    cause: new SqliteError({ cause: 'Leader persistence requires its own outer native host boundary' }),
+                    note: operation,
+                  }),
+                ),
+              )
+              .pipe(
+                Effect.mapError((cause) => (cause instanceof SqliteError ? MaterializeError.make({ cause }) : cause)),
+              )
+          }
+          return yield* effect
+        })
 
     const materializeEvents = (
       events: ReadonlyArray<LiveStoreEvent.Client.Encoded>,
@@ -119,18 +156,24 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
             pulledEvents.find(({ event: pulledEvent }) =>
               EventSequenceNumber.Client.isEqual(event.seqNum, pulledEvent.seqNum),
             )?.syncMetadata ?? Option.none()
-          const { hash } = yield* materializeEvent(event, { syncMetadata })
+          const { hash } = yield* materializeEvent(event, { syncMetadata }).pipe(
+            Effect.mapError((cause) =>
+              cause instanceof SourceDbError ? MaterializeError.make({ cause: new SqliteError({ cause }) }) : cause,
+            ),
+          )
           return LiveStoreEvent.Client.MaterializerHash.make({ eventNum: event.seqNum, hash })
         }),
       )
 
     const persistLocal: Service['persistLocal'] = ({ events }) =>
       withCoordinatedTransactions(
-        { dbState, dbEventlog, fence },
+        { dbState, source, fence },
         Effect.gen(function* () {
           const materializerHashes = yield* materializeEvents(events)
           const persistedStateHead = yield* stateHead.get.pipe(
-            Effect.mapError((cause) => MaterializeError.make({ cause })),
+            Effect.mapError((cause) =>
+              MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+            ),
           )
 
           return {
@@ -142,6 +185,7 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
         }),
       ).pipe(
         semaphore.withPermits(1),
+        outsideNativeFrame('persistLocal'),
         Effect.withSpan('@livestore/common:LeaderPersistence:persistLocal', {
           attributes: { batchSize: events.length },
         }),
@@ -149,7 +193,7 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
 
     const persistUpstream: Service['persistUpstream'] = (plan) =>
       withCoordinatedTransactions(
-        { dbState, dbEventlog, fence },
+        { dbState, source, fence },
         Effect.gen(function* () {
           const rollbackEventNums = plan.rollbackEvents.map((event) => event.seqNum)
 
@@ -158,9 +202,17 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
             // in the eventlog. The replacement events can then be applied from the restored head.
             const headAfterRollback = plan.rollbackEvents[0]!.parentSeqNum
             yield* materializationJournal.rollback(rollbackEventNums)
-            yield* stateHead.set(headAfterRollback).pipe(Effect.mapError((cause) => MaterializeError.make({ cause })))
-            yield* Eventlog.deleteEvents(dbEventlog, rollbackEventNums).pipe(
-              Effect.mapError((cause) => MaterializeError.make({ cause })),
+            yield* stateHead
+              .set(headAfterRollback)
+              .pipe(
+                Effect.mapError((cause) =>
+                  MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+                ),
+              )
+            yield* Eventlog.deleteEvents(yield* SourceContext, rollbackEventNums).pipe(
+              Effect.mapError((cause) =>
+                MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+              ),
             )
           }
 
@@ -173,8 +225,10 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
                 isSameSequencePosition(event.seqNum, confirmedEvent.seqNum),
               ),
             )
-            yield* Eventlog.updateSyncMetadataForDb(dbEventlog, confirmedPulledEvents).pipe(
-              Effect.mapError((cause) => MaterializeError.make({ cause })),
+            yield* Eventlog.updateSyncMetadataForDb(yield* SourceContext, confirmedPulledEvents).pipe(
+              Effect.mapError((cause) =>
+                MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+              ),
             )
           }
 
@@ -182,10 +236,16 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
           yield* materializationJournal.discardUpTo(plan.backendHead)
 
           // The backend head and the corresponding event inserts share this eventlog transaction.
-          yield* updateBackendHead(dbEventlog, plan.backendHead)
+          yield* Eventlog.updateBackendHead(yield* SourceContext, plan.backendHead).pipe(
+            Effect.mapError((cause) =>
+              MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+            ),
+          )
 
           const persistedStateHead = yield* stateHead.get.pipe(
-            Effect.mapError((cause) => MaterializeError.make({ cause })),
+            Effect.mapError((cause) =>
+              MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+            ),
           )
 
           return {
@@ -199,6 +259,7 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
         }),
       ).pipe(
         semaphore.withPermits(1),
+        outsideNativeFrame('persistUpstream'),
         Effect.withSpan('@livestore/common:LeaderPersistence:persistUpstream', {
           attributes: {
             batchSize: plan.events.length,
@@ -208,19 +269,24 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
         }),
       )
 
-    const assertCompleted = () => {
-      if (
-        fence.failed === true ||
-        StateSnapshot.isEqual(StateSnapshot.readProvenance(dbState), fence) === false ||
-        SourceIdentity.read(dbEventlog).incarnation !== fence.sourceIncarnation ||
-        EventSequenceNumber.Client.isEqual(StateHead.readFromDb(dbState), Eventlog.getClientHeadFromDb(dbEventlog)) ===
-          false
-      ) {
-        throw new Error('Cannot export inconsistent leader state; reopen from the eventlog')
-      }
-    }
-    const exportSnapshot = Effect.sync(() => {
-      assertCompleted()
+    const assertCompleted = () =>
+      Effect.gen(function* () {
+        if (
+          isSourceCurrent(source, fence) === false ||
+          StateSnapshot.isEqual(StateSnapshot.readProvenance(dbState), fence) === false ||
+          (yield* SourceIdentity.read(source.handle)).incarnation !== fence.sourceIncarnation ||
+          EventSequenceNumber.Client.isEqual(
+            StateHead.readFromDb(dbState),
+            yield* Eventlog.getClientHeadFromDb(source.handle),
+          ) === false
+        ) {
+          throw new Error('Cannot export inconsistent leader state; reopen from the eventlog')
+        }
+        if (isSourceCurrent(source, fence) === false) throw new Error('SOURCE changed during snapshot validation')
+      })
+    // Native bootstrap may stage snapshot bytes inside its host frame; the adapter releases that bundle only after commit.
+    const exportSnapshot = Effect.gen(function* () {
+      yield* assertCompleted().pipe(Effect.orDie)
       return dbState.export()
     }).pipe(semaphore.withPermits(1))
     const admitSnapshot: Service['admitSnapshot'] = ({ expectedProjection, candidate }) =>
@@ -228,45 +294,45 @@ export const make = ({ materializeEvent, schema }: { materializeEvent: Materiali
         if (StateSnapshot.isSameProjection(expectedProjection, projection) === false) {
           return yield* ProjectionMismatchError.make({ expected: expectedProjection, actual: projection })
         }
+        yield* assertCompleted().pipe(Effect.orDie)
         return yield* Effect.sync(() => {
-          assertCompleted()
-          const { failed: _failed, ...provenance } = fence
+          const provenance = provenanceFor(fence)
           return StateSnapshot.isEqual(candidate, provenance) === true
             ? { _tag: 'Accepted' as const, provenance }
             : { _tag: 'StaleSnapshot' as const, provenance, snapshot: dbState.export() }
         })
       }).pipe(semaphore.withPermits(1))
 
-    const resetSource = Effect.gen(function* () {
+    const reset = Effect.gen(function* () {
       fence.failed = true
       // Invalidate this image before the source transaction; alternate caches mismatch the rotated incarnation.
       yield* executeStatement(dbState, `DELETE FROM ${SystemTables.REBUILD_META_TABLE}`)
-      const reset = Effect.gen(function* () {
-        yield* executeStatement(dbEventlog, `DELETE FROM ${SystemTables.EVENTLOG_META_TABLE}`)
-        yield* executeStatement(dbEventlog, `DELETE FROM ${SystemTables.SYNC_STATUS_TABLE}`)
-        yield* executeStatement(dbEventlog, `INSERT INTO ${SystemTables.SYNC_STATUS_TABLE} (head) VALUES (0)`)
-        yield* Effect.sync(() => SourceIdentity.rotateWithinTransaction(dbEventlog))
-      })
-      if (dbEventlog.transactionHost !== undefined) {
-        yield* dbEventlog.transactionHost
-          .runTransaction(reset)
-          .pipe(
-            Effect.mapError((error) =>
-              error instanceof SqliteError ? MaterializeError.make({ cause: error }) : error,
-            ),
-          )
-      } else {
-        yield* Effect.acquireUseRelease(
-          executeStatement(dbEventlog, 'BEGIN IMMEDIATE'),
-          () => reset.pipe(Effect.tap(() => executeStatement(dbEventlog, 'COMMIT'))),
-          (_, exit) => (exit._tag === 'Failure' ? executeStatement(dbEventlog, 'ROLLBACK') : Effect.void),
+      yield* source
+        .write((transaction) =>
+          Effect.gen(function* () {
+            yield* transaction.execute(`DELETE FROM ${SystemTables.EVENTLOG_META_TABLE}`)
+            yield* transaction.execute(`DELETE FROM ${SystemTables.SYNC_STATUS_TABLE}`)
+            yield* transaction.execute(`INSERT INTO ${SystemTables.SYNC_STATUS_TABLE} (head) VALUES (0)`)
+            yield* SourceIdentity.rotate(transaction)
+          }),
         )
-      }
+        .pipe(
+          Effect.mapError((cause) =>
+            MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
+          ),
+        )
       const tables = dbState.select<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
       )
       for (const { name } of tables) yield* executeStatement(dbState, `DROP TABLE "${name.replaceAll('"', '""')}"`)
-    }).pipe(semaphore.withPermits(1))
+    })
+    const resetSource = (
+      source.persistence.kind === 'native-shared-host' ? source.persistence.host.runTransaction(reset) : reset
+    ).pipe(
+      Effect.mapError((cause) => (cause instanceof SqliteError ? MaterializeError.make({ cause }) : cause)),
+      semaphore.withPermits(1),
+      outsideNativeFrame('resetSource'),
+    )
 
     return LeaderPersistence.of({
       [TypeId]: TypeId,
@@ -289,6 +355,8 @@ export const isSameSequencePosition = (
 
 type PersistenceFence = {
   failed: boolean
+  // Epoch belongs to this live owner; persisted projections must survive a fresh owner with a new lifecycle.
+  sourceEpoch: number
   proofVersion: typeof StateSnapshot.PROOF_VERSION
   ownerId: string
   transitionId: string
@@ -296,77 +364,107 @@ type PersistenceFence = {
   projection: StateSnapshot.ProjectionIdentity
 }
 
-const withCoordinatedTransactions = <A, E, R>(
-  { dbState, dbEventlog, fence }: { dbState: SqliteDb; dbEventlog: SqliteDb; fence: PersistenceFence },
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | MaterializeError, R> => {
-  const host = dbEventlog.transactionHost
+const provenanceFor = ({ failed: _failed, sourceEpoch: _sourceEpoch, ...provenance }: PersistenceFence) => provenance
+
+const isSourceCurrent = (source: SourceOwner, fence: PersistenceFence) =>
+  fence.failed === false &&
+  source.handle[sourceLifecycle].phase === 'open' &&
+  source.handle[sourceLifecycle].epoch === fence.sourceEpoch
+
+const withCoordinatedTransactions = <A, R>(
+  { dbState, source, fence }: { dbState: SqliteDb; source: SourceOwner; fence: PersistenceFence },
+  effect: Effect.Effect<A, PersistError, R>,
+): Effect.Effect<A, PersistError, Exclude<R, SourceContext>> => {
+  const host = source.persistence.kind === 'native-shared-host' ? source.persistence.host : undefined
   const sameHost = host === dbState.transactionHost
-  // These flags let cleanup roll back whichever transaction was actually opened or left behind by a failed commit.
   let stateTransactionOpen = false
-  let eventlogTransactionOpen = false
 
-  const rollbackOpenTransactions = Effect.gen(function* () {
-    if (eventlogTransactionOpen === true) {
-      yield* executeStatement(dbEventlog, 'ROLLBACK').pipe(Effect.ignore)
-      eventlogTransactionOpen = false
+  const rollbackState = Effect.suspend(() =>
+    stateTransactionOpen === true ? executeStatement(dbState, 'ROLLBACK').pipe(Effect.ignore) : Effect.void,
+  )
+  const assertCurrent = (attemptedTransitionId?: string): void => {
+    if (isSourceCurrent(source, fence) === true) return
+    const failure = new SqliteError({ cause: 'SOURCE changed during leader persistence; reopen before publication' })
+    if (attemptedTransitionId !== undefined) {
+      try {
+        // This attempted publication cannot leave a durable proof for bytes replaced before its linearization point.
+        const statement = `DELETE FROM ${SystemTables.REBUILD_META_TABLE} WHERE id = 1 AND transitionId = ?`
+        dbState.execute(statement, prepareBindValues([attemptedTransitionId], statement))
+      } catch (cleanup) {
+        throw new AggregateError(
+          [failure, cleanup],
+          'SOURCE changed and its attempted STATE proof could not be removed',
+          { cause: cleanup },
+        )
+      }
     }
-    if (stateTransactionOpen === true) {
-      yield* executeStatement(dbState, 'ROLLBACK').pipe(Effect.ignore)
-      stateTransactionOpen = false
-    }
+    throw failure
+  }
+  const requireCurrent = Effect.try({
+    try: () => assertCurrent(),
+    catch: (cause) => MaterializeError.make({ cause: new SqliteError({ cause }) }),
   })
-
+  const writeCompletion = Effect.try({
+    try: () => {
+      const transitionId = nanoid()
+      assertCurrent()
+      StateSnapshot.writeProvenance(dbState, { ...provenanceFor(fence), transitionId })
+      return transitionId
+    },
+    catch: (cause) => MaterializeError.make({ cause: new SqliteError({ cause }) }),
+  })
   const transaction = Effect.gen(function* () {
-    if (sameHost === false || fence.failed === true) {
+    if (sameHost === false || isSourceCurrent(source, fence) === false) {
       return yield* MaterializeError.make({
         cause: new SqliteError({ cause: 'Leader persistence is fenced until reopen' }),
       })
     }
-
-    // This autocommit is a write-ahead fence, not part of either transaction. A crash anywhere between
-    // invalidation and completion must rebuild derived state from the retained authoritative eventlog.
-    // Heads/counts cannot detect same-position rebases or confirmation-only journal changes.
+    // Invalidate before any transition. A crash must rebuild STATE from retained authoritative SOURCE.
     yield* executeStatement(dbState, `DELETE FROM ${SystemTables.REBUILD_META_TABLE}`)
-
-    yield* executeStatement(dbState, 'BEGIN TRANSACTION')
-    stateTransactionOpen = true
-    if (host === undefined) {
-      yield* executeStatement(dbEventlog, 'BEGIN TRANSACTION')
-      eventlogTransactionOpen = true
-    }
-
-    const result = yield* effect
-
-    // Independent database commits are not crash-atomic. Keep the durable fence absent until both succeed.
-    yield* executeStatement(dbState, 'COMMIT')
-    stateTransactionOpen = false
-    if (host === undefined) {
-      yield* executeStatement(dbEventlog, 'COMMIT')
-      eventlogTransactionOpen = false
-    }
-
-    const transitionId = nanoid()
-    yield* Effect.try({
-      try: () => StateSnapshot.writeProvenance(dbState, { ...fence, transitionId }),
-      catch: (cause) => MaterializeError.make({ cause: new SqliteError({ cause }) }),
-    })
+    const result = yield* source.write((transaction) =>
+      Effect.gen(function* () {
+        // Owner admission can wait behind an image replacement; validate the acquired generation before touching STATE.
+        yield* requireCurrent
+        yield* executeStatement(dbState, 'BEGIN TRANSACTION')
+        stateTransactionOpen = true
+        const scoped: SourceOwner = { ...source, handle: transaction, write: (use) => use(transaction) }
+        const result = yield* effect.pipe(Effect.provideService(SourceContext, scoped))
+        // Independent databases commit STATE first. SOURCE owns its commit and any truthful cleanup itself.
+        yield* requireCurrent
+        yield* executeStatement(dbState, 'COMMIT')
+        stateTransactionOpen = false
+        return result
+      }).pipe(Effect.ensuring(rollbackState)),
+    )
+    // An independent SOURCE commit has now settled; native work remains inside the shared host frame.
+    yield* requireCurrent
+    const transitionId = yield* writeCompletion
     return { result, transitionId }
-  }).pipe(Effect.ensuring(rollbackOpenTransactions))
+  })
   return (host === undefined ? transaction : host.runTransaction(transaction)).pipe(
-    Effect.mapError((error) => (error instanceof SqliteError ? MaterializeError.make({ cause: error }) : error)),
-    Effect.map(({ result, transitionId }) => {
-      // A host commit can fail after WASM COMMIT; publish memory only after the host confirms durability.
-      fence.transitionId = transitionId
-      return result
-    }),
-    // Even cleanup can have an ambiguous outcome. Never reuse this owner after a failed transition.
+    Effect.mapError((error) =>
+      error instanceof SourceDbError
+        ? MaterializeError.make({ cause: new SqliteError({ cause: error }) })
+        : error instanceof SqliteError
+          ? MaterializeError.make({ cause: error })
+          : error,
+    ),
+    Effect.flatMap(({ result, transitionId }) =>
+      Effect.try({
+        try: () => {
+          // Check and publish synchronously: an Effect scheduling boundary here could otherwise admit a replacement.
+          assertCurrent(transitionId)
+          fence.transitionId = transitionId
+          return result
+        },
+        catch: (cause) => MaterializeError.make({ cause: new SqliteError({ cause }) }),
+      }),
+    ),
     Effect.onExit((exit) =>
       Effect.sync(() => {
         if (exit._tag === 'Failure') fence.failed = true
       }),
     ),
-    // Do not allow cancellation between the two commits and the cleanup that follows a failure.
     Effect.uninterruptible,
   )
 }
@@ -378,15 +476,5 @@ const executeStatement = (db: SqliteDb, statement: string) =>
       MaterializeError.make({
         cause: new SqliteError({ cause, query: { sql: statement, bindValues: [] } }),
         note: `Leader sync transaction failed during ${statement}`,
-      }),
-  })
-
-const updateBackendHead = (dbEventlog: SqliteDb, head: EventSequenceNumber.Client.Composite) =>
-  Effect.try({
-    try: () => Eventlog.updateBackendHead(dbEventlog, head),
-    catch: (cause) =>
-      MaterializeError.make({
-        cause: new SqliteError({ cause }),
-        note: 'Failed to persist the leader sync backend head',
       }),
   })

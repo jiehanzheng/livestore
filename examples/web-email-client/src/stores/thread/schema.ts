@@ -117,4 +117,9 @@ export const materializers = State.SQLite.materializers(threadEvents, {
 
 const state = State.SQLite.makeState({ tables: threadTables, materializers })
 
-export const schema = makeSchema({ events: threadEvents, state, devtools: { alias: 'thread' } })
+export const schema = makeSchema({
+  events: threadEvents,
+  state,
+  projectionRevision: 'email-thread-v1',
+  devtools: { alias: 'thread' },
+})

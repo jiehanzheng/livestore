@@ -22,9 +22,11 @@ export const makeSqliteDb = <
 >({
   sqlite3,
   metadata,
+  onCreated,
 }: {
   sqlite3: SQLiteAPI
   metadata: TMetadata
+  onCreated?: (db: SqliteDb<TMetadata>) => void
 }): SqliteDb<TMetadata> => {
   const preparedStmts: PreparedStatement[] = []
   const { dbPointer } = metadata
@@ -272,6 +274,8 @@ export const makeSqliteDb = <
     },
   } satisfies SqliteDb<TMetadata>
 
+  // Ownership must be published before user configuration can fail.
+  onCreated?.(sqliteDb)
   metadata.configureDb(sqliteDb)
 
   return sqliteDb

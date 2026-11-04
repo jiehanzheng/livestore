@@ -59,7 +59,7 @@ export const connectDevtoolsToStore = Effect.fn('LSD.devtools.connectStoreToDevt
   const handledRequestIds = new Set<RequestId>()
 
   const sendToDevtools = (message: Devtools.ClientSession.MessageFromApp) =>
-    storeDevtoolsChannel.send(message).pipe(Effect.tapCauseLogPretty, Effect.runFork)
+    storeDevtoolsChannel.send(message).pipe(Effect.tapCauseLogPretty, Effect.runForkWith(services))
 
   const onMessage = (decodedMessage: Devtools.ClientSession.MessageToApp) => {
     // console.debug('@livestore/livestore:store:devtools:onMessage', decodedMessage)
@@ -84,7 +84,7 @@ export const connectDevtoolsToStore = Effect.fn('LSD.devtools.connectStoreToDevt
 
       // Signal the WebChannel to shut down; this causes the `listen` stream
       // to complete and allows the surrounding scoped fiber to exit.
-      storeDevtoolsChannel.shutdown.pipe(Effect.runFork)
+      storeDevtoolsChannel.shutdown.pipe(Effect.runForkWith(services))
       return
     }
 
@@ -299,7 +299,7 @@ export const connectDevtoolsToStore = Effect.fn('LSD.devtools.connectStoreToDevt
             }),
           )
 
-        send(store[StoreInternalsSymbol].syncProcessor.syncState.pipe(Effect.runSync))
+        send(store[StoreInternalsSymbol].syncProcessor.syncState.pipe(Effect.runSyncWith(services)))
 
         syncHeadClientSessionSubscriptions.set(
           subscriptionId,

@@ -38,6 +38,8 @@ export interface SqliteDb<TReq = any, TMetadata extends TReq = TReq> {
 
 export interface SqliteTransactionHost {
   readonly sourceNamespace: 'durable-object'
+  /** True only in this host's active owning callback fiber; inherited child contexts confer no ownership. */
+  readonly inTransaction: Effect.Effect<boolean>
   /** Resolves only after host commit and durability confirmation; failure must settle before returning. */
   runTransaction<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqliteError, R>
 }
@@ -56,6 +58,9 @@ export type MakeSqliteDb<
 >(
   input: TInput,
 ) => Effect.Effect<SqliteDb<TReq, Extract<TMetadata, { _tag: TInput['_tag'] }>>, SqliteError | UnknownError, R>
+
+/** Persistent state/source layers own disk databases; derived scratch construction needs only memory. */
+export type MakeInMemorySqliteDb = (input: { _tag: 'in-memory' }) => ReturnType<MakeSqliteDb>
 
 export interface PreparedStatement {
   execute(bindValues: PreparedBindValues | undefined, options?: { onRowsChanged?: (rowsChanged: number) => void }): void

@@ -699,7 +699,7 @@ export const makeMeshNode = <TName extends MeshNodeName>(
             yield* Effect.logDebug(`sending ping via channel ${channelKey}`)
             yield* channel.debugInfo.channel.send(msg(`channel ${channelKey}`) as any)
           }
-        }).pipe(Effect.provide(services), Effect.tapCauseLogPretty, Effect.runFork)
+        }).pipe(Effect.tapCauseLogPretty, Effect.runForkWith(services))
       },
       requestTopology: (timeoutMs = 1000) =>
         Effect.gen(function* () {
@@ -722,7 +722,7 @@ export const makeMeshNode = <TName extends MeshNodeName>(
           for (const [key, value] of item) {
             yield* Effect.logDebug(`  node '${key}' has edge to: ${Array.from(value.values()).join(', ')}`)
           }
-        }).pipe(Effect.provide(services), Effect.tapCauseLogPretty, Effect.runPromise),
+        }).pipe(Effect.tapCauseLogPretty, Effect.runPromiseWith(services)),
     }
 
     return {

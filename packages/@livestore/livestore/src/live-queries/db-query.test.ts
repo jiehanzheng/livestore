@@ -19,6 +19,7 @@ TODO write tests for:
 - optional and explicit `queriedTables` argument
 */
 
+// Trace children follow completion order: asynchronous SOURCE persistence lets shutdown finish pull before push.
 Vitest.describe('otel', () => {
   const mapAttributes = (attributes: otel.Attributes) => {
     return ReadonlyRecord.map(attributes, (val, key) => {

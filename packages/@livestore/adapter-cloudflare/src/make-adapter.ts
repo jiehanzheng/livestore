@@ -7,9 +7,7 @@ import {
   makeClientSession,
   MaterializationJournal,
   mapToAdapterError,
-  SourceIdentity,
   type SqliteDb,
-  type SqliteTransactionHost,
   toAdapterError,
   StateSqliteDb,
   type SyncOptions,
@@ -19,16 +17,22 @@ import {
 import type { CfTypes } from '@livestore/common-cf'
 import {
   type DevtoolsOptions,
-  Eventlog,
   LeaderThreadCtx,
   makeLeaderThreadLayer,
   streamEventsWithSyncState,
 } from '@livestore/common/leader-thread'
 import { getStateDbBaseName } from '@livestore/common/schema'
+import {
+  initializeSource,
+  makeHostedSource,
+  SourceEvents,
+  SourceIdentity,
+  type SourceOwner,
+} from '@livestore/common/source-db'
 import { LiveStoreEvent } from '@livestore/livestore'
 import { CF_SQL_VFS_REQUIRED_PRAGMAS, sqliteDbFactory } from '@livestore/sqlite-wasm/cf'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { Effect, FetchHttpClient, Layer, Queue, SubscriptionRef, WebChannel } from '@livestore/utils/effect'
+import { Effect, FetchHttpClient, Layer, Queue, SubscriptionRef, Stream, WebChannel } from '@livestore/utils/effect'
 
 import { makeSqliteDb as makeDoSqliteDb } from './make-sqlite-db.ts'
 import * as StateFiles from './state-files.ts'
@@ -61,37 +65,27 @@ export const makeAdapter =
 
       const devtoolsOptions = { enabled: false } as DevtoolsOptions
 
-      // Storage.sql also contains application/KV data; only retained SDK storage disproves a new source.
-      const sourceIsNew = yield* Effect.try({
-        try: () =>
-          !storage.sql
-            .exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
-            .toArray()
-            .some(
-              ({ name }) =>
-                name === 'eventlog' ||
-                name.startsWith('__livestore_') ||
-                name === 'vfs_pages' ||
-                name === 'vfs_files' ||
-                name === 'vfs_blocks',
-            ),
-        catch: toAdapterError,
-      })
       let stateToClose: SqliteDb | undefined
       const transactionHost = makeTransactionHost(storage, () => stateToClose?.close())
       const dbEventlog = yield* Effect.acquireRelease(
-        makeDoSqliteDb({
-          _tag: 'file',
-          db: storage.sql,
-          configureDb: () => {},
+        Effect.gen(function* () {
+          const native = yield* makeDoSqliteDb({
+            _tag: 'file',
+            db: storage.sql,
+            configureDb: () => {},
+          })
+          return yield* makeHostedSource(native, {
+            host: transactionHost,
+            storageName: native.metadata.persistenceInfo.fileName,
+            persistenceInfo: native.metadata.persistenceInfo,
+          })
         }),
-        (db) => Effect.sync(() => db.close()),
+        (owner) => owner.close.pipe(Effect.orDie),
       ).pipe(mapToAdapterError)
-      dbEventlog.transactionHost = transactionHost
-      let initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
+      let initializedSource = yield* initializeSource(dbEventlog)
       if (resetPersistence === true) {
-        yield* resetDurableObjectPersistence({ storage, storeId, dbEventlog, transactionHost })
-        initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
+        yield* resetDurableObjectPersistence({ storage, storeId, dbEventlog })
+        initializedSource = yield* initializeSource(dbEventlog)
       }
 
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
@@ -145,8 +139,7 @@ export const makeAdapter =
             const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
               yield* LeaderThreadCtx
 
-            const initialLeaderHead = Eventlog.getClientHeadFromDb(dbEventlog)
-            // const initialLeaderHead = EventSequenceNumber.ROOT
+            const initialLeaderHead = yield* SourceEvents.readClientHead(dbEventlog.handle)
 
             const leaderThread = ClientSessionLeaderThreadProxy.of(
               {
@@ -158,7 +151,7 @@ export const makeAdapter =
                       dbEventlog,
                       syncState: syncProcessor.syncState,
                       options,
-                    }),
+                    }).pipe(Stream.mapError(toAdapterError)),
                 },
                 initialState: {
                   leaderHead: initialLeaderHead,
@@ -166,7 +159,9 @@ export const makeAdapter =
                   storageMode: 'persisted',
                 },
                 export: exportSnapshot,
-                getEventlogData: Effect.sync(() => dbEventlog.export()),
+                getEventlogData: Effect.fail(
+                  new UnknownError({ cause: 'Native Durable Object SOURCE image export is unsupported' }),
+                ),
                 syncState: syncProcessor.syncState,
                 sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
                 networkStatus,
@@ -226,26 +221,26 @@ const resetDurableObjectPersistence = ({
   storage,
   storeId,
   dbEventlog,
-  transactionHost,
 }: {
   storage: CfTypes.DurableObjectStorage
   storeId: string
-  dbEventlog: SqliteDb
-  transactionHost: SqliteTransactionHost
+  dbEventlog: SourceOwner
 }) =>
-  transactionHost
-    .runTransaction(
-      Effect.try({
-        try: () => {
-          // Source was validated before this destructive option; identity rotation invalidates every old derived image.
-          safeSqlExec(storage, 'DELETE FROM vfs_pages')
-          safeSqlExec(storage, 'DELETE FROM __livestore_state_files')
-          dbEventlog.execute('DELETE FROM eventlog')
-          dbEventlog.execute('DELETE FROM __livestore_sync_status')
-          dbEventlog.execute('INSERT INTO __livestore_sync_status (head) VALUES (0)')
-          SourceIdentity.rotateWithinTransaction(dbEventlog)
-        },
-        catch: toAdapterError,
+  dbEventlog
+    .write((transaction) =>
+      Effect.gen(function* () {
+        // SOURCE validation precedes this option; all SDK namespace resets share the physical host transaction.
+        yield* Effect.try({
+          try: () => {
+            safeSqlExec(storage, 'DELETE FROM vfs_pages')
+            safeSqlExec(storage, 'DELETE FROM __livestore_state_files')
+          },
+          catch: toAdapterError,
+        })
+        yield* transaction.execute('DELETE FROM eventlog')
+        yield* transaction.execute('DELETE FROM __livestore_sync_status')
+        yield* transaction.execute('INSERT INTO __livestore_sync_status (head) VALUES (0)')
+        yield* SourceIdentity.rotate(transaction)
       }),
     )
     .pipe(Effect.withSpan('@livestore/adapter-cloudflare:resetPersistence', { attributes: { storeId } }))

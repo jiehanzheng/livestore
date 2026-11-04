@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { declaredCommands } from './qualification-policy.mjs'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const spec = JSON.parse(readFileSync(new URL('./tool-profile.json', import.meta.url)))
 const run = (command, args, cwd = root, capture = false) => {
@@ -40,6 +42,10 @@ for (let ancestor = path.dirname(profile); ; ancestor = path.dirname(ancestor)) 
 }
 mkdirSync(profile, { recursive: true })
 if (existsSync(path.join(profile, 'package.json')) === false) {
+  // The initial installer generates hashed launchers too, so it must use the declared pin.
+  const initialPnpmVersion = run('pnpm', ['--version'], profile, true)
+  if (initialPnpmVersion !== spec.pnpm)
+    throw new Error(`Initial pnpm ${spec.pnpm} is required; got ${initialPnpmVersion}`)
   // Bootstrap with an existing package manager before declaring the selected one: declaring it first
   // lets pnpm provision a global tool behind our back instead of the owned dependency below.
   writeFileSync(
@@ -113,16 +119,7 @@ const descriptor = {
   specSha256: createHash('sha256')
     .update(readFileSync(new URL('./tool-profile.json', import.meta.url)))
     .digest('hex'),
-  commands: {
-    pnpm: [pnpm],
-    genie: [path.join(profile, 'node_modules/@oven/bun-darwin-aarch64/bin/bun'), path.join(artifacts, 'genie.js')],
-    compiler: [path.join(bin, 'effect-tsgo'), 'tsc@7.0.2'],
-    lint: [
-      path.join(profile, 'node_modules/@oven/bun-darwin-aarch64/bin/bun'),
-      path.join(profile, 'node_modules/oxlint/bin/oxlint'),
-    ],
-    format: [path.join(bin, 'oxfmt')],
-  },
+  commands: declaredCommands(profile, spec.packages.typescript),
   environment: {
     GENIE_EXPORT_TYPE_PROOF_COMPILER: compiler,
     GENIE_TYPESCRIPT_API_SERVER: path.join(api, 'bin/typescript-api-server'),

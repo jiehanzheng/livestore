@@ -35,7 +35,7 @@
           "missedPipeableOpportunity": "warning",
           "schemaUnionOfLiterals": "warning",
           "anyUnknownInErrorContext": "warning",
-          "preferSchemaOverJson": "warning"
+          "globalJsonInEffect": "warning"
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"

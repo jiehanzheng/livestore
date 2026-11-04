@@ -7,6 +7,8 @@ import { Opfs, type WebError } from '@livestore/utils/effect/browser'
 import * as VFS from '@livestore/wa-sqlite/src/VFS.js'
 
 import { FacadeVFS } from '../../FacadeVFS.ts'
+import { decodeAccessHandlePoolHeaderStrict } from './opfs-sah-pool.ts'
+import { OpfsSourceAssociations } from './source-association.ts'
 
 const SECTOR_SIZE = 4096
 
@@ -82,10 +84,12 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   #availableAccessHandles = new Set<FileSystemSyncAccessHandle>()
 
   #mapIdToFile = new Map<number, { path: string; flags: number; accessHandle: FileSystemSyncAccessHandle }>()
+  readonly #sourceAssociations: OpfsSourceAssociations
+  readonly #retainedMaintenance: boolean
 
-  static create = Effect.fn(function* (name: string, directoryPath: string, module: any) {
+  static create = Effect.fn(function* (name: string, directoryPath: string, module: any, retainedMaintenance = false) {
     const services = yield* Effect.context<Opfs.Opfs | Scope.Scope>()
-    const vfs = new AccessHandlePoolVFS({ name, directoryPath, module, services })
+    const vfs = new AccessHandlePoolVFS({ name, directoryPath, module, services, retainedMaintenance })
     yield* Effect.promise(() => vfs.isReady())
     return vfs
   })
@@ -95,14 +99,18 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     directoryPath,
     module,
     services,
+    retainedMaintenance = false,
   }: {
     name: string
     directoryPath: string
     module: any
     services: Context.Context<Opfs.Opfs | Scope.Scope>
+    retainedMaintenance?: boolean
   }) {
     super(name, module)
     this.#directoryPath = directoryPath
+    this.#retainedMaintenance = retainedMaintenance
+    this.#sourceAssociations = new OpfsSourceAssociations(directoryPath)
     this.#services = services
   }
 
@@ -177,12 +185,14 @@ export class AccessHandlePoolVFS extends FacadeVFS {
       const name = zName as unknown
       const path = typeof name === 'string' && name !== '' ? this.#getPath(name) : Math.random().toString(36)
       let accessHandle = this.#mapPathToAccessHandle.get(path)
+      let created = false
       if (accessHandle == null && (flags & VFS.SQLITE_OPEN_CREATE) !== 0) {
         // File not found so try to create it.
         if (this.getSize() < this.getCapacity()) {
           // Choose an unassociated OPFS file from the pool.
           ;[accessHandle] = this.#availableAccessHandles.keys()
           yield* this.#setAssociatedPath(accessHandle!, path, flags)
+          created = true
         } else {
           // Out of unassociated files. This can be fixed by calling
           // addCapacity() from the application.
@@ -195,6 +205,13 @@ export class AccessHandlePoolVFS extends FacadeVFS {
       // a way to get the file resources.
       const file = { path, flags, accessHandle }
       this.#mapIdToFile.set(fileId, file)
+      if (created === true && path === '/eventlog.db') {
+        // #setAssociatedPath has flushed the reservation; an existing empty source never reaches this branch.
+        this.#sourceAssociations.record(
+          path,
+          () => this.#mapIdToFile.get(fileId) === file && this.#mapPathToAccessHandle.get(path) === file.accessHandle,
+        )
+      }
 
       pOutFlags.setInt32(0, flags, true)
       return VFS.SQLITE_OK
@@ -203,6 +220,10 @@ export class AccessHandlePoolVFS extends FacadeVFS {
       Effect.catchCause(() => Effect.succeed(VFS.SQLITE_CANTOPEN)),
       Effect.runSyncWith(this.#services),
     )
+  }
+
+  takeCreatedSourceAssociation(zName: string) {
+    return this.#sourceAssociations.take(this.#getPath(zName))
   }
 
   override jClose(fileId: number): number {
@@ -342,10 +363,14 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     return Effect.gen({ self: this }, function* () {
       if (this.#directoryHandle == null) {
         // All files are stored in a single directory.
-        this.#directoryHandle = yield* Opfs.getDirectoryHandleByPath(this.#directoryPath, { create: true })
+        this.#directoryHandle = yield* Opfs.getDirectoryHandleByPath(this.#directoryPath, {
+          create: this.#retainedMaintenance === false,
+        })
 
         yield* this.#acquireAccessHandles()
-        if (this.getCapacity() === 0) {
+        if (this.#retainedMaintenance === true && this.#mapPathToAccessHandle.has('/eventlog.db') === false)
+          return yield* Effect.die(new Error('Retained OPFS pool has no authoritative SOURCE'))
+        if (this.#retainedMaintenance === false && this.getCapacity() === 0) {
           yield* this.addCapacity(DEFAULT_CAPACITY)
         }
       }
@@ -450,6 +475,8 @@ export class AccessHandlePoolVFS extends FacadeVFS {
           Effect.gen({ self: this }, function* () {
             this.#mapAccessHandleToName.set(accessHandle, opfsFileName)
             if (path !== '') {
+              if (this.#retainedMaintenance === true && this.#mapPathToAccessHandle.has(path) === true)
+                return yield* Effect.die(new Error('Retained OPFS pool has duplicate associations'))
               this.#mapPathToAccessHandle.set(path, accessHandle)
             } else {
               this.#availableAccessHandles.add(accessHandle)
@@ -480,9 +507,15 @@ export class AccessHandlePoolVFS extends FacadeVFS {
    */
   #getAssociatedPath = Effect.fn((accessHandle: FileSystemSyncAccessHandle) =>
     Effect.gen({ self: this }, function* () {
-      // Read the path and digest of the path from the file.
-      const corpus = new Uint8Array(HEADER_CORPUS_SIZE)
       const opfs = yield* Opfs.Opfs
+      if (this.#retainedMaintenance === true) {
+        const header = new Uint8Array(HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE)
+        const read = yield* opfs.syncRead(accessHandle, header, { at: 0 })
+        const size = yield* opfs.syncGetSize(accessHandle)
+        return yield* Effect.sync(() => decodeAccessHandlePoolHeaderStrict(header.subarray(0, read), size))
+      }
+      // Ordinary bootstrap keeps its repair-on-open policy; maintenance must preserve rejected evidence.
+      const corpus = new Uint8Array(HEADER_CORPUS_SIZE)
       yield* opfs.syncRead(accessHandle, corpus, { at: 0 })
 
       // Delete files not expected to be present.

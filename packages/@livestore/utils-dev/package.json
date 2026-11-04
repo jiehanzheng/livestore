@@ -27,14 +27,15 @@
   "files": [
     "dist",
     "package.json",
-    "src"
+    "src",
+    "!**/*.tsbuildinfo"
   ],
   "scripts": {
     "test": "echo 'No tests for utils-dev'"
   },
   "dependencies": {
-    "@effect/opentelemetry": "4.1.0",
-    "@effect/vitest": "4.1.0",
+    "@effect/opentelemetry": "4.1.2",
+    "@effect/vitest": "4.1.2",
     "@iarna/toml": "3.0.0",
     "@livestore/utils": "workspace:^",
     "@opentelemetry/api": "1.9.0",
@@ -46,29 +47,29 @@
     "wrangler": "4.156.0"
   },
   "devDependencies": {
-    "@effect/opentelemetry": "4.1.0",
-    "@effect/platform-browser": "4.1.0",
-    "@effect/platform-bun": "4.1.0",
-    "@effect/platform-node": "4.1.0",
-    "@effect/platform-node-shared": "4.1.0",
-    "@effect/vitest": "4.1.0",
+    "@effect/opentelemetry": "4.1.2",
+    "@effect/platform-browser": "4.1.2",
+    "@effect/platform-bun": "4.1.2",
+    "@effect/platform-node": "4.1.2",
+    "@effect/platform-node-shared": "4.1.2",
+    "@effect/vitest": "4.1.2",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/resources": "2.2.0",
     "@standard-schema/spec": "1.1.0",
-    "effect": "4.1.0",
+    "effect": "4.1.2",
     "vitest": "5.0.5"
   },
   "peerDependencies": {
-    "@effect/opentelemetry": "^4.1.0",
-    "@effect/platform-browser": "^4.1.0",
-    "@effect/platform-bun": "^4.1.0",
-    "@effect/platform-node": "^4.1.0",
-    "@effect/platform-node-shared": "^4.1.0",
-    "@effect/vitest": "^4.1.0",
+    "@effect/opentelemetry": "^4.1.2",
+    "@effect/platform-browser": "^4.1.2",
+    "@effect/platform-bun": "^4.1.2",
+    "@effect/platform-node": "^4.1.2",
+    "@effect/platform-node-shared": "^4.1.2",
+    "@effect/vitest": "^4.1.2",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/resources": "^2.2.0",
     "@standard-schema/spec": "^1.1.0",
-    "effect": "^4.1.0"
+    "effect": "^4.1.2"
   },
   "publishConfig": {
     "access": "public",

@@ -35,6 +35,10 @@ export default packageJson(
     ...livestorePackageDefaults,
     exports: {
       '.': './src/index.ts',
+      './source-db': './src/source-db/mod.ts',
+      './source-db/internal': './src/source-db/freshness.ts',
+      './source-maintenance': './src/source-maintenance/mod.ts',
+      './source-maintenance/internal': './src/source-maintenance/internal.ts',
       './sql-queries': './src/sql-queries/index.ts',
       './leader-thread': './src/leader-thread/mod.ts',
       './schema': './src/schema/mod.ts',
@@ -47,6 +51,10 @@ export default packageJson(
       access: 'public',
       exports: {
         '.': './dist/index.js',
+        './source-db': './dist/source-db/mod.js',
+        './source-db/internal': './dist/source-db/freshness.js',
+        './source-maintenance': './dist/source-maintenance/mod.js',
+        './source-maintenance/internal': './dist/source-maintenance/internal.js',
         './sql-queries': './dist/sql-queries/index.js',
         './leader-thread': './dist/leader-thread/mod.js',
         './schema': './dist/schema/mod.js',

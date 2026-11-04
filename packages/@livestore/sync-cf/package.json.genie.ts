@@ -2,6 +2,7 @@ import {
   catalog,
   getUtilsPeerDeps,
   livestorePackageDefaults,
+  livestorePackageFiles,
   packageJson,
   utilsEffectPeerDeps,
   workspaceMember,
@@ -35,7 +36,7 @@ export default packageJson(
       './common': './src/common/mod.ts',
       './cf-worker': './src/cf-worker/mod.ts',
     },
-    files: [...livestorePackageDefaults.files, 'README.md'],
+    files: livestorePackageFiles('README.md'),
     publishConfig: {
       access: 'public',
       exports: {

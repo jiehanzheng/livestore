@@ -102,6 +102,11 @@ const {
   ...baseTsconfigCompilerOptionsWithoutDefaults
 } = effectUtilsBaseTsconfigCompilerOptions
 
+// tsgo 0.64 renamed this same inside-Effect JSON check. Preserve its inherited
+// severity and coverage without patching the pinned effect-utils source.
+const { preferSchemaOverJson: effectJsonSeverity, ...effectDiagnosticSeverity } =
+  effectUtilsBaseTsconfigCompilerOptions.plugins[0].diagnosticSeverity
+
 // Astro's language-service host changes module defaults; retain explicit NodeNext resolution for SDK package exports.
 const baseTsconfigCompilerOptions = {
   ...baseTsconfigCompilerOptionsWithoutDefaults,
@@ -113,6 +118,7 @@ const baseTsconfigCompilerOptions = {
   plugins: [
     {
       ...effectUtilsBaseTsconfigCompilerOptions.plugins[0],
+      diagnosticSeverity: { ...effectDiagnosticSeverity, globalJsonInEffect: effectJsonSeverity },
       allowedDuplicatedPackages: ['@livestore/utils'],
     },
   ],
@@ -190,6 +196,7 @@ const effectUnstableApiPolicy = {
   },
   'packages/@livestore/sqlite-wasm': {
     runtime: ['effect/FileSystem#FileSystem'],
+    tests: ['@effect/platform-node/NodeFileSystem#layer'],
   },
   'packages/@livestore/sync-cf': {
     runtime: ['effect/rpc', 'effect/http', 'effect/socket', 'effect/observability/Otlp#layerJson'],
@@ -332,6 +339,20 @@ const releaseVersion = repo.readJson<{
   readonly version: string
 }>('release/version.json')
 
+const forkToolProfile = repo.readJson<{ readonly packages: { readonly '@effect/tsgo': string } }>(
+  'scripts/fork-qualification/tool-profile.json',
+)
+export const forkEffectTsgoVersion = forkToolProfile.packages['@effect/tsgo']
+
+// Qualifying the reviewed latest compiler also resolves its exact official
+// native packages. Keep pnpm's freshness exceptions versioned and reproducible.
+export const forkCompilerMinimumReleaseAgeExclude = [
+  '@effect/tsgo',
+  ...['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-arm', 'linux-x64', 'win32-arm64', 'win32-x64'].map(
+    (variant) => `@effect/tsgo-${variant}`,
+  ),
+].map((name) => `${name}@${forkEffectTsgoVersion}`)
+
 /** Composed catalog - effect-utils base + Effect v4 + livestore-specific + workspace packages */
 export const catalog = defineCatalog({
   ...effectUtilsCatalog,
@@ -411,13 +432,25 @@ export const repoPackageExtensions = {
 // Package Config Exports
 // =============================================================================
 
+/** Incremental compiler caches remain private build evidence, never consumer assets. */
+export const livestorePackageBuildCacheExclusions = ['!**/*.tsbuildinfo']
+
+export const livestorePackageFiles = (...extraFiles: string[]) => [
+  'dist',
+  'package.json',
+  'src',
+  ...extraFiles,
+  // Packlist patterns are ordered: later inclusions can otherwise reinclude caches.
+  ...livestorePackageBuildCacheExclusions,
+]
+
 /** Common fields for published @livestore packages */
 export const livestorePackageDefaults = {
   version: process.env.LIVESTORE_RELEASE_VERSION ?? releaseVersion.version,
   type: 'module' as const,
   sideEffects: false as const,
   license: 'Apache-2.0' as const,
-  files: ['dist', 'package.json', 'src'],
+  files: livestorePackageFiles(),
   repository: { type: 'git', url: 'git+https://github.com/livestorejs/livestore.git' },
 }
 

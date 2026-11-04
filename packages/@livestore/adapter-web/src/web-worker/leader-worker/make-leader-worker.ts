@@ -3,7 +3,7 @@ import type * as otel from '@opentelemetry/api'
 import { mapToAdapterError } from '@livestore/common'
 import type { BootStatus, BootWarningReason, LogConfig, SqliteDb, SyncOptions } from '@livestore/common'
 import { MaterializationJournal } from '@livestore/common'
-import { Devtools, EventlogSqliteDb, StateHead, StateSqliteDb, type UnknownError } from '@livestore/common'
+import { Devtools, EventlogSqliteDb, StateHead, StateSqliteDb, UnknownError } from '@livestore/common'
 import type { DevtoolsOptions, StreamEventsOptions } from '@livestore/common/leader-thread'
 import {
   configureConnection,
@@ -13,6 +13,7 @@ import {
   streamEventsWithSyncState,
 } from '@livestore/common/leader-thread'
 import { LiveStoreEvent, type LiveStoreSchema } from '@livestore/common/schema'
+import { fromSyncSource, type SourceOwner } from '@livestore/common/source-db'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { isDevEnv, LS_DEV } from '@livestore/utils'
@@ -28,7 +29,7 @@ import {
   RpcSerialization,
   RpcServer,
   RpcWorker,
-  Schema,
+  type Schema,
   Scope,
   Stream,
   TaskTracing,
@@ -36,15 +37,20 @@ import {
 import { BrowserWorkerRunner, Opfs, WebError } from '@livestore/utils/effect/browser'
 import * as WebmeshWorker from '@livestore/webmesh/worker'
 
+import { checkOpfsAvailability } from '../common/browser-environment.ts'
 import {
   cleanupOldStateDbFiles,
   discoverPersistedSource,
   getStateDbFileName,
   sanitizeOpfsDir,
 } from '../common/persisted-sqlite.ts'
+import { withPhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
 import { makeShutdownChannel } from '../common/shutdown-channel.ts'
+import { acquireSourceNamespace } from '../common/source-namespace.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
 import { closeSqliteDb } from './close-sqlite-db.ts'
+import { makeDevtoolsOptions } from './devtools-options.ts'
+import { makeMessagePortRpcServerProtocol } from './message-port-rpc-protocol.ts'
 
 export type WorkerOptions = {
   /**
@@ -119,90 +125,33 @@ const makeWorkerRunnerOuter = Effect.fn('@livestore/adapter-web:worker:wrapper:I
   // Port coming from client session and forwarded via the shared worker.
   const {
     port: incomingRequestsPort,
+    lifetimePort,
     storeId,
     clientId,
   } = yield* RpcWorker.initialMessage(WorkerSchema.LeaderWorkerOuterInitialMessage.payloadSchema)
 
-  return yield* RpcServer.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
-    Effect.provide(
-      Layer.provideMerge(makeWorkerRunnerInner(workerOptions), makeMessagePortRpcServerProtocol(incomingRequestsPort)),
-    ),
-    Effect.withSpan('@livestore/adapter-web:worker:wrapper:InitialMessage:innerFiber'),
-    Effect.tapCauseLogPretty,
-    Effect.provide(
-      Layer.mergeAll(
-        Opfs.layer,
-        WebmeshWorker.CacheService.layer({
-          nodeName: Devtools.makeNodeName.client.leader({ storeId, clientId }),
-        }),
+  return yield* withPhysicalWorkerLifetime(
+    lifetimePort,
+    RpcServer.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          makeWorkerRunnerInner(workerOptions),
+          makeMessagePortRpcServerProtocol(incomingRequestsPort),
+        ),
+      ),
+      Effect.withSpan('@livestore/adapter-web:worker:wrapper:InitialMessage:innerFiber'),
+      Effect.tapCauseLogPretty,
+      Effect.provide(
+        Layer.mergeAll(
+          Opfs.layer,
+          WebmeshWorker.CacheService.layer({
+            nodeName: Devtools.makeNodeName.client.leader({ storeId, clientId }),
+          }),
+        ),
       ),
     ),
   )
 })
-
-const makeMessagePortRpcServerProtocol = (port: MessagePort): Layer.Layer<RpcServer.Protocol> =>
-  Layer.effect(
-    RpcServer.Protocol,
-    Effect.gen(function* () {
-      const disconnects = yield* Queue.unbounded<number>()
-      const initialMessage = yield* Deferred.make<unknown>()
-      const closed = yield* Deferred.make<void>()
-      const clientIds = new Set<number>()
-
-      return RpcServer.Protocol.of({
-        disconnects,
-        send: (_clientId, response, transferables) =>
-          Effect.sync(() => port.postMessage([1, response], { transfer: (transferables ?? []) as Transferable[] })),
-        end: () => Effect.void,
-        clientIds: Effect.succeed(clientIds),
-        initialMessage: Effect.asSome(Deferred.await(initialMessage)),
-        supportsAck: true,
-        supportsTransferables: true,
-        supportsSpanPropagation: true,
-        supportsNotifications: true,
-        codecFor: RpcSerialization.json.codecFor,
-        run: (writeRequest) =>
-          Effect.gen(function* () {
-            const context = yield* Effect.context<never>()
-            const runFork = Effect.runForkWith(context)
-            const onMessage = (event: MessageEvent) => {
-              const message = event.data as readonly [0 | 1, unknown?]
-              if (message[0] === 1) {
-                runFork(
-                  Effect.gen(function* () {
-                    yield* Queue.offer(disconnects, 0)
-                    yield* Deferred.succeed(closed, undefined)
-                  }),
-                )
-                return
-              }
-
-              const request = message[1] as { readonly _tag?: string; readonly value?: unknown }
-              clientIds.add(0)
-              if (request._tag === 'InitialMessage') {
-                runFork(Deferred.succeed(initialMessage, request.value))
-              } else {
-                runFork(writeRequest(0, request as never))
-              }
-            }
-
-            port.addEventListener('message', onMessage)
-            port.start()
-            port.postMessage([0])
-
-            return yield* Deferred.await(closed).pipe(
-              Effect.andThen(Effect.interrupt),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  port.removeEventListener('message', onMessage)
-                  port.close()
-                }),
-              ),
-            )
-          }),
-      })
-    }),
-  )
 
 const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }: WorkerOptions) =>
   WorkerSchema.LeaderWorkerInnerRpcs.toLayer(
@@ -216,7 +165,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
             yield* RpcWorker.initialMessage(WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema)
 
           const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
-          const makeSqliteDb = sqliteDbFactory({ sqlite3 })
+          const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
           const services = yield* Effect.context()
 
           // Check OPFS availability and determine storage mode
@@ -235,13 +184,24 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
 
           const opfsDirectory = useOpfs === true ? yield* sanitizeOpfsDir(storageOptions.directory, storeId) : undefined
 
-          const { sourceIsNew } =
-            useOpfs === true ? yield* discoverPersistedSource({ storageOptions, storeId }) : { sourceIsNew: true }
+          const namespace =
+            useOpfs === true
+              ? yield* acquireSourceNamespace({ directory: opfsDirectory!, closePhysicalOwner: makeSqliteDb.close })
+              : undefined
+          const discovery =
+            namespace === undefined ? undefined : yield* discoverPersistedSource({ storageOptions, storeId, namespace })
+
+          let sourceOwner: SourceOwner | undefined
+          const releaseSource = (database: SqliteDb) =>
+            sourceOwner === undefined ? closeSqliteDb(database) : sourceOwner.close.pipe(Effect.orDie)
 
           const makeOpfsDb = (kind: 'state' | 'eventlog') =>
             Effect.acquireRelease(
               makeSqliteDb({
                 _tag: 'opfs',
+                ...(kind === 'eventlog' && discovery?.inventory !== undefined
+                  ? { sourceInventory: discovery.inventory }
+                  : {}),
                 opfsDirectory: opfsDirectory!,
                 fileName: kind === 'state' ? getStateDbFileName(schema) : 'eventlog.db',
                 configureDb: (db) =>
@@ -254,21 +214,31 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
                     foreignKeys: true,
                   }).pipe(Effect.runSyncWith(services)),
               }),
-              closeSqliteDb,
+              (database) => (kind === 'eventlog' ? releaseSource(database) : closeSqliteDb(database)),
             )
 
-          const makeInMemoryDb = () =>
+          const makeInMemoryDb = (isSource = false) =>
             Effect.acquireRelease(
               makeSqliteDb({
                 _tag: 'in-memory',
                 configureDb: (db) => configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
               }),
-              closeSqliteDb,
+              (database) => (isSource === true ? releaseSource(database) : closeSqliteDb(database)),
             )
 
           // Validate authoritative source before opening any derived database.
-          const dbEventlog = yield* useOpfs === true ? makeOpfsDb('eventlog') : makeInMemoryDb()
-          const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
+          const nativeSource = yield* useOpfs === true ? makeOpfsDb('eventlog') : makeInMemoryDb(true)
+          const creation =
+            nativeSource.metadata._tag === 'opfs'
+              ? nativeSource.metadata.sourceCreation
+              : {
+                  kind: 'new-memory-connection' as const,
+                  storageName: nativeSource.metadata.persistenceInfo.fileName,
+                  isHeld: () => true,
+                }
+          const dbEventlog = yield* fromSyncSource(nativeSource, creation, namespace?.isHeld)
+          sourceOwner = dbEventlog
+          const initializedSource = yield* Eventlog.initializeSource(dbEventlog)
           const dbState = yield* useOpfs === true ? makeOpfsDb('state') : makeInMemoryDb()
 
           // Clean up old state database files after successful database creation
@@ -281,7 +251,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
             })
           }
 
-          const devtoolsOptions = yield* makeDevtoolsOptions({ devtoolsEnabled, dbState, dbEventlog })
+          const devtoolsOptions = yield* makeDevtoolsOptions({ devtoolsEnabled, dbState, dbEventlog: nativeSource })
           const shutdownChannel = yield* makeShutdownChannel(storeId)
           const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
           const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
@@ -373,7 +343,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
               dbEventlog,
               syncState: syncProcessor.syncState,
               options: options as StreamEventsOptions,
-            })
+            }).pipe(Stream.mapError((cause) => UnknownError.make({ cause })))
           }).pipe(provideLeaderThread, Stream.unwrap, Stream.withSpan('@livestore/adapter-web:worker:StreamEvents')),
         Export: () =>
           LeaderThreadCtx.pipe(
@@ -383,7 +353,14 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
           ),
         ExportEventlog: () =>
           EventlogSqliteDb.EventlogSqliteDb.pipe(
-            Effect.flatMap((dbEventlog) => Effect.sync(() => dbEventlog.export())),
+            Effect.flatMap((dbEventlog) =>
+              dbEventlog.image === undefined
+                ? Effect.die(new Error('SOURCE image export is unsupported by this provider'))
+                : dbEventlog.image.export.pipe(
+                    Effect.map((bytes) => new Uint8Array(bytes)),
+                    UnknownError.mapToUnknownError,
+                  ),
+            ),
             provideLeaderThread,
             Effect.withSpan('@livestore/adapter-web:worker:ExportEventlog'),
           ),
@@ -396,7 +373,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
         GetLeaderHead: () =>
           Effect.gen(function* () {
             const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-            return Eventlog.getClientHeadFromDb(dbEventlog)
+            return yield* Eventlog.getClientHeadFromDb(dbEventlog.handle).pipe(UnknownError.mapToUnknownError)
           }).pipe(provideLeaderThread),
         GetLeaderSyncState: () =>
           Effect.gen(function* () {
@@ -436,58 +413,3 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
       })
     }),
   )
-
-const makeDevtoolsOptions = ({
-  devtoolsEnabled,
-  dbState,
-  dbEventlog,
-}: {
-  devtoolsEnabled: boolean
-  dbState: SqliteDb
-  dbEventlog: SqliteDb
-}): Effect.Effect<DevtoolsOptions, UnknownError, Scope.Scope | WebmeshWorker.CacheService> =>
-  Effect.gen(function* () {
-    if (devtoolsEnabled === false) {
-      return { enabled: false }
-    }
-
-    const { node } = yield* WebmeshWorker.CacheService
-
-    return {
-      enabled: true,
-      boot: Effect.succeed({
-        node,
-        persistenceInfo: {
-          state: dbState.metadata.persistenceInfo,
-          eventlog: dbEventlog.metadata.persistenceInfo,
-        },
-        mode: 'direct' as const,
-      }),
-    }
-  })
-
-/**
- * Attempts to access OPFS and returns a warning if unavailable.
- *
- * Common failure scenarios:
- * - Safari/Firefox private browsing: SecurityError or NotAllowedError
- * - Permission denied: NotAllowedError
- * - Quota exceeded: QuotaExceededError
- */
-const checkOpfsAvailability = Effect.gen(function* () {
-  const opfs = yield* Opfs.Opfs
-  return yield* opfs.getRootDirectoryHandle.pipe(
-    Effect.as(undefined),
-    Effect.catch((error) => {
-      const reason: BootWarningReason =
-        Schema.is(WebError.SecurityError)(error) === true || Schema.is(WebError.NotAllowedError)(error) === true
-          ? 'private-browsing'
-          : 'storage-unavailable'
-      const message =
-        reason === 'private-browsing'
-          ? 'Storage unavailable in private browsing mode. LiveStore will continue without persistence.'
-          : 'Storage access denied. LiveStore will continue without persistence.'
-      return Effect.succeed({ reason, message } as const)
-    }),
-  )
-})

@@ -22,6 +22,10 @@
     ".": "./src/index.ts",
     "./leader-thread": "./src/leader-thread/mod.ts",
     "./schema": "./src/schema/mod.ts",
+    "./source-db": "./src/source-db/mod.ts",
+    "./source-db/internal": "./src/source-db/freshness.ts",
+    "./source-maintenance": "./src/source-maintenance/mod.ts",
+    "./source-maintenance/internal": "./src/source-maintenance/internal.ts",
     "./sql-queries": "./src/sql-queries/index.ts",
     "./sync": "./src/sync/index.ts",
     "./sync/next": "./src/sync/next/mod.ts",
@@ -31,7 +35,8 @@
   "files": [
     "dist",
     "package.json",
-    "src"
+    "src",
+    "!**/*.tsbuildinfo"
   ],
   "scripts": {
     "test": "vitest"
@@ -43,35 +48,39 @@
     "@opentelemetry/api": "1.9.0"
   },
   "devDependencies": {
-    "@effect/opentelemetry": "4.1.0",
-    "@effect/platform-browser": "4.1.0",
-    "@effect/platform-bun": "4.1.0",
-    "@effect/platform-node": "4.1.0",
-    "@effect/platform-node-shared": "4.1.0",
-    "@effect/vitest": "4.1.0",
+    "@effect/opentelemetry": "4.1.2",
+    "@effect/platform-browser": "4.1.2",
+    "@effect/platform-bun": "4.1.2",
+    "@effect/platform-node": "4.1.2",
+    "@effect/platform-node-shared": "4.1.2",
+    "@effect/vitest": "4.1.2",
     "@livestore/utils-dev": "workspace:^",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/resources": "2.2.0",
     "@standard-schema/spec": "1.1.0",
-    "effect": "4.1.0",
+    "effect": "4.1.2",
     "vitest": "5.0.5"
   },
   "peerDependencies": {
-    "@effect/opentelemetry": "^4.1.0",
-    "@effect/platform-browser": "^4.1.0",
-    "@effect/platform-bun": "^4.1.0",
-    "@effect/platform-node": "^4.1.0",
-    "@effect/platform-node-shared": "^4.1.0",
-    "@effect/vitest": "^4.1.0",
+    "@effect/opentelemetry": "^4.1.2",
+    "@effect/platform-browser": "^4.1.2",
+    "@effect/platform-bun": "^4.1.2",
+    "@effect/platform-node": "^4.1.2",
+    "@effect/platform-node-shared": "^4.1.2",
+    "@effect/vitest": "^4.1.2",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/resources": "^2.2.0",
     "@standard-schema/spec": "^1.1.0",
-    "effect": "^4.1.0"
+    "effect": "^4.1.2"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
       ".": "./dist/index.js",
+      "./source-db": "./dist/source-db/mod.js",
+      "./source-db/internal": "./dist/source-db/freshness.js",
+      "./source-maintenance": "./dist/source-maintenance/mod.js",
+      "./source-maintenance/internal": "./dist/source-maintenance/internal.js",
       "./sql-queries": "./dist/sql-queries/index.js",
       "./leader-thread": "./dist/leader-thread/mod.js",
       "./schema": "./dist/schema/mod.js",

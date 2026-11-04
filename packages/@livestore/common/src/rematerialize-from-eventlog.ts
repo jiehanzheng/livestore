@@ -1,18 +1,15 @@
 import { memoizeByRef } from '@livestore/utils'
-import { Effect, Option, ReadonlyArray as EffectArray, Schema, Stream } from '@livestore/utils/effect'
+import { Effect, Option, Schema, Stream } from '@livestore/utils/effect'
 
 import { type SqliteDb, UnknownError } from './adapter-types.ts'
 import * as EventlogSqliteDb from './EventlogSqliteDb.ts'
 import type { MaterializeEvent } from './leader-thread/mod.ts'
 import { STATE_REBUILD_BATCH_SIZE_DEFAULT, StateRebuildBatchSizeSchema } from './leader-thread/types.ts'
 import type { EventDef, LiveStoreSchema } from './schema/mod.ts'
-import { EventSequenceNumber, LiveStoreEvent, SystemTables } from './schema/mod.ts'
+import { EventSequenceNumber, SystemTables } from './schema/mod.ts'
+import { readPage } from './source-db/events.ts'
+import type { StoredEvent } from './source-db/rows.ts'
 import { withSavepoint } from './sqlite-db-helper.ts'
-import type { PreparedBindValues } from './util.ts'
-import { sql } from './util.ts'
-
-/** Parse JSON string to unknown value */
-const jsonParse = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))
 
 export const rematerializeFromEventlog = Effect.fn('@livestore/common:rematerializeFromEventlog')(function* ({
   // TODO re-use this db when bringing back the boot in-memory db implementation
@@ -36,35 +33,19 @@ export const rematerializeFromEventlog = Effect.fn('@livestore/common:rematerial
   }
 
   const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-  const eventsCount = dbEventlog.select<{ count: number }>(
+  const eventsCount = (yield* dbEventlog.handle.select<{ count: number }>(
     `SELECT COUNT(*) AS count FROM ${SystemTables.EVENTLOG_META_TABLE}`,
-  )[0]!.count
+  ))[0]!.count
 
   const hashEventDef = memoizeByRef((event: EventDef.AnyWithoutFn) => Schema.hash(event.schema))
 
   const processEvent = Effect.fn(`@livestore/common:rematerializeFromEventlog:processEvent`)(function* (
-    row: SystemTables.EventlogMetaRow,
+    row: StoredEvent,
   ) {
-    const args = jsonParse(row.argsJson)
-    const eventEncoded = LiveStoreEvent.Client.Encoded.make({
-      name: row.name,
-      args,
-      seqNum: {
-        global: row.seqNumGlobal,
-        client: row.seqNumClient,
-        rebaseGeneration: row.seqNumRebaseGeneration,
-      },
-      parentSeqNum: {
-        global: row.parentSeqNumGlobal,
-        client: row.parentSeqNumClient,
-        rebaseGeneration: row.parentSeqNumRebaseGeneration,
-      },
-      clientId: row.clientId,
-      sessionId: row.sessionId,
-    })
-
-    const eventDef = schema.eventsDefsMap.get(row.name)
-    const materializer = schema.state.materializers.get(row.name)
+    const eventEncoded = row.event
+    const args = eventEncoded.args
+    const eventDef = schema.eventsDefsMap.get(eventEncoded.name)
+    const materializer = schema.state.materializers.get(eventEncoded.name)
 
     if (eventDef === undefined || materializer === undefined) {
       // Route unknown events through the normal materialization boundary so
@@ -75,7 +56,7 @@ export const rematerializeFromEventlog = Effect.fn('@livestore/common:rematerial
 
     if (hashEventDef(eventDef) !== row.schemaHash) {
       yield* Effect.logWarning(
-        `Schema hash mismatch for event definition ${row.name}. Trying to materialize event anyway.`,
+        `Schema hash mismatch for event definition ${eventEncoded.name}. Trying to materialize event anyway.`,
       )
     }
 
@@ -86,7 +67,7 @@ export const rematerializeFromEventlog = Effect.fn('@livestore/common:rematerial
           cause,
           note: `\
 There was an error during rematerializing from the eventlog while decoding
-the persisted event args for event definition "${row.name}".
+the persisted event args for event definition "${eventEncoded.name}".
 This likely means the schema has changed in an incompatible way.
 `,
         }),
@@ -96,43 +77,14 @@ This likely means the schema has changed in an incompatible way.
     yield* materializeEvent(eventEncoded, { skipEventlog: true })
   })
 
-  const stmt = dbEventlog.prepare(sql`\
-SELECT * FROM ${SystemTables.EVENTLOG_META_TABLE} 
-WHERE seqNumGlobal > $seqNumGlobal OR (seqNumGlobal = $seqNumGlobal AND seqNumClient > $seqNumClient)
-ORDER BY seqNumGlobal ASC, seqNumClient ASC
-LIMIT $batchSize
-`)
-
   let processedEvents = 0
-
   yield* Stream.paginate(EventSequenceNumber.Client.ROOT, (lastId) =>
-    Effect.sync(() => {
-      const rows = stmt.select<SystemTables.EventlogMetaRow>({
-        $seqNumGlobal: lastId.global,
-        $seqNumClient: lastId.client,
-        $batchSize: batchSize,
-      } as any as PreparedBindValues)
-
-      if (EffectArray.isReadonlyArrayNonEmpty(rows) === false) {
-        const done: readonly [
-          ReadonlyArray<SystemTables.EventlogMetaRow>,
-          Option.Option<EventSequenceNumber.Client.Composite>,
-        ] = [rows, Option.none()]
-        return done
-      }
-
-      const lastRow = EffectArray.lastNonEmpty(rows)
-      const nextCursor = EventSequenceNumber.Client.Composite.make({
-        global: lastRow.seqNumGlobal,
-        client: lastRow.seqNumClient,
-        rebaseGeneration: lastRow.seqNumRebaseGeneration,
-      })
-      const next: readonly [
-        ReadonlyArray<SystemTables.EventlogMetaRow>,
-        Option.Option<EventSequenceNumber.Client.Composite>,
-      ] = [rows, Option.some(nextCursor)]
-      return next
-    }),
+    readPage(dbEventlog.handle, { since: lastId, limit: batchSize, includeClientOnly: true }).pipe(
+      Effect.map((rows) => {
+        const last = rows.at(-1)
+        return [rows, last === undefined ? Option.none() : Option.some(last.event.seqNum)] as const
+      }),
+    ),
   ).pipe(
     Stream.bufferArray({ capacity: 2 }),
     Stream.runForEachArray((rows) =>
@@ -148,6 +100,5 @@ LIMIT $batchSize
         { discard: true },
       ).pipe(withSavepoint(dbState)),
     ),
-    Effect.ensuring(Effect.sync(() => stmt.finalize())),
   )
 }, Effect.withPerformanceMeasure('@livestore/common:rematerializeFromEventlog'))

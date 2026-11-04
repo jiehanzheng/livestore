@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "@cloudflare/workers-types"
+    ],
+    // Keep SDK implementation DOM references out of the worker runtime; the SDK graph checks its source separately.
+    "disableSourceOfProjectReferenceRedirect": true
+  },
+  "include": [
+    "src/cf-worker"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+  "references": [
+    {
+      "path": "../../packages/@livestore/adapter-cloudflare"
+    },
+    {
+      "path": "../../packages/@livestore/livestore"
+    },
+    {
+      "path": "../../packages/@livestore/sync-cf"
+    }
+  ]
+}

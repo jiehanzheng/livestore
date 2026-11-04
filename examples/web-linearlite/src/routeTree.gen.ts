@@ -9,21 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StoreIdRouteImport } from './routes/$storeId'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StoreIdRouteImport } from './routes/$storeId'
 import { Route as StoreIdIndexRouteImport } from './routes/$storeId/index'
-import { Route as StoreIdSearchRouteImport } from './routes/$storeId/search'
-import { Route as StoreIdIssueRouteImport } from './routes/$storeId/issue'
 import { Route as StoreIdBoardRouteImport } from './routes/$storeId/board'
+import { Route as StoreIdIssueRouteImport } from './routes/$storeId/issue'
+import { Route as StoreIdSearchRouteImport } from './routes/$storeId/search'
 
-const StoreIdRoute = StoreIdRouteImport.update({
-  id: '/$storeId',
-  path: '/$storeId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoreIdRoute = StoreIdRouteImport.update({
+  id: '/$storeId',
+  path: '/$storeId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StoreIdIndexRoute = StoreIdIndexRouteImport.update({
@@ -31,9 +31,9 @@ const StoreIdIndexRoute = StoreIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => StoreIdRoute,
 } as any)
-const StoreIdSearchRoute = StoreIdSearchRouteImport.update({
-  id: '/search',
-  path: '/search',
+const StoreIdBoardRoute = StoreIdBoardRouteImport.update({
+  id: '/board',
+  path: '/board',
   getParentRoute: () => StoreIdRoute,
 } as any)
 const StoreIdIssueRoute = StoreIdIssueRouteImport.update({
@@ -41,9 +41,9 @@ const StoreIdIssueRoute = StoreIdIssueRouteImport.update({
   path: '/issue',
   getParentRoute: () => StoreIdRoute,
 } as any)
-const StoreIdBoardRoute = StoreIdBoardRouteImport.update({
-  id: '/board',
-  path: '/board',
+const StoreIdSearchRoute = StoreIdSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => StoreIdRoute,
 } as any)
 
@@ -104,18 +104,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/$storeId': {
-      id: '/$storeId'
-      path: '/$storeId'
-      fullPath: '/$storeId'
-      preLoaderRoute: typeof StoreIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$storeId': {
+      id: '/$storeId'
+      path: '/$storeId'
+      fullPath: '/$storeId'
+      preLoaderRoute: typeof StoreIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$storeId/': {
@@ -125,11 +125,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StoreIdIndexRouteImport
       parentRoute: typeof StoreIdRoute
     }
-    '/$storeId/search': {
-      id: '/$storeId/search'
-      path: '/search'
-      fullPath: '/$storeId/search'
-      preLoaderRoute: typeof StoreIdSearchRouteImport
+    '/$storeId/board': {
+      id: '/$storeId/board'
+      path: '/board'
+      fullPath: '/$storeId/board'
+      preLoaderRoute: typeof StoreIdBoardRouteImport
       parentRoute: typeof StoreIdRoute
     }
     '/$storeId/issue': {
@@ -139,11 +139,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StoreIdIssueRouteImport
       parentRoute: typeof StoreIdRoute
     }
-    '/$storeId/board': {
-      id: '/$storeId/board'
-      path: '/board'
-      fullPath: '/$storeId/board'
-      preLoaderRoute: typeof StoreIdBoardRouteImport
+    '/$storeId/search': {
+      id: '/$storeId/search'
+      path: '/search'
+      fullPath: '/$storeId/search'
+      preLoaderRoute: typeof StoreIdSearchRouteImport
       parentRoute: typeof StoreIdRoute
     }
   }

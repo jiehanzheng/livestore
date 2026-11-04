@@ -6,14 +6,12 @@ import { expect, test, vi } from 'vitest'
 
 import { liveStoreStorageFormatVersion } from '@livestore/common'
 import { makeSchema, State } from '@livestore/common/schema'
-import { Effect } from '@livestore/utils/effect'
+import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
+import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
+import { Cause, Effect, Exit } from '@livestore/utils/effect'
+import { PlatformNode } from '@livestore/utils/node'
 
 import { openDatabases } from './storage.ts'
-const initialization = vi.hoisted(() => ({ initialize: vi.fn(() => Effect.succeed({})) }))
-vi.mock('@livestore/common/leader-thread', async (original) => {
-  const real = await original()
-  return { ...real, Eventlog: { ...real.Eventlog, initializeSource: initialization.initialize } }
-})
 const current = `eventlog@${liveStoreStorageFormatVersion}.db`
 const old = `eventlog@${liveStoreStorageFormatVersion - 1}.db`
 const schema = makeSchema({
@@ -33,6 +31,34 @@ const fixture = async function (operation) {
 const args = { storeId: 'replica', schema }
 const execute = (base, factory) =>
   Effect.runPromise(Effect.scoped(openDatabases(args, { type: 'fs', baseDirectory: base }, factory)))
+const failure = async (base, factory) => {
+  const exit = await Effect.runPromiseExit(
+    Effect.scoped(openDatabases(args, { type: 'fs', baseDirectory: base }, factory)),
+  )
+  expect(Exit.isFailure(exit)).toBe(true)
+  return Cause.pretty(exit.cause)
+}
+// Layout tests keep real allocation/adoption and SOURCE initialization; only call/close observation is substituted.
+const observedFactory = async (opened = () => {}, closed = () => {}) => {
+  const sqlite3 = await loadSqlite3Wasm()
+  const native = await Effect.runPromise(
+    sqliteDbFactory({ sqlite3 }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer)),
+  )
+  return vi.fn((input) => {
+    opened(input)
+    return native(input).pipe(
+      Effect.provide(PlatformNode.NodeFileSystem.layer),
+      Effect.map((db) => ({
+        ...db,
+        close: () => {
+          db.close()
+          closed(input)
+        },
+      })),
+    )
+  })
+}
+
 const bytes = async function (directory) {
   const result = []
   for (const name of (await fs.readdir(directory)).sort()) {
@@ -99,7 +125,7 @@ test.each(['EACCES', 'ENOENT'])('enumeration %s after discovery is uncertainty, 
     const before = await bytes(directory)
     const factory = vi.fn(),
       scan = vi.spyOn(fs, 'readdir').mockRejectedValueOnce(Object.assign(new Error('injected read failure'), { code }))
-    await expect(execute(base, factory)).rejects.toThrow('injected read failure')
+    expect(await failure(base, factory)).toContain('injected read failure')
     scan.mockRestore()
     expect(factory).not.toHaveBeenCalled()
     expect(await bytes(directory)).toEqual(before)
@@ -110,19 +136,22 @@ test.each(['missing', 'empty', 'current'])('%s opens source before derived state
   fixture(async (base, directory) => {
     if (kind !== 'missing') await fs.mkdir(directory)
     if (kind === 'current') {
-      await fs.writeFile(path.join(directory, current), 'retained')
+      await execute(base, await observedFactory())
       await fs.writeFile(path.join(directory, 'opaque-extra'), 'keep')
-      await fs.writeFile(path.join(directory, `${current}-wal`), 'sidecar')
     }
     const before = kind === 'current' ? await bytes(directory) : undefined,
       closes = [],
       calls = []
-    const factory = vi.fn((input) => {
-      calls.push(input.fileName)
-      return Effect.succeed({ close: () => closes.push(input.fileName) })
-    })
+    const factory = await observedFactory(
+      (input) => calls.push(input.fileName),
+      (input) => closes.push(input.fileName),
+    )
     const result = await execute(base, factory)
-    expect(initialization.initialize).toHaveBeenLastCalledWith(expect.anything(), { sourceIsNew: kind !== 'current' })
+    expect(result.dbEventlog.persistence.kind).toBe('independent')
+    expect(result.dbEventlog.fresh !== undefined).toBe(kind !== 'current')
+    expect(result.initializedSource.identity.formatVersion).toBe(liveStoreStorageFormatVersion)
+    expect(factory.mock.calls[0][0].create).toBe(false)
+    expect(factory.mock.calls[0][0].sourceCreation !== undefined).toBe(kind !== 'current')
     expect(calls[0]).toBe(current)
     expect(calls).toHaveLength(2)
     expect(closes).toEqual(calls.toReversed())
@@ -132,13 +161,14 @@ test.each(['missing', 'empty', 'current'])('%s opens source before derived state
 
 test('derived open failure still closes the acquired source', async () =>
   fixture(async (base) => {
-    const close = vi.fn(),
-      factory = vi
-        .fn()
-        .mockReturnValueOnce(Effect.succeed({ close }))
-        .mockReturnValueOnce(Effect.die(new Error('state open failed')))
-    await expect(execute(base, factory)).rejects.toThrow('state open failed')
+    const close = vi.fn()
+    const native = await observedFactory(() => {}, close)
+    const factory = vi.fn((input) =>
+      input.fileName === current ? native(input) : Effect.die(new Error('state open failed')),
+    )
+    expect(await failure(base, factory)).toContain('state open failed')
     expect(close).toHaveBeenCalledOnce()
+    expect(close.mock.calls[0][0].fileName).toBe(current)
   }))
 
 test('source disappearance after directory discovery refuses with no factory or mutation', async () =>
@@ -155,7 +185,7 @@ test('source disappearance after directory discovery refuses with no factory or 
           ? Promise.reject(Object.assign(new Error('source changed during discovery'), { code: 'ENOENT' }))
           : original(file),
       )
-    await expect(execute(base, factory)).rejects.toThrow('source changed during discovery')
+    expect(await failure(base, factory)).toContain('source changed during discovery')
     stat.mockRestore()
     expect(factory).not.toHaveBeenCalled()
     expect(await bytes(directory)).toEqual(before)
@@ -163,16 +193,32 @@ test('source disappearance after directory discovery refuses with no factory or 
 
 test('source close failure remains a failed scope result instead of successful closure', async () =>
   fixture(async (base) => {
-    const closes = [],
-      factory = vi.fn((input) =>
-        Effect.succeed({
-          close: () => {
-            closes.push(input.fileName)
-            if (input.fileName === current) throw new Error('source close failed')
-          },
-        }),
-      )
-    await expect(execute(base, factory)).rejects.toThrow('source close failed')
+    const closes = []
+    const factory = await observedFactory(
+      () => {},
+      (input) => {
+        closes.push(input.fileName)
+        if (input.fileName === current) throw new Error('source close failed')
+      },
+    )
+    expect(await failure(base, factory)).toContain('source close failed')
     expect(closes).toHaveLength(2)
     expect(closes[1]).toBe(current)
+  }))
+
+test('malformed current WAL refuses before derived open and retains source and sidecar bytes', async () =>
+  fixture(async (base, directory) => {
+    await execute(base, await observedFactory())
+    await fs.writeFile(path.join(directory, `${current}-wal`), 'malformed-sidecar')
+    const before = await bytes(directory)
+    const calls = [],
+      closes = []
+    const factory = await observedFactory(
+      (input) => calls.push(input.fileName),
+      (input) => closes.push(input.fileName),
+    )
+    expect(await failure(base, factory)).toContain('unable to open database file')
+    expect(calls).toEqual([current])
+    expect(closes).toEqual([current])
+    expect(await bytes(directory)).toEqual(before)
   }))

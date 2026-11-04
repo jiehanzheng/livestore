@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Cause, Deferred, Effect, Exit, Fiber, Scope } from '@livestore/utils/effect'
 
+import { makePhysicalWorkerLifetime, withPhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
 import { makeLeaderElectionLock } from './leader-election-lock.ts'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -233,3 +234,51 @@ const installLockManager = () => {
     },
   }
 }
+
+it('cancels a queued follower while the real physical close acknowledgement is pending', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const locks = installLockManager()
+        const leaderScope = yield* ownedScope
+        const followerScope = yield* ownedScope
+        const receiverScope = yield* ownedScope
+        const closingScope = yield* ownedScope
+        const allowClose = yield* Deferred.make<void>()
+        const started = yield* Deferred.make<void>()
+        const closing = yield* Deferred.make<void>()
+        yield* Effect.addFinalizer(() => Deferred.succeed(allowClose, undefined))
+        const lifetime = yield* makePhysicalWorkerLifetime
+        const port = yield* lifetime.initialPort
+        yield* withPhysicalWorkerLifetime(
+          port,
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() =>
+              Deferred.succeed(closing, undefined).pipe(Effect.andThen(Deferred.await(allowClose))),
+            )
+            yield* Deferred.succeed(started, undefined)
+            return yield* Effect.never
+          }),
+        ).pipe(Effect.forkIn(receiverScope))
+        yield* Deferred.await(started)
+        const leader = yield* makeLeaderElectionLock('joined-queued', () => lifetime.close).pipe(
+          Scope.provide(leaderScope),
+        )
+        expect(yield* leader.tryAcquire).toBe(true)
+        const follower = yield* makeLeaderElectionLock('joined-queued').pipe(Scope.provide(followerScope))
+        const waiting = yield* follower.wait.pipe(Scope.provide(followerScope), Effect.forkIn(followerScope))
+        yield* Deferred.await(locks.receipt(1).requested)
+        const released = yield* Scope.close(leaderScope, Exit.void).pipe(Effect.forkIn(closingScope))
+        yield* Deferred.await(closing)
+        expect(locks.isHeld('joined-queued')).toBe(true)
+        yield* Scope.close(followerScope, Exit.void)
+        const waitingExit = yield* Fiber.await(waiting)
+        expect(Exit.isFailure(waitingExit) && Cause.hasInterruptsOnly(waitingExit.cause)).toBe(true)
+        yield* Deferred.succeed(allowClose, undefined)
+        yield* Fiber.join(released)
+        yield* Deferred.await(locks.receipt(0).released)
+        expect(yield* Deferred.isDone(locks.receipt(1).granted)).toBe(false)
+        expect(locks.isHeld('joined-queued')).toBe(false)
+      }),
+    ),
+  ))

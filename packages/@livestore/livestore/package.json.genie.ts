@@ -2,6 +2,7 @@ import {
   catalog,
   getUtilsPeerDeps,
   livestorePackageDefaults,
+  livestorePackageFiles,
   packageJson,
   workspaceMember,
 } from '../../../genie/repo.ts'
@@ -35,7 +36,7 @@ export default packageJson(
       './internal/testing-utils': './src/utils/tests/mod.ts',
       './effect': './src/effect/mod.ts',
     },
-    files: [...livestorePackageDefaults.files, 'docs'],
+    files: livestorePackageFiles('docs'),
     publishConfig: {
       access: 'public',
       exports: {

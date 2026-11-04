@@ -55,6 +55,12 @@ export const decodeAccessHandlePoolFilename = async (file: File): Promise<string
 export const decodeAccessHandlePoolFilenameStrict = async (file: File): Promise<string> => {
   const headerSize = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE
   const header = new Uint8Array(await file.slice(0, headerSize).arrayBuffer())
+  return decodeAccessHandlePoolHeaderStrict(header, file.size)
+}
+
+/** Shared by read-only discovery and the retained-only VFS startup; neither may repair evidence. */
+export const decodeAccessHandlePoolHeaderStrict = (header: Uint8Array, fileSize: number): string => {
+  const headerSize = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE
   if (header.byteLength !== headerSize) throw new Error('Truncated OPFS pool header')
   const corpus = header.subarray(0, HEADER_CORPUS_SIZE)
   const flags = new DataView(header.buffer, header.byteOffset).getUint32(HEADER_OFFSET_FLAGS)
@@ -67,7 +73,7 @@ export const decodeAccessHandlePoolFilenameStrict = async (file: File): Promise<
   if (pathEnd === -1) throw new Error('Unterminated OPFS pool filename')
   if (pathEnd === 0) {
     // A valid free handle is truncated to one sector. Retained payload can be an interrupted deletion.
-    if (flags !== 0 || file.size !== HEADER_OFFSET_DATA) throw new Error('Incomplete OPFS pool disassociation')
+    if (flags !== 0 || fileSize !== HEADER_OFFSET_DATA) throw new Error('Incomplete OPFS pool disassociation')
     return ''
   }
   if ((flags & VFS.SQLITE_OPEN_DELETEONCLOSE) !== 0 || (flags & PERSISTENT_FILE_TYPES) === 0) {

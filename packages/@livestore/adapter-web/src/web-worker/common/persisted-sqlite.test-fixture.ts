@@ -11,7 +11,7 @@ import { getStateDbFileName, readPersistedStateDbFromClientSession, sanitizeOpfs
 /** Exercise the browser snapshot reader against a real AccessHandlePoolVFS file. */
 const run = Effect.gen(function* () {
   const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
-  const makeSqliteDb = sqliteDbFactory({ sqlite3 })
+  const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
   const services = yield* Effect.context()
   const storeId = `rebuild-snapshot-${crypto.randomUUID()}`
   const storageOptions = { type: 'opfs' as const }

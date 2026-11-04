@@ -13,11 +13,35 @@ import { EventSequenceNumber } from '@livestore/common/schema'
 import { nativeBindings, normalizedRows, ownedBytes } from './binary.ts'
 import { createResourceLedger, withCleanup, type ResourceLedger } from './resources.ts'
 import { assertSingleBoundStatement } from './single-statement.ts'
+import {
+  acquireExpoSourceOwner,
+  consumeExpoSourceAllocation,
+  expoSourceStorageName,
+  type ExpoSourceAllocation,
+  type ExpoSourceCreation,
+  type ExpoSourceOwner,
+} from './source-owner.ts'
 
-export type NativeInput = { _tag: 'in-memory' } | { _tag: 'file'; databaseName: string; directory: string }
-export type NativeMetadata = { dbPointer: number; persistenceInfo: { fileName: string } } & NativeInput
+export type NativeInput =
+  | { _tag: 'in-memory' }
+  | {
+      _tag: 'file'
+      databaseName: string
+      directory: string
+      sourceOwner?: 'exclusive'
+      sourceAllocation?: ExpoSourceAllocation
+    }
+export type NativeMetadata = {
+  dbPointer: number
+  persistenceInfo: { fileName: string }
+  sourceCreation?: ExpoSourceCreation
+  sourceLease?: ExpoSourceOwner
+} & NativeInput
 type NativeFactory = MakeSqliteDb<NativeMetadata, NativeInput, NativeMetadata>
 type OwnedResource = { close(): void }
+
+// A failed native close must keep its actual connection reachable until runtime disposal.
+const quarantinedDatabases = new Set<SQLite.SQLiteDatabase>()
 
 const sqliteError = function (cause: unknown, note: string) {
   return new SqliteError({ cause, note })
@@ -57,9 +81,6 @@ export const createSqliteFactory = function () {
     Effect.try({
       try: () => openSqlite(input, ledger),
       catch: (cause) => {
-        // Expo can reject initialization after allocating native state without
-        // returning a handle. No caller can then positively attest its closure.
-        ledger.failed(cause)
         return sqliteError(cause, 'Native SQLite acquisition failed.')
       },
     })) as NativeFactory
@@ -67,12 +88,46 @@ export const createSqliteFactory = function () {
 }
 
 const openSqlite = function (input: NativeInput, ledger: ResourceLedger): SqliteDb<NativeMetadata> {
+  const sourceName = input._tag === 'file' ? expoSourceStorageName(input.directory, input.databaseName) : ':memory:'
+  if (input._tag === 'file' && input.sourceAllocation !== undefined) {
+    if (input.sourceOwner !== 'exclusive') throw new Error('SOURCE allocation requires native exclusive ownership')
+    consumeExpoSourceAllocation(input.sourceAllocation, sourceName)
+  }
   // Cached native connections would let one owner's close invalidate another.
-  const db =
-    input._tag === 'in-memory'
-      ? SQLite.openDatabaseSync(':memory:', { useNewConnection: true })
-      : SQLite.openDatabaseSync(input.databaseName, { useNewConnection: true }, input.directory)
+  let db: SQLite.SQLiteDatabase
+  try {
+    db =
+      input._tag === 'in-memory'
+        ? SQLite.openDatabaseSync(':memory:', { useNewConnection: true })
+        : SQLite.openDatabaseSync(input.databaseName, { useNewConnection: true }, input.directory)
+  } catch (cause) {
+    // No returned handle means native acquisition cannot be positively disposed.
+    ledger.failed(cause)
+    throw cause
+  }
   ledger.acquire(db)
+  let sourceLease: ExpoSourceOwner | undefined
+  if (input._tag === 'file' && input.sourceOwner === 'exclusive') {
+    try {
+      sourceLease = acquireExpoSourceOwner(db)
+    } catch (cause) {
+      return withCleanup(
+        (): never => {
+          throw cause
+        },
+        () => {
+          try {
+            db.closeSync()
+            ledger.release(db)
+          } catch (cleanup) {
+            quarantinedDatabases.add(db)
+            ledger.failed(cleanup)
+            throw cleanup
+          }
+        },
+      )
+    }
+  }
   const resources = new Set<OwnedResource>()
   let phase: 'open' | 'closing' | 'closed' | 'failed' = 'open'
   let closeFailure: unknown
@@ -83,6 +138,16 @@ const openSqlite = function (input: NativeInput, ledger: ResourceLedger): Sqlite
     ...input,
     dbPointer: 0,
     persistenceInfo: { fileName: input._tag === 'file' ? `${input.directory}/${input.databaseName}` : ':memory:' },
+    ...(sourceLease === undefined ? {} : { sourceLease }),
+    ...(input._tag === 'file' && input.sourceAllocation !== undefined && sourceLease !== undefined
+      ? {
+          sourceCreation: {
+            storageName: sourceName,
+            kind: 'exclusive-expo-source-namespace' as const,
+            isHeld: sourceLease.isHeld,
+          },
+        }
+      : {}),
   }
   const assertOpen = function () {
     if (phase !== 'open') throw sqliteError(closeFailure, `Native SQLite connection is ${phase}.`)
@@ -268,7 +333,9 @@ const openSqlite = function (input: NativeInput, ledger: ResourceLedger): Sqlite
       try {
         db.closeSync()
         ledger.release(db)
+        sourceLease?.closed()
       } catch (cause) {
+        quarantinedDatabases.add(db)
         ledger.failed(cause)
         causes.push(cause)
       }
@@ -280,6 +347,9 @@ const openSqlite = function (input: NativeInput, ledger: ResourceLedger): Sqlite
       phase = 'closed'
     },
     destroy() {
+      // SOURCE reset is a common-owned transaction; unlinking its candidate would erase retained evidence.
+      if (input._tag === 'file' && input.sourceOwner === 'exclusive')
+        throw sqliteError(undefined, 'Native SOURCE cannot be destroyed through the STATE API.')
       if (destroyed === true) return
       sqlite.close()
       if (input._tag === 'file') {

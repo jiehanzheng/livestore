@@ -77,7 +77,7 @@ const materializers = State.SQLite.materializers(events, {
 
 const state = State.SQLite.makeState({ tables, materializers })
 
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({ events, state, projectionRevision: 'linearlite-v1' })
 
 // Shared sync payload schema for this example
 export const SyncPayload = Schema.Struct({ authToken: Schema.String })

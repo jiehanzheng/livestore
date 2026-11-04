@@ -51,7 +51,12 @@ export const SyncBackendOptions = Schema.Record(Schema.String, Schema.Json)
 export type SyncBackendOptions = Record<string, Schema.Json>
 
 export class LeaderWorkerOuterInitialMessage extends Rpc.make('InitialMessage', {
-  payload: { port: Transferable.MessagePort, storeId: Schema.String, clientId: Schema.String },
+  payload: {
+    port: Transferable.MessagePort,
+    lifetimePort: Transferable.MessagePort,
+    storeId: Schema.String,
+    clientId: Schema.String,
+  },
   success: Schema.Void,
   error: Schema.Never,
 }) {}

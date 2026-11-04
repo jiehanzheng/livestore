@@ -19,7 +19,7 @@ import type { MaterializeError } from '../errors.ts'
 import type {
   BootStatus,
   Devtools,
-  MakeSqliteDb,
+  MakeInMemorySqliteDb,
   PersistenceInfo,
   SqliteDb,
   SyncBackend,
@@ -27,6 +27,8 @@ import type {
 } from '../index.ts'
 import type * as MaterializationJournal from '../MaterializationJournal.ts'
 import { EventSequenceNumber, type LiveStoreEvent, type LiveStoreSchema } from '../schema/mod.ts'
+import type { SourceContext } from '../source-db/owner.ts'
+import type { SourceDbError } from '../source-db/role.ts'
 import type * as SyncState from '../sync/syncstate.ts'
 import type * as LeaderSyncProcessor from './LeaderSyncProcessor.ts'
 import type { ShutdownChannel } from './shutdown-channel.ts'
@@ -92,7 +94,7 @@ export class LeaderThreadCtx extends Context.Service<
     schema: LiveStoreSchema
     storeId: string
     clientId: string
-    makeSqliteDb: MakeSqliteDb
+    makeSqliteDb: MakeInMemorySqliteDb
     bootStatusQueue: Queue.Queue<BootStatus>
     // TODO we should find a more elegant way to handle cases which need this ref for their implementation
     shutdownStateSubRef: SubscriptionRef.SubscriptionRef<ShutdownState>
@@ -101,6 +103,7 @@ export class LeaderThreadCtx extends Context.Service<
     devtools: DevtoolsContext
     syncBackend: SyncBackend.SyncBackend | undefined
     syncProcessor: LeaderSyncProcessor.Service
+    resetSource: Effect.Effect<void, MaterializeError>
     exportSnapshot: Effect.Effect<Uint8Array<ArrayBuffer>>
     materializeEvent: MaterializeEvent
     initialState: {
@@ -127,7 +130,8 @@ export type MaterializeEvent = (
   },
 ) => Effect.Effect<
   { hash: Option.Option<number> },
-  MaterializeError | MaterializationJournal.MaterializationJournalError
+  MaterializeError | MaterializationJournal.MaterializationJournalError | SourceDbError,
+  SourceContext
 >
 
 export type InitialBlockingSyncContext = {

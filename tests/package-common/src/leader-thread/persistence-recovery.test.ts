@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { expect } from 'vitest'
@@ -15,12 +16,12 @@ import {
 } from '@livestore/common/leader-thread'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables, makeSchema, State } from '@livestore/common/schema'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
+import { reserveNodeSource, sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import { Effect, FetchHttpClient, FileSystem, Layer, Queue, WebChannel } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
+import { ownSource, events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
 
 /** Real retained files distinguish cross-database recovery from ordinary transaction rollback. */
 for (const commitOutcome of [
@@ -46,7 +47,13 @@ for (const commitOutcome of [
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const fs = yield* FileSystem.FileSystem
       const directory = yield* fs.makeTempDirectoryScoped()
-      const open = (fileName: string) => makeSqliteDb({ _tag: 'fs', directory, fileName })
+      const open = (fileName: string, newlyAllocated = false) =>
+        makeSqliteDb({
+          _tag: 'fs',
+          directory,
+          fileName,
+          ...(newlyAllocated === true ? { sourceCreation: reserveNodeSource(path.join(directory, fileName)) } : {}),
+        })
       const original = todo('original', 0)
       const replacement = todo('replacement', 1)
 
@@ -78,8 +85,7 @@ for (const commitOutcome of [
               return rawState.execute(...args)
             }),
           }
-          const dbEventlog = yield* Effect.acquireRelease(open('eventlog.db'), (db) => Effect.sync(() => db.close()))
-          yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+          const dbEventlog = yield* open('eventlog.db', true)
           let failCommit = false
           const wrappedEventlog: SqliteDb = {
             ...dbEventlog,
@@ -101,10 +107,14 @@ for (const commitOutcome of [
               return dbEventlog.execute(...args)
             }),
           }
-          const services = makeSqliteServicesLayer({ dbState, dbEventlog: wrappedEventlog })
+          const source = yield* ownSource(wrappedEventlog, dbEventlog.metadata.sourceCreation)
+          const initializedSource = yield* Eventlog.initializeSource(source)
+          const services = makeSqliteServicesLayer({ dbState, source })
           const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
           const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-          yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(services))
+          yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(
+            Effect.provide(services),
+          )
           const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(services))
           yield* persistence.persistLocal({ events: [original] })
           if (commitOutcome === 'malformed-completed') {
@@ -151,8 +161,9 @@ for (const commitOutcome of [
         }).pipe(Effect.scoped)
 
       yield* Effect.gen(function* () {
-        const dbEventlog = yield* Effect.acquireRelease(open('eventlog.db'), (db) => Effect.sync(() => db.close()))
-        const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
+        const dbEventlog = yield* open('eventlog.db')
+        const source = yield* ownSource(dbEventlog)
+        const initializedSource = yield* Eventlog.initializeSource(source)
         const dbState = yield* Effect.acquireRelease(open('state.db'), (db) => Effect.sync(() => db.close()))
         const sourceBeforeBoot = dbEventlog.select(SystemTables.eventlogMetaTable)
         const shutdown = yield* WebChannel.queueChannelProxy({ schema: ShutdownChannel.All })
@@ -186,10 +197,7 @@ for (const commitOutcome of [
               syncOptions: undefined,
               devtoolsOptions: { enabled: false },
               shutdownChannel: shutdown.webChannel,
-            }).pipe(
-              Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
-              Layer.provide(FetchHttpClient.layer),
-            ),
+            }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source })), Layer.provide(FetchHttpClient.layer)),
           ),
         )
       }).pipe(Effect.scoped)
@@ -237,19 +245,25 @@ Vitest.live('rebuilds A to B to A projections over the same retained source and 
     let cached: StateSnapshot.Provenance | undefined
     for (const [index, current] of [projectionA, projectionB, projectionA].entries()) {
       yield* Effect.gen(function* () {
-        const open = (fileName: string) =>
-          Effect.acquireRelease(makeSqliteDb({ _tag: 'fs', directory, fileName }), (db) =>
-            Effect.sync(() => db.close()),
-          )
-        const dbEventlog = yield* open('eventlog.db')
-        const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: index === 0 })
-        const dbState = yield* open('state.db')
+        const open = (fileName: string, newlyAllocated = false) =>
+          makeSqliteDb({
+            _tag: 'fs',
+            directory,
+            fileName,
+            ...(newlyAllocated === true ? { sourceCreation: reserveNodeSource(path.join(directory, fileName)) } : {}),
+          })
+        const openState = (fileName: string) =>
+          Effect.acquireRelease(open(fileName), (db) => Effect.sync(() => db.close()))
+        const dbEventlog = yield* open('eventlog.db', index === 0)
+        const source = yield* ownSource(dbEventlog, dbEventlog.metadata.sourceCreation)
+        const initializedSource = yield* Eventlog.initializeSource(source)
+        const dbState = yield* openState('state.db')
         const channel = yield* WebChannel.queueChannelProxy({ schema: ShutdownChannel.All })
         yield* Effect.gen(function* () {
           const leader = yield* LeaderThreadCtx
           if (index === 0) yield* leader.syncProcessor.push([todo('retained', 0)])
           expect(dbState.select(tables.todos).map((row) => row.text)).toEqual([`${index === 1 ? 'B' : 'A'}:retained`])
-          const identity = SourceIdentity.read(dbEventlog)
+          const identity = yield* SourceIdentity.read(source.handle)
           if (incarnation === undefined) incarnation = identity.incarnation
           expect(identity.incarnation).toBe(incarnation)
           const admission = yield* leader.syncProcessor.openSession({
@@ -272,10 +286,7 @@ Vitest.live('rebuilds A to B to A projections over the same retained source and 
               syncPayloadSchema: undefined,
               devtoolsOptions: { enabled: false },
               shutdownChannel: channel.webChannel,
-            }).pipe(
-              Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
-              Layer.provide(FetchHttpClient.layer),
-            ),
+            }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source })), Layer.provide(FetchHttpClient.layer)),
           ),
         )
       }).pipe(Effect.scoped)
@@ -289,33 +300,41 @@ Vitest.live('source reset and same-head regrowth invalidate a retained cache fro
     const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
     const fs = yield* FileSystem.FileSystem
     const directory = yield* fs.makeTempDirectoryScoped()
-    const open = (fileName: string) =>
-      Effect.acquireRelease(makeSqliteDb({ _tag: 'fs', directory, fileName }), (db) => Effect.sync(() => db.close()))
+    const open = (fileName: string, newlyAllocated = false) =>
+      makeSqliteDb({
+        _tag: 'fs',
+        directory,
+        fileName,
+        ...(newlyAllocated === true ? { sourceCreation: reserveNodeSource(path.join(directory, fileName)) } : {}),
+      })
+    const openState = (fileName: string) => Effect.acquireRelease(open(fileName), (db) => Effect.sync(() => db.close()))
     const captured = yield* Effect.gen(function* () {
-      const dbEventlog = yield* open('eventlog.db')
-      yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
-      const dbState = yield* open('state.db')
-      const services = makeSqliteServicesLayer({ dbState, dbEventlog })
+      const dbEventlog = yield* open('eventlog.db', true)
+      const source = yield* ownSource(dbEventlog, dbEventlog.metadata.sourceCreation)
+      const initializedSource = yield* Eventlog.initializeSource(source)
+      const dbState = yield* openState('state.db')
+      const services = makeSqliteServicesLayer({ dbState, source })
       const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
       const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-      yield* recreateDb({ schema, materializeEvent, bootStatusQueue }).pipe(Effect.provide(services))
+      yield* recreateDb({ initializedSource, schema, materializeEvent, bootStatusQueue }).pipe(Effect.provide(services))
       const persistence = yield* LeaderPersistence.make({ schema, materializeEvent }).pipe(Effect.provide(services))
       yield* persistence.persistLocal({ events: [todo('before-reset', 0)] })
       const provenance = StateSnapshot.readProvenance(dbState)!
-      const head = Eventlog.getClientHeadFromDb(dbEventlog)
+      const head = yield* Eventlog.getClientHeadFromDb(source.handle)
       yield* persistence.resetSource
-      expect(SourceIdentity.read(dbEventlog).incarnation).not.toBe(provenance.sourceIncarnation)
+      expect((yield* SourceIdentity.read(source.handle)).incarnation).not.toBe(provenance.sourceIncarnation)
       return { provenance, head }
     }).pipe(Effect.scoped)
     yield* Effect.gen(function* () {
       const dbEventlog = yield* open('eventlog.db')
-      const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
-      const dbState = yield* open('state.db')
+      const source = yield* ownSource(dbEventlog)
+      const initializedSource = yield* Eventlog.initializeSource(source)
+      const dbState = yield* openState('state.db')
       const channel = yield* WebChannel.queueChannelProxy({ schema: ShutdownChannel.All })
       yield* Effect.gen(function* () {
         const leader = yield* LeaderThreadCtx
         yield* leader.syncProcessor.push([todo('after-reset', 0)])
-        expect(Eventlog.getClientHeadFromDb(dbEventlog)).toEqual(captured.head)
+        expect(yield* Eventlog.getClientHeadFromDb(source.handle)).toEqual(captured.head)
         expect(dbState.select(tables.todos).map((row) => row.id)).toEqual(['after-reset'])
         const opened = yield* leader.syncProcessor.openSession({
           expectedProjection: StateSnapshot.getProjectionIdentity(schema),
@@ -336,10 +355,7 @@ Vitest.live('source reset and same-head regrowth invalidate a retained cache fro
             syncPayloadSchema: undefined,
             devtoolsOptions: { enabled: false },
             shutdownChannel: channel.webChannel,
-          }).pipe(
-            Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
-            Layer.provide(FetchHttpClient.layer),
-          ),
+          }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source })), Layer.provide(FetchHttpClient.layer)),
         ),
       )
     }).pipe(Effect.scoped)

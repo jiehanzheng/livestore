@@ -25,19 +25,21 @@ export default {
 
     const url = new URL(request.url)
 
-    if (url.pathname.includes('/mailbox-client-do')) {
+    if (url.pathname.includes('/mailbox-client-do') === true) {
       const storeId = storeIdFromRequest(request)
       await env.MAILBOX_CLIENT_DO.getByName(storeId).initialize({ storeId })
-      // @ts-expect-error TODO remove casts once CF types are fixed in https://github.com/cloudflare/workerd/issues/4811
-      return new Response('Mailbox Client DO initialized', { status: 200 }) as SyncBackend.CfTypes.Response
+      return new Response('Mailbox Client DO initialized', { status: 200 })
     }
 
-    // @ts-expect-error TODO remove casts once CF types are fixed in https://github.com/cloudflare/workerd/issues/4811
-    return new Response('Not found', { status: 404 }) as SyncBackend.CfTypes.Response
+    return new Response('Not found', { status: 404 })
   },
 
   // Queue consumer handler for cross-store events
-  async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext): Promise<void> {
+  async queue(
+    batch: SyncBackend.CfTypes.MessageBatch,
+    env: Env,
+    ctx: SyncBackend.CfTypes.ExecutionContext,
+  ): Promise<void> {
     console.log(`[QueueConsumer] Processing ${batch.messages.length} cross-store events`)
 
     const threadsToAdd: Array<{ id: string; subject: string; participants: string[]; createdAt: Date }> = []

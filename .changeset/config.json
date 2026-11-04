@@ -5,6 +5,8 @@
   "fixed": [
     [
       "@livestore/adapter-cloudflare",
+      "@livestore/adapter-expo",
+      "@livestore/adapter-node",
       "@livestore/adapter-web",
       "@livestore/common",
       "@livestore/common-cf",

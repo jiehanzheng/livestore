@@ -300,6 +300,8 @@ const createStreamingResponse = <Rpcs extends Rpc.Any, LE>(
         ? Schema.encodeUnknownEffect(erasedCodec(codecFor, Schema.NonEmptyArray(streamSchemas.value.success)))
         : Schema.encodeUnknownEffect(erasedCodec(codecFor, Schema.NonEmptyArray(Schema.Any)))
 
+    // The detached producer outlives response construction but retains request logging and tracing.
+    const services = yield* Effect.context()
     // Convert stream to ReadableStream
     let producer: Fiber.Fiber<void> | undefined
     let cancelled = false
@@ -367,7 +369,7 @@ const createStreamingResponse = <Rpcs extends Rpc.Any, LE>(
           Effect.scoped,
           Effect.tapCauseLogPretty,
           (_) => _ as Effect.Effect<void>,
-          Effect.runFork,
+          Effect.runForkWith(services),
         )
       },
       cancel() {

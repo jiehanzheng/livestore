@@ -492,9 +492,8 @@ export const makeProxyChannel = ({
           debug: {
             ping: (message = 'ping') =>
               send(WebChannel.DebugPingMessage.make({ message })).pipe(
-                Effect.provide(services),
                 Effect.tapCauseLogPretty,
-                Effect.runFork,
+                Effect.runForkWith(services),
               ),
           },
         } as {}),

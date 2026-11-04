@@ -1,9 +1,9 @@
 import { expect } from 'vitest'
 
-import type { SourceIdentity } from '@livestore/common'
 import { type BootStatus, type SqliteDb, makeMockSyncBackend, SqliteDbHelper } from '@livestore/common'
 import { Eventlog, LeaderPersistence, makeMaterializeEvent, recreateDb } from '@livestore/common/leader-thread'
 import { EventSequenceNumber, LiveStoreEvent, SystemTables } from '@livestore/common/schema'
+import type { InitializedSource, SourceOwner } from '@livestore/common/source-db'
 import { createStore, StoreInternalsSymbol } from '@livestore/livestore'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
@@ -23,6 +23,7 @@ import { PlatformNode } from '@livestore/utils/node'
 
 import { events, makeSqliteServicesLayer, schema, tables } from '../leader-thread/fixture.ts'
 import { makeTestAdapter } from '../test-adapter.ts'
+import { acquireNewFileSource, acquireRetainedFileSource } from './source-fixture.ts'
 
 for (const owner of ['ongoing', 'restarted'] as const) {
   Vitest.live(`reconciles a delayed pre-fence snapshot with ${owner} source before later events`, (test) =>
@@ -46,22 +47,27 @@ for (const owner of ['ongoing', 'restarted'] as const) {
         parentSeqNum: competing.seqNum,
       })
       const captured = yield* Effect.gen(function* () {
-        const dbState = yield* open('state.db')
-        const rawEventlog = yield* open('eventlog.db')
         let armed = false
-        const dbEventlog = {
-          ...rawEventlog,
-          execute: SqliteDbHelper.makeExecute((...args) => {
-            rawEventlog.execute(...args)
-            if (armed === true && args[0] === 'COMMIT')
-              throw new Error('Source committed before completion marker restoration')
+        const source = yield* acquireNewFileSource(
+          makeSqliteDb,
+          { directory, fileName: 'eventlog.db' },
+          (rawEventlog) => ({
+            ...rawEventlog,
+            execute: SqliteDbHelper.makeExecute((...args) => {
+              rawEventlog.execute(...args)
+              if (armed === true && args[0] === 'COMMIT')
+                throw new Error('Source committed before completion marker restoration')
+            }),
           }),
-        }
-        yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
-        const services = makeSqliteServicesLayer({ dbState, dbEventlog })
+        )
+        const initializedSource = yield* Eventlog.initializeSource(source)
+        const dbState = yield* open('state.db')
+        const services = makeSqliteServicesLayer({ dbState, source })
         const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
         const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-        yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(services))
+        yield* recreateDb({ schema, bootStatusQueue, materializeEvent, initializedSource }).pipe(
+          Effect.provide(services),
+        )
         const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(services))
         yield* persistence.persistUpstream({
           events: [base],
@@ -73,7 +79,7 @@ for (const owner of ['ongoing', 'restarted'] as const) {
         yield* persistence.persistLocal({ events: [original] })
         // This is a valid completed image when captured. Invalidating the live file cannot revoke these bytes.
         const snapshot = yield* persistence.exportSnapshot
-        expect(Eventlog.getClientHeadFromDb(dbEventlog)).toEqual(original.seqNum)
+        expect(yield* Eventlog.getClientHeadFromDb(source.handle)).toEqual(original.seqNum)
         expect(
           dbState
             .select(tables.todos)
@@ -92,16 +98,20 @@ for (const owner of ['ongoing', 'restarted'] as const) {
             })
             .pipe(Effect.flip)
           expect(dbState.select(SystemTables.rebuildMetaTable)).toEqual([])
-          expect(Eventlog.getClientHeadFromDb(dbEventlog)).toEqual(replacement.seqNum)
-          expect(Eventlog.getBackendHeadFromDb(dbEventlog)).toEqual(2)
+          expect((yield* Effect.exit(Eventlog.getClientHeadFromDb(source.handle)))._tag).toBe('Failure')
+          yield* source.close
+          const retained = yield* acquireRetainedFileSource(makeSqliteDb, { directory, fileName: 'eventlog.db' })
+          yield* Eventlog.initializeSource(retained)
+          expect(yield* Eventlog.getClientHeadFromDb(retained.handle)).toEqual(replacement.seqNum)
+          expect(yield* Eventlog.getBackendHeadFromDb(retained.handle)).toEqual(2)
         }
         return snapshot
       }).pipe(Effect.scoped)
 
       const recovered = yield* Deferred.make<{
         dbState: SqliteDb
-        dbEventlog: SqliteDb
-        initializedSource: SourceIdentity.InitializedSource
+        source: SourceOwner
+        initializedSource: InitializedSource
       }>()
       let opening = false
       const backend = yield* makeMockSyncBackend({ startConnected: true })
@@ -128,10 +138,10 @@ for (const owner of ['ongoing', 'restarted'] as const) {
                       Effect.acquireRelease(factory({ _tag: 'fs', directory, fileName }), (db) =>
                         Effect.sync(() => db.close()),
                       )
-                    const dbEventlog = yield* reopen('eventlog.db')
-                    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
+                    const source = yield* acquireRetainedFileSource(factory, { directory, fileName: 'eventlog.db' })
+                    const initializedSource = yield* Eventlog.initializeSource(source)
                     const dbState = yield* reopen('state.db')
-                    yield* Deferred.succeed(recovered, { dbState, dbEventlog, initializedSource })
+                    yield* Deferred.succeed(recovered, { dbState, source, initializedSource })
                   }
                   return yield* Deferred.await(recovered)
                 }),
@@ -151,7 +161,9 @@ for (const owner of ['ongoing', 'restarted'] as const) {
         Stream.filter((state) => state.upstreamHead.global === 2 && state.localHead.global === 3),
         Stream.runHead,
       )
-      expect(Eventlog.getClientHeadFromDb((yield* Deferred.await(recovered)).dbEventlog)).toEqual(replacement.seqNum)
+      expect(yield* Eventlog.getClientHeadFromDb((yield* Deferred.await(recovered)).source.handle)).toEqual(
+        replacement.seqNum,
+      )
       expect((yield* leader.syncState.get).pending.map((event) => event.args.id)).toEqual(['pending'])
       expect(
         dbState

@@ -9,6 +9,7 @@ import { Cause, Deferred, Effect, Exit, FetchHttpClient, Layer, Schema, Stream }
 import { PlatformNode } from '@livestore/utils/node'
 
 import { makeTestAdapter } from '../test-adapter.ts'
+import { acquireMemorySource } from './source-fixture.ts'
 
 Vitest.live('a leader persistence failure closes the optimistic session instead of leaving it queryable', (test) =>
   Effect.gen(function* () {
@@ -30,21 +31,18 @@ Vitest.live('a leader persistence failure closes the optimistic session instead 
           makeLeaderThread: (makeSqliteDb) =>
             Effect.gen(function* () {
               // Use the adapter's WASM factory: SQLite handles cannot cross module instances.
-              const rawEventlog = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-                Effect.sync(() => db.close()),
-              )
-              const dbEventlog = {
+              const source = yield* acquireMemorySource(makeSqliteDb, (rawEventlog) => ({
                 ...rawEventlog,
                 execute: SqliteDbHelper.makeExecute((...args) => {
                   if (armed === true && args[0] === 'COMMIT') throw new Error('Injected leader source COMMIT failure')
                   rawEventlog.execute(...args)
                 }),
-              }
-              const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+              }))
+              const initializedSource = yield* Eventlog.initializeSource(source)
               const dbState = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
                 Effect.sync(() => db.close()),
               )
-              return { dbState, dbEventlog, initializedSource }
+              return { dbState, source, initializedSource }
             }),
         },
       },

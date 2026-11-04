@@ -8,6 +8,7 @@ const root = path.resolve(import.meta.dirname, '../..')
 export default defineConfig({
   test: {
     projects: [
+      'packages/@livestore/sqlite-wasm/vitest.config.ts',
       'packages/@livestore/adapter-node/vitest.config.ts',
       'packages/@livestore/adapter-expo/vitest.config.ts',
       'packages/@livestore/react/vitest.config.ts',

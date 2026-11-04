@@ -53,7 +53,7 @@ import {
 } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
+import { newMemorySource, events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
 
 /*
 TODO:
@@ -424,7 +424,8 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-      const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+      const source = yield* newMemorySource(dbEventlog)
+      const initializedSource = yield* Eventlog.initializeSource(source)
       const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const mockBackend = yield* makeMockSyncBackend({ startConnected: false })
       const shutdownChannel = yield* WebChannel.noopChannel<any, any>()
@@ -442,7 +443,7 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       }).pipe(
         Layer.provide(
           Layer.mergeAll(
-            makeSqliteServicesLayer({ dbState, dbEventlog }),
+            makeSqliteServicesLayer({ dbState, source }),
             FetchHttpClient.layer,
             PlatformNode.NodeFileSystem.layer,
           ),
@@ -1008,9 +1009,13 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       expect({ global: stateHead.global, client: stateHead.client }).toEqual({ global: 2, client: 0 })
       expect(stateHead.rebaseGeneration).toBe(1)
       expect(
-        (yield* EventlogSqliteDb.EventlogSqliteDb)
-          .select(SystemTables.eventlogMetaTable)
-          .map(({ seqNumGlobal, seqNumRebaseGeneration, name }) => ({ seqNumGlobal, seqNumRebaseGeneration, name })),
+        (yield* (yield* EventlogSqliteDb.EventlogSqliteDb).handle.select<{
+          seqNumGlobal: number
+          seqNumRebaseGeneration: number
+          name: string
+        }>(`SELECT * FROM ${SystemTables.EVENTLOG_META_TABLE}`)).map(
+          ({ seqNumGlobal, seqNumRebaseGeneration, name }) => ({ seqNumGlobal, seqNumRebaseGeneration, name }),
+        ),
       ).toEqual([
         { seqNumGlobal: 1, seqNumRebaseGeneration: 0, name: 'todoCreated' },
         { seqNumGlobal: 2, seqNumRebaseGeneration: 1, name: 'todoCreated' },
@@ -1402,7 +1407,7 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       yield* testContext.mockSyncBackend.pushedEvents.pipe(Stream.take(1), Stream.runDrain, Effect.timeout(3000))
 
       // Verify data exists in eventlog before the error
-      const beforeRows = (yield* EventlogSqliteDb.EventlogSqliteDb).select<{ name: string }>(
+      const beforeRows = yield* (yield* EventlogSqliteDb.EventlogSqliteDb).handle.select<{ name: string }>(
         `SELECT name FROM eventlog`,
       )
       expect(beforeRows.length).toBeGreaterThan(0)
@@ -1423,10 +1428,10 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
 
       // Verify databases were cleared
       const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
-      const afterEventlogRows = dbEventlog.select<{ name: string }>(`SELECT name FROM eventlog`)
+      const afterEventlogRows = yield* dbEventlog.handle.select<{ name: string }>(`SELECT name FROM eventlog`)
       expect(afterEventlogRows.length).toBe(0)
 
-      const afterSyncStatusRows = dbEventlog.select<{ head: number; backendId: string | null }>(
+      const afterSyncStatusRows = yield* dbEventlog.handle.select<{ head: number; backendId: string | null }>(
         `SELECT head, backendId FROM __livestore_sync_status`,
       )
       expect(afterSyncStatusRows).toEqual([{ head: 0, backendId: null }])
@@ -1452,7 +1457,7 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       )
 
       // Verify data exists
-      const beforeRows = (yield* EventlogSqliteDb.EventlogSqliteDb).select<{ name: string }>(
+      const beforeRows = yield* (yield* EventlogSqliteDb.EventlogSqliteDb).handle.select<{ name: string }>(
         `SELECT name FROM eventlog`,
       )
       expect(beforeRows.length).toBeGreaterThan(0)
@@ -1471,7 +1476,9 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       expect(shutdownMsg._tag).toEqual('BackendIdMismatchError')
 
       // Verify databases were NOT cleared
-      const afterRows = (yield* EventlogSqliteDb.EventlogSqliteDb).select<{ name: string }>(`SELECT name FROM eventlog`)
+      const afterRows = yield* (yield* EventlogSqliteDb.EventlogSqliteDb).handle.select<{ name: string }>(
+        `SELECT name FROM eventlog`,
+      )
       expect(afterRows.length).toBeGreaterThan(0)
     }).pipe(
       withTestCtx({ syncOptions: { onBackendIdMismatch: 'shutdown', livePull: false }, captureShutdown: true })(test),
@@ -1506,7 +1513,9 @@ Vitest.describe.concurrent('LeaderSyncProcessor', { timeout: 60000 }, () => {
       yield* Effect.sleep(Duration.millis(500))
 
       // Verify data still exists (not cleared)
-      const afterRows = (yield* EventlogSqliteDb.EventlogSqliteDb).select<{ name: string }>(`SELECT name FROM eventlog`)
+      const afterRows = yield* (yield* EventlogSqliteDb.EventlogSqliteDb).handle.select<{ name: string }>(
+        `SELECT name FROM eventlog`,
+      )
       expect(afterRows.length).toBeGreaterThan(0)
 
       // Verify no shutdown happened (deferred should still be pending)
@@ -1590,9 +1599,10 @@ const LeaderThreadCtxLive = ({
       captureShutdown === true ? yield* WebChannel.queueChannelProxy({ schema: Shutdown.All }) : undefined
 
     const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+    const source = yield* newMemorySource(dbEventlog)
+    const initializedSource = yield* Eventlog.initializeSource(source)
     const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
-    const sqliteServicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
+    const sqliteServicesLayer = makeSqliteServicesLayer({ dbState, source })
     const leaderContextLayer = makeLeaderThreadLayer({
       initializedSource,
       schema,

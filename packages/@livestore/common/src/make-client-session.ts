@@ -100,6 +100,7 @@ export const makeClientSession = <R>({
                   mode: webmeshMode,
                 })
 
+                const services = yield* Effect.context()
                 const sendDisconnect = clientSessionDevtoolsChannel
                   .send(Devtools.ClientSession.Disconnect.make({ clientId, liveStoreVersion, sessionId }))
                   .pipe(Effect.orDie)
@@ -109,7 +110,7 @@ export const makeClientSession = <R>({
 
                 // Disconnect on before unload
                 yield* Effect.acquireRelease(
-                  Effect.sync(() => registerBeforeUnload(() => sendDisconnect.pipe(Effect.runFork))),
+                  Effect.sync(() => registerBeforeUnload(() => sendDisconnect.pipe(Effect.runForkWith(services)))),
                   (unsub) => Effect.sync(() => unsub()),
                 )
 

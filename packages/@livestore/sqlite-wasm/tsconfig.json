@@ -35,13 +35,29 @@
           "missedPipeableOpportunity": "warning",
           "schemaUnionOfLiterals": "warning",
           "anyUnknownInErrorContext": "warning",
-          "preferSchemaOverJson": "warning"
+          "globalJsonInEffect": "warning"
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
         ],
         "allowedUnstableApis": [
           "effect/FileSystem#FileSystem"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/FileSystem#FileSystem",
+                "@effect/platform-node/NodeFileSystem#layer"
+              ]
+            }
+          }
         ]
       }
     ],

@@ -12,6 +12,9 @@ export type Env = {
   SYNC_BACKEND_DO: CfTypes.DurableObjectNamespace<CfSyncBackend.SyncBackendRpcInterface>
 }
 
+// Store creation uses only these capabilities; unrelated runtime members differ across CF and DOM type realms.
+type StoreDurableObjectContext = Pick<CfTypes.DurableObjectState, 'storage' | 'id'>
+
 export type CreateStoreDoOptions<TSchema extends LiveStoreSchema, TEnv, TState> = {
   /** LiveStore schema that defines state, migrations, and validators. */
   schema: TSchema
@@ -111,7 +114,7 @@ export type CreateStoreDoOptions<TSchema extends LiveStoreSchema, TEnv, TState> 
 export const createStoreDo = <
   TSchema extends LiveStoreSchema,
   TEnv,
-  TState extends CfTypes.DurableObjectState = CfTypes.DurableObjectState,
+  TState extends StoreDurableObjectContext = StoreDurableObjectContext,
 >({
   schema,
   storeId,
@@ -182,7 +185,7 @@ export const createStoreDo = <
 export const createStoreDoPromise = <
   TSchema extends LiveStoreSchema,
   TEnv,
-  TState extends CfTypes.DurableObjectState = CfTypes.DurableObjectState,
+  TState extends StoreDurableObjectContext = StoreDurableObjectContext,
 >(
   options: CreateStoreDoOptions<TSchema, TEnv, TState>,
 ) =>

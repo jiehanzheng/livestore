@@ -20,19 +20,23 @@ export const makeTransactionHost = (
 ): SqliteTransactionHost => {
   const semaphore = Semaphore.makeUnsafe(1)
   let failed = false
+  const ownedFrame: Effect.Effect<TransactionFrame | undefined> = Effect.gen(function* () {
+    const current = yield* Effect.serviceOption(ActiveTransaction)
+    const fiberId = yield* Effect.fiberId
+    return Option.isSome(current) === true &&
+      current.value.host === host &&
+      current.value.active === true &&
+      current.value.ownerFiberId === fiberId
+      ? current.value
+      : undefined
+  })
   const host: SqliteTransactionHost = {
     sourceNamespace: 'durable-object',
+    inTransaction: ownedFrame.pipe(Effect.map((frame) => frame !== undefined)),
     runTransaction: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       Effect.gen(function* () {
-        const current = yield* Effect.serviceOption(ActiveTransaction)
-        const fiberId = yield* Effect.fiberId
-        if (
-          Option.isSome(current) === true &&
-          current.value.host === host &&
-          current.value.active === true &&
-          current.value.ownerFiberId === fiberId
-        ) {
-          const frame = current.value
+        const frame = yield* ownedFrame
+        if (frame !== undefined) {
           return yield* effect.pipe(
             Effect.onExit((exit) =>
               Effect.sync(() => {

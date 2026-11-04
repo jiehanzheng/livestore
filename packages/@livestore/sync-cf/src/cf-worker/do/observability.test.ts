@@ -5,6 +5,7 @@ import { type CfTypes, layerProtocolDurableObject, WsContext } from '@livestore/
 import { makeNoopSpan, makeNoopTracer } from '@livestore/utils'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import {
+  Context,
   Deferred,
   Effect,
   FetchHttpClient,
@@ -167,7 +168,7 @@ Vitest.describe('sync-cf telemetry ownership', () => {
             payload: payload as Uint8Array<ArrayBuffer>,
             input,
             observability,
-          }).pipe(Effect.runPromise),
+          }).pipe(Effect.runPromiseWith(Context.empty())),
       })
       const responses = yield* Effect.gen(function* () {
         const client = yield* RpcClient.make(SyncDoRpc)

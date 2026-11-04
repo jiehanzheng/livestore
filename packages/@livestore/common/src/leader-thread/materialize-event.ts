@@ -1,13 +1,14 @@
 import { isDevEnv, shouldNeverHappen } from '@livestore/utils'
 import { Effect, Option, Schema } from '@livestore/utils/effect'
 
-import { MaterializeError } from '../adapter-types.ts'
-import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
+import { MaterializeError, SqliteError } from '../adapter-types.ts'
 import * as MaterializationJournal from '../MaterializationJournal.ts'
 import { getExecStatementsFromMaterializer, hashMaterializerResults } from '../materializer-helper.ts'
 import { logDeprecationWarnings } from '../schema/EventDef/deprecated.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
 import { EventSequenceNumber, resolveEventDef, UNKNOWN_EVENT_SCHEMA_HASH } from '../schema/mod.ts'
+import { SourceContext } from '../source-db/owner.ts'
+import { SourceDbError } from '../source-db/role.ts'
 import * as SqliteDbHelper from '../sqlite-db-helper.ts'
 import * as StateHead from '../StateHead.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
@@ -23,14 +24,10 @@ export const makeMaterializeEvent = ({
 }): Effect.Effect<
   MaterializeEvent,
   never,
-  | EventlogSqliteDb.EventlogSqliteDb
-  | MaterializationJournal.MaterializationJournal
-  | StateHead.StateHead
-  | StateSqliteDb.StateSqliteDb
+  MaterializationJournal.MaterializationJournal | StateHead.StateHead | StateSqliteDb.StateSqliteDb
 > =>
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
-    const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
     const materializationJournal = yield* MaterializationJournal.MaterializationJournal
     const stateHead = yield* StateHead.StateHead
     const eventDefSchemaHashMap = new Map(
@@ -42,6 +39,7 @@ export const makeMaterializeEvent = ({
 
     return (eventEncoded, options) =>
       Effect.gen(function* () {
+        const source = yield* SourceContext
         const skipEventlog = options?.skipEventlog ?? false
         const syncMetadata = options?.syncMetadata ?? Option.none()
 
@@ -57,7 +55,7 @@ export const makeMaterializeEvent = ({
           if (skipEventlog === false) {
             yield* Eventlog.insertIntoEventlog(
               eventEncoded,
-              dbEventlog,
+              source,
               UNKNOWN_EVENT_SCHEMA_HASH,
               eventEncoded.clientId,
               eventEncoded.sessionId,
@@ -130,7 +128,7 @@ export const makeMaterializeEvent = ({
 
           yield* Eventlog.insertIntoEventlog(
             eventEncoded,
-            dbEventlog,
+            source,
             eventDefSchemaHash,
             eventEncoded.clientId,
             eventEncoded.sessionId,
@@ -145,7 +143,7 @@ export const makeMaterializeEvent = ({
         Effect.mapError((cause) =>
           MaterializationJournal.isMaterializationJournalError(cause) === true
             ? cause
-            : MaterializeError.make({ cause }),
+            : MaterializeError.make({ cause: cause instanceof SourceDbError ? new SqliteError({ cause }) : cause }),
         ),
         Effect.withSpan(`@livestore/common:leader-thread:materializeEvent`, {
           attributes: {

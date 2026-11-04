@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { expect } from 'vitest'
 
 import { StateSnapshot } from '@livestore/common'
@@ -7,7 +9,7 @@ import type { EventSequenceNumber } from '@livestore/common/schema'
 import { Events, LiveStoreEvent, makeSchema, State, SystemTables } from '@livestore/common/schema'
 import { EventFactory } from '@livestore/common/testing'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
+import { reserveNodeSource, sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import {
   Cause,
@@ -26,7 +28,7 @@ import {
 } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { getStateHead, makeSqliteServicesLayer } from './fixture.ts'
+import { ownSource, getStateHead, makeSqliteServicesLayer } from './fixture.ts'
 
 const objects = State.SQLite.table({
   name: 'retained_objects',
@@ -68,10 +70,15 @@ for (const policy of ['shutdown', 'reset'] as const) {
         const fs = yield* FileSystem.FileSystem
         // Each policy has disposable files: the reset control must never share the retained source fixture.
         const directory = yield* fs.makeTempDirectoryScoped()
-        const open = (fileName: string) =>
-          Effect.acquireRelease(makeSqliteDb({ _tag: 'fs', directory, fileName }), (db) =>
-            Effect.sync(() => db.close()),
-          )
+        const open = (fileName: string, newlyAllocated = false) =>
+          makeSqliteDb({
+            _tag: 'fs',
+            directory,
+            fileName,
+            ...(newlyAllocated === true ? { sourceCreation: reserveNodeSource(path.join(directory, fileName)) } : {}),
+          })
+        const openState = (fileName: string) =>
+          Effect.acquireRelease(open(fileName), (db) => Effect.sync(() => db.close()))
         const factory = EventFactory.makeFactory(events)({ client: EventFactory.clientIdentity(clientId, sessionId) })
         const confirmed = factory.created.next({ id: 'confirmed' })
         const pending = factory.created.next({ id: 'pending' })
@@ -82,9 +89,10 @@ for (const policy of ['shutdown', 'reset'] as const) {
         let retainedHead: EventSequenceNumber.Client.Composite | undefined
 
         yield* Effect.gen(function* () {
-          const dbEventlog = yield* open('eventlog.db')
-          const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
-          const dbState = yield* open('state.db')
+          const dbEventlog = yield* open('eventlog.db', true)
+          const source = yield* ownSource(dbEventlog, dbEventlog.metadata.sourceCreation)
+          const initializedSource = yield* Eventlog.initializeSource(source)
+          const dbState = yield* openState('state.db')
           const mockBackend = yield* makeMockSyncBackend()
           const mismatchStarted = yield* Deferred.make<void>()
           const releaseMismatch = yield* Deferred.make<void>()
@@ -110,7 +118,7 @@ for (const policy of ['shutdown', 'reset'] as const) {
             },
             devtoolsOptions: { enabled: false },
             shutdownChannel: shutdown.webChannel,
-          }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })), Layer.provide(FetchHttpClient.layer))
+          }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source })), Layer.provide(FetchHttpClient.layer))
 
           yield* Effect.gen(function* () {
             const leader = yield* LeaderThreadCtx
@@ -177,8 +185,9 @@ for (const policy of ['shutdown', 'reset'] as const) {
 
         yield* Effect.gen(function* () {
           const dbEventlog = yield* open('eventlog.db')
-          const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
-          const dbState = yield* open('state.db')
+          const source = yield* ownSource(dbEventlog)
+          const initializedSource = yield* Eventlog.initializeSource(source)
+          const dbState = yield* openState('state.db')
           if (policy === 'shutdown') expect(persisted(dbState, dbEventlog)).toEqual(retained)
           else {
             expect(dbEventlog.select(SystemTables.eventlogMetaTable)).toEqual([])
@@ -211,7 +220,7 @@ for (const policy of ['shutdown', 'reset'] as const) {
                 devtoolsOptions: { enabled: false },
                 shutdownChannel: shutdown.webChannel,
               }).pipe(
-                Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
+                Layer.provide(makeSqliteServicesLayer({ dbState, source })),
                 Layer.provide(FetchHttpClient.layer),
               ),
             ),

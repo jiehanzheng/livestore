@@ -267,6 +267,7 @@ Vitest.describe('useClientDocument', () => {
     }),
   )
 
+  // Trace children follow completion order: asynchronous SOURCE persistence lets shutdown finish pull before push.
   Vitest.describe('otel', () => {
     it.each([{ strictMode: true }, { strictMode: false }])(
       'should update the data based on component key strictMode=%s',

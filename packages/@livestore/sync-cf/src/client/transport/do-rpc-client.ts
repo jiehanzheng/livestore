@@ -42,7 +42,7 @@ export interface DoRpcSyncOptions {
    * State handle of the client DurableObject running this sync backend. Scopes live-pull routing to
    * this instance so it resets when the DO is reconstructed (see {@link handleSyncUpdateRpc}).
    */
-  durableObjectState: CfTypes.DurableObjectState
+  durableObjectState: object
   /** Information about this DurableObject instance so the Sync DO instance can call back to this instance */
   durableObjectContext: {
     /** See `wrangler.toml` for the binding name */
@@ -227,7 +227,7 @@ export const makeDoRpcSync =
  * }
  * ```
  */
-export const handleSyncUpdateRpc = (ctx: CfTypes.DurableObjectState, payload: Uint8Array<ArrayBuffer>) =>
+export const handleSyncUpdateRpc = (ctx: object, payload: Uint8Array<ArrayBuffer>) =>
   Effect.gen(function* () {
     const serialization = yield* RpcSerialization.RpcSerialization
     const parser = serialization.makeUnsafe()
@@ -269,9 +269,9 @@ type PullRouting = Map<EffectRpcRequestId, Queue.Queue<SyncMessage.PullResponse>
  * - Keyed by request id: a late chunk from a superseded pull generation finds no entry and is
  *   dropped here — never reaching `SyncState.merge`, which dies on an event at/below the upstream head.
  */
-const pullRoutingByInstance = new WeakMap<CfTypes.DurableObjectState, PullRouting>()
+const pullRoutingByInstance = new WeakMap<object, PullRouting>()
 
-const pullRoutingFor = (ctx: CfTypes.DurableObjectState): PullRouting => {
+const pullRoutingFor = (ctx: object): PullRouting => {
   const existing = pullRoutingByInstance.get(ctx)
   if (existing !== undefined) return existing
   const routing: PullRouting = new Map()

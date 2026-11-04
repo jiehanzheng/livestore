@@ -10,6 +10,7 @@ import * as Playwright from '@livestore/effect-playwright'
 import { shouldNeverHappen } from '@livestore/utils'
 import { OtelLiveHttp } from '@livestore/utils-dev/node'
 import {
+  Context,
   Effect,
   FetchHttpClient,
   Fiber,
@@ -348,8 +349,9 @@ const PWLive = ({ extensionPath }: { extensionPath: string }) =>
             await tab2.devtools.reload()
           })
 
+          // This native host callback uses the live default clock, independently of the test runtime.
           tab2.liveStoreDevtools = await getLiveStoreDevtoolsFrame(tab2.devtools, 'devtools-tab-2').pipe(
-            Effect.runPromise,
+            Effect.runPromiseWith(Context.empty()),
           )
 
           await checkDevtoolsState({

@@ -11,7 +11,6 @@ import {
 } from '@livestore/common'
 import {
   configureConnection,
-  Eventlog,
   LeaderPersistence,
   LeaderThreadCtx,
   makeLeaderThreadLayer,
@@ -20,6 +19,7 @@ import {
   ShutdownChannel,
 } from '@livestore/common/leader-thread'
 import { Events, EventSequenceNumber, LiveStoreEvent, makeSchema, State, SystemTables } from '@livestore/common/schema'
+import { fromSyncSource, initializeSource, SourceEvents, type SourceOwner } from '@livestore/common/source-db'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { deepEqual } from '@livestore/utils'
@@ -32,6 +32,7 @@ import {
   readPersistedStateDbFromClientSession,
   sanitizeOpfsDir,
 } from './persisted-sqlite.ts'
+import { acquireSourceNamespace } from './source-namespace.ts'
 
 /** Dedicated-worker fixture: the parent terminates this worker at a real SQLite boundary, without finalizers. */
 type Command = {
@@ -86,7 +87,7 @@ addEventListener('message', (message: MessageEvent<Command>) => {
   let ownedDirectory: string | undefined
   const run = Effect.gen(function* () {
     const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
-    const makeSqliteDb = sqliteDbFactory({ sqlite3 })
+    const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
     const directory = yield* sanitizeOpfsDir(undefined, request.namespace)
     ownedDirectory = directory
     stage = 'fast-read'
@@ -104,25 +105,32 @@ addEventListener('message', (message: MessageEvent<Command>) => {
       )
       return { namespace: request.namespace, directory, snapshot }
     }
-    const { sourceIsNew } = yield* discoverPersistedSource({
+    const namespace = yield* acquireSourceNamespace({ directory, closePhysicalOwner: makeSqliteDb.close })
+    const discovery = yield* discoverPersistedSource({
       storageOptions: { type: 'opfs' },
       storeId: request.namespace,
+      namespace,
     })
     const services = yield* Effect.context()
-    const open = (fileName: string) =>
+    let sourceOwner: SourceOwner | undefined
+    const open = (fileName: string, isSource = false) =>
       Effect.acquireRelease(
         makeSqliteDb({
           _tag: 'opfs',
           opfsDirectory: directory,
           fileName,
+          ...(isSource === true && discovery.inventory !== undefined ? { sourceInventory: discovery.inventory } : {}),
           configureDb: (db) => configureConnection(db, { foreignKeys: true }).pipe(Effect.runSyncWith(services)),
         }),
-        (db) => Effect.sync(() => db.close()),
+        (db) =>
+          isSource === true && sourceOwner !== undefined
+            ? sourceOwner.close.pipe(Effect.orDie)
+            : Effect.sync(() => db.close()),
       )
     stage = 'open-eventlog'
-    const rawEventlog = yield* open('eventlog.db')
+    const rawEventlog = yield* open('eventlog.db', true)
     let armed = false
-    const dbEventlog: SqliteDb = {
+    const observedEventlog: SqliteDb = {
       ...rawEventlog,
       execute: SqliteDbHelper.makeExecute((...args) => {
         rawEventlog.execute(...args)
@@ -130,7 +138,13 @@ addEventListener('message', (message: MessageEvent<Command>) => {
           parkAtBoundary('after-eventlog')
       }),
     }
-    const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew })
+    const dbEventlog = yield* fromSyncSource(
+      observedEventlog,
+      rawEventlog.metadata._tag === 'opfs' ? rawEventlog.metadata.sourceCreation : undefined,
+      namespace.isHeld,
+    )
+    sourceOwner = dbEventlog
+    const initializedSource = yield* initializeSource(dbEventlog)
     stage = 'open-state'
     const rawState = yield* open(getStateDbFileName(schema))
     const dbState: SqliteDb = {
@@ -156,7 +170,7 @@ addEventListener('message', (message: MessageEvent<Command>) => {
       const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(layers))
       const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
       stage = 'initial-reconstruction'
-      yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(layers))
+      yield* recreateDb({ schema, bootStatusQueue, materializeEvent, initializedSource }).pipe(Effect.provide(layers))
       const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(layers))
       const base = sourceEvent('base', 0)
       const original =
@@ -214,11 +228,16 @@ addEventListener('message', (message: MessageEvent<Command>) => {
       throw new Error('Expected the parent to terminate this worker at a boundary')
     }
     stage = 'offline-leader-boot'
-    const sourceBefore = dbEventlog.select(SystemTables.eventlogMetaTable)
+    const readSource = SourceEvents.selectStoredEvents(
+      dbEventlog.handle,
+      'SELECT * FROM eventlog ORDER BY seqNumGlobal, seqNumClient, seqNumRebaseGeneration',
+    )
+    const sourceBefore = yield* readSource
     const shutdown = yield* WebChannel.queueChannelProxy({ schema: ShutdownChannel.All })
     return yield* Effect.gen(function* () {
       const leader = yield* LeaderThreadCtx
       const state = yield* leader.syncProcessor.syncState.get
+      const sourceAfter = yield* readSource
       const recovered = {
         namespace: request.namespace,
         directory,
@@ -228,9 +247,9 @@ addEventListener('message', (message: MessageEvent<Command>) => {
           clientId: event.clientId,
           sessionId: event.sessionId,
         })),
-        sourceIds: dbEventlog.select(SystemTables.eventlogMetaTable).map((event) => event.argsJson),
-        sourceUnchanged: deepEqual(sourceBefore, dbEventlog.select(SystemTables.eventlogMetaTable)),
-        backendHead: Eventlog.getBackendHeadFromDb(dbEventlog),
+        sourceIds: sourceAfter.map(({ event }) => event.args),
+        sourceUnchanged: deepEqual(sourceBefore, sourceAfter),
+        backendHead: yield* SourceEvents.readBackendHead(dbEventlog.handle),
         stateHead: dbState.select(SystemTables.stateHeadMetaTable),
         journalCount: dbState.select(SystemTables.materializationJournalMetaTable).length,
         marker: dbState.select(SystemTables.rebuildMetaTable),
@@ -299,12 +318,8 @@ addEventListener('message', (message: MessageEvent<Command>) => {
       ),
     )
   }).pipe(Effect.scoped, Effect.provide(Opfs.layer), Effect.withSpan('fork-opfs-recovery-fixture'))
-  // Web Locks model the adapter's exclusive owner handoff after abrupt worker termination.
-  // Fast snapshot reads deliberately remain concurrent with the parked persistence owner.
-  const execution =
-    request.action === 'fast-read'
-      ? Effect.runPromise(run)
-      : navigator.locks.request(`fork-opfs-owner-${request.namespace}`, () => Effect.runPromise(run))
+  // The actual SOURCE namespace lease releases on abrupt worker termination; fast reads remain concurrent.
+  const execution = Effect.runPromise(run)
   void execution.then(
     (result) => postMessage({ result }),
     (error) => postMessage({ error: String(error), stage, namespace: request.namespace, directory: ownedDirectory }),

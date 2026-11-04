@@ -21,8 +21,11 @@ export default packageJson(
   {
     name: '@livestore/adapter-node',
     ...livestorePackageDefaults,
-    exports: { '.': './src/mod.ts' },
-    publishConfig: { access: 'public', exports: { '.': './dist/mod.js' } },
+    exports: { '.': './src/mod.ts', './source-maintenance': './src/source-maintenance.ts' },
+    publishConfig: {
+      access: 'public',
+      exports: { '.': './dist/mod.js', './source-maintenance': './dist/source-maintenance.js' },
+    },
   },
   runtimeDeps,
 )

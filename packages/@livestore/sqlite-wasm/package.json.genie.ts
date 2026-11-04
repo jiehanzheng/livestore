@@ -40,6 +40,8 @@ export default packageJson(
       './node': './src/node/mod.ts',
       './cf': './src/cf/mod.ts',
       './browser': './src/browser/mod.ts',
+      './browser/internal-source': './src/browser/opfs/source-allocation.ts',
+      './browser/source-maintenance': './src/browser/opfs/maintenance.ts',
     },
     publishConfig: {
       access: 'public',
@@ -63,6 +65,14 @@ export default packageJson(
         './cf': {
           types: './dist/cf/mod.d.ts',
           default: './dist/cf/mod.js',
+        },
+        './browser/internal-source': {
+          types: './dist/browser/opfs/source-allocation.d.ts',
+          default: './dist/browser/opfs/source-allocation.js',
+        },
+        './browser/source-maintenance': {
+          types: './dist/browser/opfs/maintenance.d.ts',
+          default: './dist/browser/opfs/maintenance.js',
         },
         './browser': {
           types: './dist/browser/mod.d.ts',

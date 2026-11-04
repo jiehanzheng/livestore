@@ -62,6 +62,7 @@ import { PlatformNode } from '@livestore/utils/node'
 
 import { events, getStateHead, makeSqliteServicesLayer, schema, tables } from '../leader-thread/fixture.ts'
 import { makeTestAdapter, type TestingOverrides } from '../test-adapter.ts'
+import { acquireMemorySource } from './source-fixture.ts'
 
 // TODO fix type level - derived events are missing and thus infers to `never` currently
 const eventSchema = LiveStoreEvent.Input.makeSchema(schema) as TODO as Schema.Codec<LiveStoreEvent.Input.Encoded>
@@ -159,7 +160,7 @@ const makeClientProcessorHarness = Effect.fn(function* ({
     clientSession,
     materializeEvent,
     refreshTables: () => undefined,
-    params: { leaderPushBatchSize, rebaseBarriers },
+    params: { leaderPushBatchSize, ...omitUndefineds({ rebaseBarriers }) },
     confirmUnsavedChanges: false,
   }).pipe(
     Effect.provide(
@@ -815,9 +816,9 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
         capacity: Number.POSITIVE_INFINITY,
         lookup: ({ makeSqliteDb }: LeaderThreadCacheKey) =>
           Effect.gen(function* () {
-            const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
+            const source = yield* acquireMemorySource(makeSqliteDb)
 
-            const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: true })
+            const initializedSource = yield* Eventlog.initializeSource(source)
 
             yield* Eventlog.insertIntoEventlog(
               LiveStoreEvent.Client.Encoded.make({
@@ -827,7 +828,7 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
                 parentSeqNum: EventSequenceNumber.Client.ROOT,
                 sessionId: 'client-session1',
               }),
-              dbEventlog,
+              source,
               Schema.hash(events.todoCreated.schema),
               'client',
               'client-session1',
@@ -836,11 +837,13 @@ Vitest.describe.concurrent('ClientSessionSyncProcessor', () => {
             const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
 
             const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-            const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
+            const servicesLayer = makeSqliteServicesLayer({ dbState, source })
             const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(servicesLayer))
-            yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(servicesLayer))
+            yield* recreateDb({ schema, bootStatusQueue, materializeEvent, initializedSource }).pipe(
+              Effect.provide(servicesLayer),
+            )
 
-            return { dbEventlog, dbState, initializedSource }
+            return { source, dbState, initializedSource }
           }).pipe(Effect.orDie),
       })
 

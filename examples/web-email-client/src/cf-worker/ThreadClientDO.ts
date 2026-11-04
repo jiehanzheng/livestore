@@ -2,7 +2,6 @@ import { DurableObject } from 'cloudflare:workers'
 
 import { type ClientDoWithRpcCallback, createStoreDoPromise } from '@livestore/adapter-cloudflare'
 import { nanoid, type Store } from '@livestore/livestore'
-import type * as SyncBackend from '@livestore/sync-cf/cf-worker'
 import { handleSyncUpdateRpc } from '@livestore/sync-cf/client'
 
 import { schema as threadSchema, threadTables } from '../stores/thread/schema.ts'
@@ -27,13 +26,13 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
 
     const storeId = `thread-${threadId}`
 
-    this.store = await createStoreDoPromise({
+    this.store = await createStoreDoPromise<typeof threadSchema, Env>({
       schema: threadSchema,
       storeId,
       clientId: 'thread-client-do',
       sessionId: nanoid(),
       durableObject: {
-        ctx: this.ctx as SyncBackend.CfTypes.DurableObjectState,
+        ctx: this.ctx,
         env: this.env,
         bindingName: 'THREAD_CLIENT_DO',
       },
@@ -56,7 +55,7 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
   }
 
   private async subscribeToStore() {
-    if (this.threadLabelsSubscription || this.threadSubscription) return
+    if (this.threadLabelsSubscription !== undefined || this.threadSubscription !== undefined) return
 
     if (this.hasStore === false) throw new Error('Store not initialized. Call initialize() first.')
 
@@ -73,7 +72,7 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
     try {
       // Find removed labels - publish v1.ThreadLabelRemoved
       for (const { threadId, labelId } of this.previousLabels) {
-        if (!currentLabels.some((curr) => curr.labelId === labelId)) {
+        if (currentLabels.some((curr) => curr.labelId === labelId) === false) {
           await this.env.CROSS_STORE_EVENTS_QUEUE.send({
             name: 'v1.ThreadLabelRemoved',
             data: {
@@ -88,7 +87,7 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
 
       // Find added labels - publish v1.ThreadLabelApplied
       for (const { threadId, labelId } of currentLabels) {
-        if (!this.previousLabels.some((prev) => prev.labelId === labelId)) {
+        if (this.previousLabels.some((prev) => prev.labelId === labelId) === false) {
           await this.env.CROSS_STORE_EVENTS_QUEUE.send({
             name: 'v1.ThreadLabelApplied',
             data: {
@@ -119,7 +118,7 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
   ) => {
     try {
       // Since this store manages a single thread, we only publish once
-      if (this.threadPublished || currentThreads.length === 0) {
+      if (this.threadPublished === true || currentThreads.length === 0) {
         return
       }
 
@@ -149,6 +148,6 @@ export class ThreadClientDO extends DurableObject<Env> implements ClientDoWithRp
   async syncUpdateRpc(payload: Uint8Array<ArrayBuffer>) {
     // Make sure to wake up the store before processing the sync update
     await this.subscribeToStore()
-    await handleSyncUpdateRpc(this.ctx as SyncBackend.CfTypes.DurableObjectState, payload)
+    await handleSyncUpdateRpc(this.ctx, payload)
   }
 }

@@ -29,7 +29,7 @@ import {
 } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { getStateHead, makeSqliteServicesLayer } from './fixture.ts'
+import { newMemorySource, getStateHead, makeSqliteServicesLayer } from './fixture.ts'
 
 for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'interrupt'] as const) {
   Vitest.live(`rebuilds surviving partial state after ${failure} failure on common leader boot (#1605)`, (test) =>
@@ -39,9 +39,7 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
       const fs = yield* FileSystem.FileSystem
       const directory = yield* fs.makeTempDirectoryScoped()
       const services = yield* Effect.context()
-      const dbEventlog = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-        Effect.sync(() => db.close()),
-      )
+      const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
       const openState = Effect.acquireRelease(
         makeSqliteDb({
           _tag: 'fs',
@@ -58,12 +56,13 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
       const events = { created: Events.synced({ name: 'created', schema: Schema.Struct({ id: Schema.String }) }) }
       const factory = EventFactory.makeFactory(events)({ client: EventFactory.clientIdentity('test') })
       const eventIds = Array.from({ length: 5 }, (_, i) => `todo-${i + 1}`)
-      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+      const source = yield* newMemorySource(dbEventlog)
+      const initializedSource = yield* Eventlog.initializeSource(source)
       for (const id of eventIds) {
         const event = LiveStoreEvent.Client.fromGlobal(factory.created.next({ id }))
         yield* Eventlog.insertIntoEventlog(
           event,
-          dbEventlog,
+          source,
           Schema.hash(events.created.schema),
           event.clientId,
           event.sessionId,
@@ -127,7 +126,6 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
         }),
       })
       const boot = Effect.gen(function* () {
-        const initializedSource = yield* Eventlog.initializeSource(dbEventlog, { sourceIsNew: false })
         const persistedState = yield* openState
         // Model adapters whose failure cleanup leaves the persisted file intact.
         const dbState = { ...persistedState, destroy: () => persistedState.close() }
@@ -153,10 +151,7 @@ for (const failure of ['init', 'pre', 'replay', 'replay-after-batch', 'post', 'i
               devtoolsOptions: { enabled: false },
               shutdownChannel: shutdown.webChannel,
               ...(failure === 'replay-after-batch' ? { params: { stateRebuildBatchSize: 2 } } : {}),
-            }).pipe(
-              Layer.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
-              Layer.provide(FetchHttpClient.layer),
-            ),
+            }).pipe(Layer.provide(makeSqliteServicesLayer({ dbState, source })), Layer.provide(FetchHttpClient.layer)),
           ),
         )
       }).pipe(Effect.scoped)
@@ -213,9 +208,7 @@ Vitest.live('publishes rebuild completion only after an async post hook finishes
     const dbState = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
       Effect.sync(() => db.close()),
     )
-    const dbEventlog = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-      Effect.sync(() => db.close()),
-    )
+    const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
     const enteredPost = yield* Deferred.make<void>()
     const releasePost = yield* Deferred.make<void>()
     const schema = makeSchema({
@@ -235,11 +228,12 @@ Vitest.live('publishes rebuild completion only after an async post hook finishes
         },
       }),
     })
-    yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+    const source = yield* newMemorySource(dbEventlog)
+    const initializedSource = yield* Eventlog.initializeSource(source)
     const bootStatusQueue = yield* Effect.acquireRelease(Queue.unbounded<BootStatus>(), Queue.shutdown)
-    const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
+    const servicesLayer = makeSqliteServicesLayer({ dbState, source })
     const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(servicesLayer))
-    const rebuild = yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(
+    const rebuild = yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(
       Effect.provide(servicesLayer),
       Effect.forkScoped,
     )

@@ -14,32 +14,32 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.3.3)
       '@effect/ai-openai':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/sql-sqlite-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/tsgo':
-        specifier: 0.63.0
-        version: 0.63.0
+        specifier: 0.64.1
+        version: 0.64.1
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -50,8 +50,8 @@ importers:
         specifier: 25.3.3
         version: 25.3.3
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       oxfmt:
         specifier: 0.61.0
         version: 0.61.0(svelte@5.43.14(@typescript-eslint/types@8.59.4))
@@ -89,23 +89,23 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@astrojs/starlight@0.42.7(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(astro@7.4.4(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(@netlify/blobs@10.7.8(supports-color@10.2.2))(@types/node@25.3.3)(esbuild@0.28.0)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))(supports-color@10.2.2)(typescript@6.0.3))(tailwindcss@4.3.3)
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/adapter-cloudflare':
         specifier: workspace:^
         version: link:../packages/@livestore/adapter-cloudflare
@@ -123,7 +123,7 @@ importers:
         version: 0.5.0(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
       '@livestore/graphql':
         specifier: 0.5.0
-        version: 0.5.0(44964eb8831cf7d01010ae4b6b026a6e)
+        version: 0.5.0(2c79e0866b688351eaf2c54b0fda7905)
       '@livestore/livestore':
         specifier: workspace:^
         version: link:../packages/@livestore/livestore
@@ -132,19 +132,19 @@ importers:
         version: link:../packages/@livestore/react
       '@livestore/solid':
         specifier: 0.5.0
-        version: 0.5.0(6f6c7dee7e1b277a8b2d8118270d823c)
+        version: 0.5.0(c6bfd0f3871fc5edebb4548192a94a5d)
       '@livestore/svelte':
         specifier: 0.5.0
-        version: 0.5.0(0e4f9bc0d4c272b2112b27be6bc54aa9)
+        version: 0.5.0(fb55a59fe64954492a6ccd00aaaac926)
       '@livestore/sync-cf':
         specifier: workspace:^
         version: link:../packages/@livestore/sync-cf
       '@livestore/sync-electric':
         specifier: 0.5.0
-        version: 0.5.0(bd170ad6cb6ca5ea6e76c4e4da737653)
+        version: 0.5.0(706fd42accfac001974f26b0e81768a5)
       '@livestore/sync-s2':
         specifier: 0.5.0
-        version: 0.5.0(bd170ad6cb6ca5ea6e76c4e4da737653)
+        version: 0.5.0(706fd42accfac001974f26b0e81768a5)
       '@livestore/utils':
         specifier: workspace:^
         version: link:../packages/@livestore/utils
@@ -188,8 +188,8 @@ importers:
         specifier: 0.42.0
         version: 0.42.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       github-slugger:
         specifier: 2.0.0
         version: 2.0.0
@@ -276,29 +276,29 @@ importers:
         specifier: 5.20261030.1
         version: 5.20261030.1
       '@effect/ai-openai':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/atom-react':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(react@19.3.1)(scheduler@0.28.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(react@19.3.1)(scheduler@0.28.0)
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/adapter-cloudflare':
         specifier: workspace:^
         version: link:../../../../../packages/@livestore/adapter-cloudflare
@@ -313,7 +313,7 @@ importers:
         version: 0.5.0(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
       '@livestore/graphql':
         specifier: 0.5.0
-        version: 0.5.0(5db41bb5d09ef7f9d1befd2a54cd7498)
+        version: 0.5.0(bd131b3a6fe8703c162a12d7c54c6f73)
       '@livestore/livestore':
         specifier: workspace:^
         version: link:../../../../../packages/@livestore/livestore
@@ -322,22 +322,22 @@ importers:
         version: link:../../../../../packages/@livestore/react
       '@livestore/solid':
         specifier: 0.5.0
-        version: 0.5.0(f8ff4065e61c6b90681e886c4fde72bd)
+        version: 0.5.0(6648fd76d733227ff12adafa2ac35051)
       '@livestore/sqlite-wasm':
         specifier: workspace:^
         version: link:../../../../../packages/@livestore/sqlite-wasm
       '@livestore/svelte':
         specifier: 0.5.0
-        version: 0.5.0(91a7737fddb3847ede88f37fcbbb8beb)
+        version: 0.5.0(10ec51220a5584f89578467c46365240)
       '@livestore/sync-cf':
         specifier: workspace:^
         version: link:../../../../../packages/@livestore/sync-cf
       '@livestore/sync-electric':
         specifier: 0.5.0
-        version: 0.5.0(4ddbb76b9c6528b0ce52f2a829971c33)
+        version: 0.5.0(375d75ec361bd83dc30490264c9257c1)
       '@livestore/sync-s2':
         specifier: 0.5.0
-        version: 0.5.0(4ddbb76b9c6528b0ce52f2a829971c33)
+        version: 0.5.0(375d75ec361bd83dc30490264c9257c1)
       '@livestore/utils':
         specifier: workspace:^
         version: link:../../../../../packages/@livestore/utils
@@ -375,8 +375,8 @@ importers:
         specifier: 3.5.44
         version: 3.5.44
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       fractional-indexing:
         specifier: 3.2.0
         version: 3.2.0
@@ -436,23 +436,23 @@ importers:
   docs/src/content/_assets/code/native:
     dependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/adapter-expo':
         specifier: workspace:^
         version: link:../../../../../../packages/@livestore/adapter-expo
@@ -464,7 +464,7 @@ importers:
         version: link:../../../../../../packages/@livestore/livestore
       '@livestore/react':
         specifier: workspace:^
-        version: file:packages/@livestore/react(05acb309ad88371113293c6566e9085f)
+        version: file:packages/@livestore/react(a4661c47cef830943a7dbd471702f709)
       '@livestore/sync-cf':
         specifier: workspace:^
         version: link:../../../../../../packages/@livestore/sync-cf
@@ -481,20 +481,20 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       expo:
-        specifier: 58.0.21
-        version: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+        specifier: 58.0.22
+        version: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       expo-crypto:
         specifier: 58.0.7
-        version: 58.0.7(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))
+        version: 58.0.7(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))
       expo-file-system:
         specifier: 58.0.13
-        version: 58.0.13(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
+        version: 58.0.13(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
       expo-sqlite:
-        specifier: 58.0.14
-        version: 58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+        specifier: 58.0.15
+        version: 58.0.15(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -999,23 +999,23 @@ importers:
         specifier: 5.20261030.1
         version: 5.20261030.1
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1044,8 +1044,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       esbuild:
         specifier: 0.28.0
@@ -1060,23 +1060,23 @@ importers:
   packages/@livestore/adapter-expo:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1093,21 +1093,21 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/livestore':
         specifier: workspace:^
         version: link:../livestore
       expo:
-        specifier: 58.0.21
-        version: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+        specifier: 58.0.22
+        version: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       expo-file-system:
         specifier: 58.0.13
-        version: 58.0.13(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
+        version: 58.0.13(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
       expo-sqlite:
-        specifier: 58.0.14
-        version: 58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+        specifier: 58.0.15
+        version: 58.0.15(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -1124,23 +1124,23 @@ importers:
   packages/@livestore/adapter-node:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1160,8 +1160,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/livestore':
         specifier: workspace:^
@@ -1176,23 +1176,23 @@ importers:
   packages/@livestore/adapter-web:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1215,8 +1215,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@types/chrome':
         specifier: 0.1.4
@@ -1244,23 +1244,23 @@ importers:
         version: 1.9.0
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/utils-dev':
         specifier: workspace:^
         version: link:../utils-dev
@@ -1271,8 +1271,8 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -1283,23 +1283,23 @@ importers:
         specifier: 5.20261030.1
         version: 5.20261030.1
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/utils':
         specifier: workspace:^
         version: link:../utils
@@ -1313,8 +1313,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/utils-dev':
         specifier: workspace:^
@@ -1333,23 +1333,23 @@ importers:
         version: link:../utils
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -1366,29 +1366,29 @@ importers:
         specifier: 25.3.3
         version: 25.3.3
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
 
   packages/@livestore/framework-toolkit:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/adapter-web':
         specifier: workspace:^
         version: link:../adapter-web
@@ -1411,8 +1411,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/utils-dev':
         specifier: workspace:^
@@ -1424,23 +1424,23 @@ importers:
   packages/@livestore/livestore:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1457,8 +1457,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/adapter-web':
         specifier: workspace:^
@@ -1485,23 +1485,23 @@ importers:
   packages/@livestore/peer-deps:
     dependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -1512,29 +1512,29 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
 
   packages/@livestore/react:
     dependencies:
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1557,8 +1557,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@livestore/adapter-web':
         specifier: workspace:^
@@ -1612,23 +1612,23 @@ importers:
         specifier: 5.20261030.1
         version: 5.20261030.1
       '@effect/opentelemetry':
-        specifier: ^4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: ^4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../common
@@ -1651,8 +1651,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       effect:
-        specifier: ^4.1.0
-        version: 4.1.0
+        specifier: ^4.1.2
+        version: 4.1.2
     devDependencies:
       '@types/chrome':
         specifier: 0.1.4
@@ -1686,23 +1686,23 @@ importers:
         version: link:../utils
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/utils-dev':
         specifier: workspace:^
         version: link:../utils-dev
@@ -1716,8 +1716,8 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -1725,8 +1725,8 @@ importers:
   packages/@livestore/utils:
     dependencies:
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -1741,20 +1741,20 @@ importers:
         version: 2.0.4
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -1774,8 +1774,8 @@ importers:
         specifier: 0.0.264
         version: 0.0.264
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       esbuild:
         specifier: 0.28.0
         version: 0.28.0
@@ -1789,11 +1789,11 @@ importers:
   packages/@livestore/utils-dev:
     dependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@iarna/toml':
         specifier: 3.0.0
         version: 3.0.0
@@ -1823,17 +1823,17 @@ importers:
         version: 4.156.0(@cloudflare/workers-types@5.20261030.1)(@types/node@25.3.3)
     devDependencies:
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@opentelemetry/resources':
         specifier: 2.2.0
         version: 2.2.0(@opentelemetry/api@1.9.0)
@@ -1841,8 +1841,8 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -1892,23 +1892,23 @@ importers:
         version: link:../utils
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/utils-dev':
         specifier: workspace:^
         version: link:../utils-dev
@@ -1922,8 +1922,8 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -1938,23 +1938,23 @@ importers:
         version: link:../../@livestore/utils
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -1971,8 +1971,8 @@ importers:
         specifier: 7.4.4
         version: 7.4.4(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(@netlify/blobs@10.7.8(supports-color@10.2.2))(@types/node@25.3.3)(esbuild@0.28.0)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       puppeteer:
         specifier: 24.43.1
         version: 24.43.1(supports-color@10.2.2)(typescript@7.0.2)
@@ -1983,8 +1983,8 @@ importers:
   packages/@local/astro-twoslash-code:
     dependencies:
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@livestore/utils':
         specifier: workspace:^
         version: link:../../@livestore/utils
@@ -2014,20 +2014,20 @@ importers:
         specifier: 0.42.7
         version: 0.42.7(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(astro@7.4.4(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(@netlify/blobs@10.7.8(supports-color@10.2.2))(@types/node@25.3.3)(esbuild@0.28.0)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))(supports-color@10.2.2)(typescript@6.0.3)
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -2047,8 +2047,8 @@ importers:
         specifier: 7.4.4
         version: 7.4.4(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(@netlify/blobs@10.7.8(supports-color@10.2.2))(@types/node@25.3.3)(esbuild@0.28.0)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -2072,23 +2072,23 @@ importers:
         version: 7.4.4(@astrojs/markdown-remark@7.3.5(supports-color@10.2.2))(@netlify/blobs@10.7.8(supports-color@10.2.2))(@types/node@25.3.3)(esbuild@0.28.0)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -2108,8 +2108,8 @@ importers:
         specifier: 25.3.3
         version: 25.3.3
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -2126,23 +2126,23 @@ importers:
   scripts:
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.8.1)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.8.1)))
       '@livestore/common':
         specifier: workspace:^
         version: link:../packages/@livestore/common
@@ -2192,8 +2192,8 @@ importers:
         specifier: ^7.7.0
         version: 7.7.1
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       madge:
         specifier: ^8.0.0
         version: 8.0.0(supports-color@10.2.2)(typescript@7.0.2)
@@ -2253,23 +2253,23 @@ importers:
         specifier: 5.20261030.1
         version: 5.20261030.1
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -2307,8 +2307,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -2356,23 +2356,23 @@ importers:
         specifier: 7.29.11
         version: 7.29.11
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/devtools-vite':
         specifier: 0.5.0
         version: 0.5.0(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -2389,8 +2389,8 @@ importers:
         specifier: 25.3.3
         version: 25.3.3
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -2444,23 +2444,23 @@ importers:
         version: 8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -2477,8 +2477,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
 
   tests/perf-eventlog:
     dependencies:
@@ -2541,23 +2541,23 @@ importers:
         version: 8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/devtools-vite':
         specifier: 0.5.0
         version: 0.5.0(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -2574,8 +2574,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       tsx:
         specifier: ^4.20.0
         version: 4.22.3
@@ -2608,23 +2608,23 @@ importers:
         version: link:../../packages/@livestore/utils
     devDependencies:
       '@effect/opentelemetry':
-        specifier: 4.1.0
-        version: 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
       '@effect/platform-browser':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-bun':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/platform-node':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
       '@effect/platform-node-shared':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)
       '@effect/vitest':
-        specifier: 4.1.0
-        version: 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/devtools-vite':
         specifier: 0.5.0
         version: 0.5.0(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -2644,8 +2644,8 @@ importers:
         specifier: 25.3.3
         version: 25.3.3
       effect:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.2
+        version: 4.1.2
       vitest:
         specifier: 5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
@@ -3609,20 +3609,20 @@ packages:
     resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
-  '@effect/ai-openai@4.1.0':
-    resolution: {integrity: sha512-nliaAiyda83NE76Xd8CcHglYy9c0cLxm4iMK+maOODodarFIdVjWeGf8imps0svjd6/G14BAGhHBOOs+gSo7bw==}
+  '@effect/ai-openai@4.1.2':
+    resolution: {integrity: sha512-u2RkBOj718eQQmZan3mJh0PJDLzhbZ4qFmMc/uSJhS0jmUoiaQI8SsCzENpNk0TRkt8lxEK4urohpeV5/xDWBQ==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
 
-  '@effect/atom-react@4.1.0':
-    resolution: {integrity: sha512-PeaBDmwqG9BPQfaPHeWCB2NF4NQaFlI6poKxjlBHMrMjKqV+LVBdryhpDNqSZOhqGgT+qnh9gV+19MYjNOQ+bg==}
+  '@effect/atom-react@4.1.2':
+    resolution: {integrity: sha512-XRAm4lks2kzNFQIz9QTGKR02CaDTR9VJNRXDjDAR8OzM15ybrK4YkB7OlFZ9U+hxXe3DXJZx7RU1/xI2Em2PGQ==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
       react: '>=19.0.0 <20.0.0'
       scheduler: '>=0.25.0 <0.29.0'
 
-  '@effect/opentelemetry@4.1.0':
-    resolution: {integrity: sha512-j9bNzQaoQvcnimBFMG0i3piEW20E8HjkXAQHTJN/XqG2e4uJ9zCv53/HCNzD7+ooFn5S4nwQy/BOXeNReMIe+A==}
+  '@effect/opentelemetry@4.1.2':
+    resolution: {integrity: sha512-FhxQy4I0nKLX0Dh9l6rZ5S/fRAMt7dKdekHtoxgx7N/XBtPP/IFhcJnGPenceuuSeVbcLp1vpZa43wC05qdxng==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       '@opentelemetry/api': '>=1.9.0 <2.0.0'
@@ -3634,7 +3634,7 @@ packages:
       '@opentelemetry/sdk-trace-node': '>=2.0.0 <3.0.0'
       '@opentelemetry/sdk-trace-web': '>=2.0.0 <3.0.0'
       '@opentelemetry/semantic-conventions': '>=1.33.0 <2.0.0'
-      effect: ^4.1.0
+      effect: ^4.1.2
     peerDependenciesMeta:
       '@opentelemetry/api':
         optional: true
@@ -3653,77 +3653,77 @@ packages:
       '@opentelemetry/sdk-trace-web':
         optional: true
 
-  '@effect/platform-browser@4.1.0':
-    resolution: {integrity: sha512-IEyaPzejKozHDupOUSjQIgQYGv2C0I828up8z7/nvQTHzmQHUS2/tGMEwXX/FwAvnrWZ0H9MhlhTl18ZgCHQiQ==}
+  '@effect/platform-browser@4.1.2':
+    resolution: {integrity: sha512-O+C5hpnfdphBhSaOndFw8XA3dBG0x4SiF3m3QJzJwZZOlB4nGe+ghCZgknyaLcxigA8NqUtEj73rSsVVwshYFA==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
 
-  '@effect/platform-bun@4.1.0':
-    resolution: {integrity: sha512-ZgIV+tV2utcbiopbWSoJuGn3FZuyqhLWIYITFCR8vlwnKicO1q0WgP4BBjDUYUTMRPEU/N1+BcZourAgpiDI/w==}
+  '@effect/platform-bun@4.1.2':
+    resolution: {integrity: sha512-waEAa84CITqjctgw9VdhlL9PyXRHICG3KAWTFRDPUE2XL/pfMPhO7V9oFdfx22dbAhhUzV+MHs0d9hnmy/DQ7w==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
 
-  '@effect/platform-node-shared@4.1.0':
-    resolution: {integrity: sha512-uYQfFRoxWLo8fIhiSeBcmz/R1ooOfE3HF3cWHFgxz82tZMk2Wn02BGABcdLmaAch9VpDLbtWnuhSxNyBsGMUFg==}
+  '@effect/platform-node-shared@4.1.2':
+    resolution: {integrity: sha512-wSwl9A/G1hcVvF8nLI+YfB3EyOIDvWS6+lsTZBkmgDnPBL7m8YWZF+1HD+mdEsb52SUGfukip46Q3gRwSdk3QA==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
 
-  '@effect/platform-node@4.1.0':
-    resolution: {integrity: sha512-v+X7moGVF9k5oMVvz0slA+NgtEod+W+oygeI285MDJgSlUCW3JcqElj+cD3rlijFZtpKhC7RLkU1GuCxjGHTpA==}
+  '@effect/platform-node@4.1.2':
+    resolution: {integrity: sha512-ye0UjxORdd5Qu3paZ1LljgGOALWHt7muP9VTpjUSCNfcesiB/Hm7wPJIvZeu4gnwpTe5BtEnO1VHngWqjJp8mA==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
-      effect: ^4.1.0
-      redis: '>=5.0.0 <7.0.0'
+      effect: ^4.1.2
+      redis: '>=5.1.0 <7.0.0'
 
-  '@effect/sql-sqlite-node@4.1.0':
-    resolution: {integrity: sha512-Z8PxzlVlfp5JCGYAg9CwehHkvLEwMf/NF7htdDkKy65G4vE78ARkDMUSyeIzZ1zpadMxbbCEUJ2FM9M5/0Nxgg==}
+  '@effect/sql-sqlite-node@4.1.2':
+    resolution: {integrity: sha512-fTmI8Ol1Lf8rGITtdIW285nuT9G46ETOPZ48CxlZ7vkfWDYgipYnH0dILxPGcZ6f/BMLeybmLRKKBcRWStShfQ==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
 
-  '@effect/tsgo-darwin-arm64@0.63.0':
-    resolution: {integrity: sha512-KBvYatuEol71+i+BERWuDRU9XE+4sTK78N83Ko6VNF5gy6yXiujj/bgtWs2P3cDGXsevAV6L+HtpuAWjAQKC6Q==}
+  '@effect/tsgo-darwin-arm64@0.64.1':
+    resolution: {integrity: sha512-/T4E1JzKiCaXL1dNyNDB2K+7Wot35Pt+FttrrQ5XV5W2p6A62FhCzpZvPaNZ/NQvT/Ldw6wNMtprivpE0mKTdQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@effect/tsgo-darwin-x64@0.63.0':
-    resolution: {integrity: sha512-Qxp51/OFaHx5D+z5f1FtRKAiUH5rkMzaqjv/4ppUGNS0ppdqlcQ5rwQqbY6CiZOxqUlcnmKRirtWpmuxUgHP7w==}
+  '@effect/tsgo-darwin-x64@0.64.1':
+    resolution: {integrity: sha512-K6GwVVbudxEG3vuf3x4ooAsL667T/uf5XQXNkKzlxNDqHv6i/h8eRIArRk0flV1Z1H97YQmHTryoeffjKAgbAQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@effect/tsgo-linux-arm64@0.63.0':
-    resolution: {integrity: sha512-uwnM3kSwaHDKPeU1WSMxijdZaM1NxpDREgJtyyIx2qdqB6HnRYhEZB8RrhWvYYPw1QDKaWHd+byzq5p49+o7+Q==}
+  '@effect/tsgo-linux-arm64@0.64.1':
+    resolution: {integrity: sha512-sVmjJzl1aqliVkHkBhgZgQMrxI2eaD2IFYXaz4FWVgOOENqE92xBEJrpnwhsKVEwxMZCDoEG6yEHZQJ2m4vGmw==}
     cpu: [arm64]
     os: [linux]
 
-  '@effect/tsgo-linux-arm@0.63.0':
-    resolution: {integrity: sha512-tVwlTyAqmDVPvDrr0oogCnlRVs96X19Ny9OD/XJ/6QQSp/1hIjXAvKjo9HAyncF2sAUQyVdF1E7Q7X3wFXvSnQ==}
+  '@effect/tsgo-linux-arm@0.64.1':
+    resolution: {integrity: sha512-DKpAPkIEm1avo0II4wdpkzQXyHYRDYoVbTBs/2KROnKtT20ZVJHLJUAlfEbHZjFi5nhg1s8UgeUNPsR1kamNJA==}
     cpu: [arm]
     os: [linux]
 
-  '@effect/tsgo-linux-x64@0.63.0':
-    resolution: {integrity: sha512-fM3pJIhAZEX8LMbd/pN9iYNxkdVEkx68vMtILYGT4qazwxWelvouD/5fNV0SHDmY13Mv04NJ/550vTLC2hU8VA==}
+  '@effect/tsgo-linux-x64@0.64.1':
+    resolution: {integrity: sha512-mHSsYFFgEsOiGo2E/G0T0kKmphb88oJZnJMx8IaO0/wVIdEAUKIMN30o13cC9gXJpeCrNox6ZilrzFOA+VllFg==}
     cpu: [x64]
     os: [linux]
 
-  '@effect/tsgo-win32-arm64@0.63.0':
-    resolution: {integrity: sha512-LTS0CrEqZmQO0AJAIfFaETjIN/3d/Nda1Mi5zl90y/9BKZr4yyFfClCkz+DMl6/P/+TOuEQ5Wi8LvRiEdwWT4g==}
+  '@effect/tsgo-win32-arm64@0.64.1':
+    resolution: {integrity: sha512-Av6WBMiQIu1jyKgU8Cy8fLOnKBvJAk94Hb2vpFzgwRNItFgC9cFUhvUGa+QVZRx60xwx0cWBs4HpEDXpFuqNyA==}
     cpu: [arm64]
     os: [win32]
 
-  '@effect/tsgo-win32-x64@0.63.0':
-    resolution: {integrity: sha512-28s5YrwL26/7EUnUOu81IOJGJZLkPf2lPkiSIsd4EnFhimeBqP279bhAoDAEwLW1gv45GKM/49JKduXmdLyT1g==}
+  '@effect/tsgo-win32-x64@0.64.1':
+    resolution: {integrity: sha512-fDozqyqyT15T/RcGswIqr8yVOMDhAAnsDZ8o0UP2OAaXzIf5lO6SvUbS+A5A0KE0ddCCBYWPF/8Rw1N9y7sVNQ==}
     cpu: [x64]
     os: [win32]
 
-  '@effect/tsgo@0.63.0':
-    resolution: {integrity: sha512-bRbvVj+YLE/nBmcBWGAwsul3mjEYlqqOmWMxvwSVKq/oNnJEuZYgi2OFDeUf7q49E2g3w+oMHMWyN2QayZ77RQ==}
+  '@effect/tsgo@0.64.1':
+    resolution: {integrity: sha512-MtBw+qO1IJdZklc80rBXIMgAZBmNTH1NeEHgJu5LiCFocDR0X56cFYUyKItYY7+D9ROzNIS3bD/sL1Tku6mMpQ==}
     hasBin: true
 
-  '@effect/vitest@4.1.0':
-    resolution: {integrity: sha512-+APF69oTYgGj5WCewowk1/udepH74xz4ONyH7d+UfcK0SrF3osiSwsWEyODUpJvWd6MIk5F5PcFJiE4evMuG2A==}
+  '@effect/vitest@4.1.2':
+    resolution: {integrity: sha512-JJPwAHkJHxvM/woW9mMW/khjasAHcmwWdOMAgMy16rfqsxcVhFDnrRsvN9VI2+kMv8zDCCyBE2q1n5hzZlfE0w==}
     peerDependencies:
-      effect: ^4.1.0
+      effect: ^4.1.2
       vitest: '>=5.0.0 <6.0.0'
 
   '@electric-sql/pglite@0.3.16':
@@ -4243,14 +4243,17 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@expo/cli@58.1.17':
-    resolution: {integrity: sha512-2WKvwrq9Sr0jj4vFVt7dPtbHoxFzaSp4s5Bsk1FDmCQjZhQlWZjb7j6igBYCs0nBzZZ4UyBdSMY2hwmDhRmPQA==}
+  '@expo/cli@58.1.18':
+    resolution: {integrity: sha512-voZUcir9mEwvLKBNqQM6Jy2Yp67z8ONmcINXb6ZrLMayb7yxzwvEnN0eeH8ADzUABKL288pv1eJ1WRqtYxXQ/Q==}
     hasBin: true
     peerDependencies:
       expo: '*'
+      expo-mcp: '*'
       expo-router: '*'
       react-native: '*'
     peerDependenciesMeta:
+      expo-mcp:
+        optional: true
       expo-router:
         optional: true
       react-native:
@@ -4266,8 +4269,8 @@ packages:
   '@expo/config-types@58.0.3':
     resolution: {integrity: sha512-wyfrwkTT/hQHzwyqkXkngKxoOa8L6ovsTP4h/UukS1mTmssee5et6HOPoN5RtawdJPnm5JO28f//C/wXlpka8Q==}
 
-  '@expo/config@58.0.9':
-    resolution: {integrity: sha512-rN21dSqt6jfzpnVaBwCZVIvRFxoWEit+11AY+dSyaVkkwFWnVga0KOkFTQydtYgIZmP/vdm4QJhKeQkoUf4oMQ==}
+  '@expo/config@58.0.10':
+    resolution: {integrity: sha512-EC2BKXf9nIVrsvpwMOIUw8fyJPLU4moeFFiWhQivpVX9Ta9EUfXjpeoJHhv8Nt7+lx9RfRfZy9sgMsSUVMuRBw==}
 
   '@expo/devcert@1.2.2':
     resolution: {integrity: sha512-wz1YedXwdNbYqk/PRr34vixnuw1+l6uSwmPXUj649cot5iYNccb2zIOnK7Nonb1Pfd/dxAY6CvU6KM3uSdxC7A==}
@@ -4297,8 +4300,8 @@ packages:
     resolution: {integrity: sha512-dBGu8BAfvUcXvG4HvYth+EhcHEsdC+/fT6HTH/zFvvwfp50LG6uzpzT8TXObwEq/t2B/rvAMV5OolxQ46LWXHg==}
     engines: {node: '>=20.12.0'}
 
-  '@expo/fingerprint@0.21.7':
-    resolution: {integrity: sha512-rE9QN4TXGZxS3PC1yW77D1B6JNnuv3n7hXVUZxFEDDndPKFnQPC0XkqFyIz21oXbtrvThROCbV9CDVJiycCntg==}
+  '@expo/fingerprint@0.21.8':
+    resolution: {integrity: sha512-ufFLmY4Lyf8POxZgaWsZGq3p16fWJUCrkkm9E0HM9mw74vGQkRu5sKUIPde+ROGXv2cWLsrudJkUZLU5l6Clvw==}
     hasBin: true
 
   '@expo/image-utils@0.12.6':
@@ -4310,14 +4313,14 @@ packages:
   '@expo/json-file@11.2.1':
     resolution: {integrity: sha512-UPhKoFCj8BcwgLB1rKQ1CuR/REITnZLiqxHEHOeH1tPsdXcHGtUDh0P5bLbr7oU0nKVdtJ5rzyKx8jniMQdESQ==}
 
-  '@expo/local-build-cache-provider@58.0.9':
-    resolution: {integrity: sha512-C1QZ4GDljraOtARoZPvImxA9gKLd9kb/w1fRpc+x2sCZ1qXxWmqoVh+ISuwe6niB1BvzBEDA8KH0QQJj3r9nLQ==}
+  '@expo/local-build-cache-provider@58.0.10':
+    resolution: {integrity: sha512-0O0EF9V2rEgIPYJI+4vYLEKQn3xUt2js4L2L6DLE9PrElozL7cvHJKPkfEpYSxo5NNJhyGfVxBdazd0vE4Xg3w==}
 
   '@expo/log-box-utils@58.0.2':
     resolution: {integrity: sha512-My8Lwe9FU/yDwwzqwi5LN2rzzDcJqIAZKrD9f0XHZEKz/FQnWJYdt1rsV7+RwqMGeGq2XsxTCVT1ggTCOvumxw==}
 
-  '@expo/log-box@58.0.13':
-    resolution: {integrity: sha512-Cl9qc77nWjQVivUI5/OCPSEP8s20EtbK3Ivy5ayy+uHO0Cf+XatatWfTvKiHO38VOpT2ywlROzZb4XZyxZUZ1Q==}
+  '@expo/log-box@58.0.14':
+    resolution: {integrity: sha512-0aXQIWgTBvtzlzzqS7+oDx+DeGyX961Xxr53HzWWiyxNM9PkK7QXVV2gVeuvAYL0RIKUL1hNC0ZCz7sSkYyfww==}
     peerDependencies:
       '@expo/dom-webview': ^58.0.2
       expo: '*'
@@ -4327,8 +4330,8 @@ packages:
       expo:
         optional: true
 
-  '@expo/metro-config@58.0.19':
-    resolution: {integrity: sha512-z8tOnyiY5jg2sbrCAD60N+G9AX6sZQyMrfrhL4DK4pkwyt5TODkxk61G0Y0k9RidXpvjguqftB7v/w8UK5wCGg==}
+  '@expo/metro-config@58.0.20':
+    resolution: {integrity: sha512-M8O9hcpHTYXZjuUO0UzHInbpqKiWVXW/If8ZD3tdg1l01vDjoS6ol5lzP0IJhGY4VeJNJI3U5MsdS7dxx0AlLw==}
     peerDependencies:
       expo: '*'
     peerDependenciesMeta:
@@ -4376,8 +4379,8 @@ packages:
   '@expo/plist@0.10.1':
     resolution: {integrity: sha512-nuNOqj+r/hGJbZ1Ax3jUpZaOB8UAMHUrISALJEUKaCieTflYj7224EqFWmMpriCGk9wXS1gH+9GGVnSj0tWzuQ==}
 
-  '@expo/prebuild-config@58.0.17':
-    resolution: {integrity: sha512-QSMM9YiHQnRENUIgP7wgZt71WKPLUMLz5QFm4KWA2aa20a808F6b+HV/ZzfX47MWWt39RjyT9pUcLv/dgEp0UA==}
+  '@expo/prebuild-config@58.0.18':
+    resolution: {integrity: sha512-xTfSvhBrD2UYwRmpnQCPxY06j37ZMobXiZsdRPsW07vVMHe0ox4OpMbs47qv3h6RG/gfV+uu1RgMqi8d6cxurg==}
 
   '@expo/require-utils@58.0.5':
     resolution: {integrity: sha512-14dGubYUBmJjK9aqVSGnwSDs9uaxfzvtqJugtMCEWyuTa/eIvToUbzUwpKCSek6S/hYSEYcgds23vDJhXSBpbQ==}
@@ -4387,10 +4390,10 @@ packages:
       typescript:
         optional: true
 
-  '@expo/router-server@58.0.19':
-    resolution: {integrity: sha512-yyqiU830tiKybH6Vr0BqXbcSCdCj5+lK/MR6l/DG5Jbv3s4jXKqa8vb4QuWRO2mMvk0xUeJO7RNyWEtGF9TYEA==}
+  '@expo/router-server@58.0.20':
+    resolution: {integrity: sha512-EqrJBFWlouh6YywiKpCVr4vjRWYon3NeRTsvULuTEVpWD0EB/8eXDxcRTfUvAtxcc6Zlf5mCEXpzE8Hf8ulA1Q==}
     peerDependencies:
-      '@expo/metro-runtime': ^58.0.15
+      '@expo/metro-runtime': ^58.0.16
       expo: '*'
       expo-constants: ^58.0.14
       expo-font: ^58.0.11
@@ -4409,8 +4412,8 @@ packages:
       react-server-dom-webpack:
         optional: true
 
-  '@expo/schema-utils@58.0.2':
-    resolution: {integrity: sha512-w28y8SG+5ZTdDdmH2ZnCQk9wHVwGzI9NqX5V4urJUFEnxbm7I129fJRkb8RIAJmMA1WKU5h3ONmranV473uaXQ==}
+  '@expo/schema-utils@58.0.3':
+    resolution: {integrity: sha512-DwoMEpT3H+r1lU+YUEP10UcUW7sDKmfvgE7oA+zQeuGyi0XxDSDgRZUUZ5nOGp+lymmTicoIUKkoN7rByuI04g==}
 
   '@expo/sdk-runtime-versions@1.0.1':
     resolution: {integrity: sha512-kvisefkhxu8Fm/4M8G6DEqUaigrXfrSOm2lFw7hsk/nq0zchcp6B4wSk8rlheHY8FRi5iHxKtoVMGY/3M6h04A==}
@@ -4913,16 +4916,16 @@ packages:
   '@livestore/react@file:packages/@livestore/react':
     resolution: {directory: packages/@livestore/react, type: directory}
     peerDependencies:
-      '@effect/opentelemetry': ^4.1.0
-      '@effect/platform-browser': ^4.1.0
-      '@effect/platform-bun': ^4.1.0
-      '@effect/platform-node': ^4.1.0
-      '@effect/platform-node-shared': ^4.1.0
-      '@effect/vitest': ^4.1.0
+      '@effect/opentelemetry': ^4.1.2
+      '@effect/platform-browser': ^4.1.2
+      '@effect/platform-bun': ^4.1.2
+      '@effect/platform-node': ^4.1.2
+      '@effect/platform-node-shared': ^4.1.2
+      '@effect/vitest': ^4.1.2
       '@opentelemetry/api': ^1.9.0
       '@opentelemetry/resources': ^2.2.0
       '@standard-schema/spec': ^1.1.0
-      effect: ^4.1.0
+      effect: ^4.1.2
       react: ^19.0.0
 
   '@livestore/solid@0.5.0':
@@ -7953,12 +7956,12 @@ packages:
   babel-plugin-transform-flow-enums@0.0.2:
     resolution: {integrity: sha512-g4aaCrDDOsWjbm0PUUeVnkcVd6AKJsVc/MbnPhEotEpkeJQP6b8nzewohQi7+QS8UyPehOhGWn0nOwjvWpmMvQ==}
 
-  babel-preset-expo@58.0.22:
-    resolution: {integrity: sha512-2/pbzxDh4wd4MrBU4lFqFWEfCQooCVjnh6JJZnPLmWisOy5+r4qaOItcH+zaiO4hP2CyYwnyotg1QKhgsmAMEw==}
+  babel-preset-expo@58.0.23:
+    resolution: {integrity: sha512-7wdPu1QSvG7BwZ1UCKFMedJp/I4hLFvVsOjchu78YooHyxoJ/6aU8QzW8uiwZR3ov5Z9OFkRWTTcYyDP9u113w==}
     peerDependencies:
       '@babel/runtime': ^7.20.0
       expo: '*'
-      expo-widgets: ^58.0.25
+      expo-widgets: ^58.0.26
       react-refresh: '>=0.14.0 <1.0.0'
     peerDependenciesMeta:
       '@babel/runtime':
@@ -9015,8 +9018,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@4.1.0:
-    resolution: {integrity: sha512-lGx2MJJyrXA8RZb2UpQ/0Nkb5Utaimby7oD92+18noBxLPE85IFOvptdzau8dvcxAOwfwHo9iqapbKeFzqQM/Q==}
+  effect@4.1.2:
+    resolution: {integrity: sha512-d3Oah1WyKxFLFh19yWheS5IXIVaITzxZ71JkE1rkUozq/6EcJSU5nPk5bF2QrSygZ3SQoiNQB8TsxFriyMeMaQ==}
 
   electron-to-chromium@1.5.361:
     resolution: {integrity: sha512-Q6Hts7N9FnJc5LeGRINFvLhCI9xZmNtTDe5ZbcVezQz7cU4a8Aua3GH1b8J2XY8Al9PF+OCwYqhgsOOheMdvkA==}
@@ -9317,8 +9320,8 @@ packages:
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
     hasBin: true
 
-  expo-modules-core@58.0.28:
-    resolution: {integrity: sha512-2FCnT8mIubdQAHVtX9fVMN9qajF7hGDC3CjxxBG0HlyK7NEsxUDKkukiNVzqQpwiI+jJx7ysG0YvATwKKlu1sw==}
+  expo-modules-core@58.0.29:
+    resolution: {integrity: sha512-S3L38WVxcn1sQfUr9fiUgKri2n4YKdtuToF3r45V7dVIUmHN69Fc7nZPF5BiMtOl/CgPWACicqUZr7jawBxXFg==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -9339,15 +9342,15 @@ packages:
     resolution: {integrity: sha512-6DBlSZwxk3J0y1j2s4XebAWNiwGaMp32NcWX7b2kJC2+EFf1g+pCcVmx8ylawt2tyLmbDHswm4MHOfrd4bqfvA==}
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
 
-  expo-sqlite@58.0.14:
-    resolution: {integrity: sha512-OEZsNXYYOzWDkMORprUYRblJVfhO/TKloMWHm5bLzIhYMgs8UcdQZ/RFIMLQFciiaMoYZDsCZbveG47OKcDRXg==}
+  expo-sqlite@58.0.15:
+    resolution: {integrity: sha512-jokbgUHPD1zvpFT/LeJaCoOTsd0QXXWzbthVPCMyMMn+/IZAMqQu79OxYzck5G5wlc+t+vTuEESGMY8r1n3VTA==}
     peerDependencies:
       expo: '*'
       react: '*'
       react-native: '*'
 
-  expo@58.0.21:
-    resolution: {integrity: sha512-2Q8jp0fKLrDMou4aKWZ5V2cCVfcwOScuV8GBMkogiXIv7bCwwN4CIkUIq5QsX7DHXJxbruXLTXEgrp6J+iF4YA==}
+  expo@58.0.22:
+    resolution: {integrity: sha512-9DmnUN+UxIRRmPLe+t7oOVwdnFzpq/9+1evMVXdFjiC4iwEF7iHCFU0AEm4o2A6HP6A7nTtCox7ADsobYvB/Lw==}
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
     hasBin: true
     peerDependencies:
@@ -13892,6 +13895,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.22.1:
+    resolution: {integrity: sha512-oyL6OPYme/CmiFvNuGzeoxCJ4nOrZE2O1FwM9MWM1AsGri6nLXB2pg+lNA8aLeXMSav0J6eIVS1j6vUPzUtK9g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   wsl-utils@1.0.1:
     resolution: {integrity: sha512-c16PKLIRxBYpR3jSWsdS7SFp0COm5SOQdiFjY818dYFHJbMGuLBszpF07LBWmOS1uzrHa9VGdynsEgoeKy0oOQ==}
     engines: {node: '>=20'}
@@ -15341,20 +15356,20 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@effect/ai-openai@4.1.0(effect@4.1.0)':
+  '@effect/ai-openai@4.1.2(effect@4.1.2)':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@effect/atom-react@4.1.0(effect@4.1.0)(react@19.3.1)(scheduler@0.28.0)':
+  '@effect/atom-react@4.1.2(effect@4.1.2)(react@19.3.1)(scheduler@0.28.0)':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
       react: 19.3.1
       scheduler: 0.28.0
 
-  '@effect/opentelemetry@4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)':
+  '@effect/opentelemetry@4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.41.1
-      effect: 4.1.0
+      effect: 4.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.217.0
@@ -15365,10 +15380,10 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.2.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.2.0(@opentelemetry/api@1.9.0)
 
-  '@effect/opentelemetry@4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)':
+  '@effect/opentelemetry@4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.41.1
-      effect: 4.1.0
+      effect: 4.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.217.0
@@ -15379,10 +15394,10 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.7.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.2.0(@opentelemetry/api@1.9.0)
 
-  '@effect/opentelemetry@4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)':
+  '@effect/opentelemetry@4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.41.1
-      effect: 4.1.0
+      effect: 4.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.217.0
@@ -15393,10 +15408,10 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.7.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.2.0(@opentelemetry/api@1.9.0)
 
-  '@effect/opentelemetry@4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)':
+  '@effect/opentelemetry@4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.41.1
-      effect: 4.1.0
+      effect: 4.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.223.0
@@ -15407,10 +15422,10 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.12.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.2.0(@opentelemetry/api@1.9.0)
 
-  '@effect/opentelemetry@4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)':
+  '@effect/opentelemetry@4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.41.1
-      effect: 4.1.0
+      effect: 4.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.223.0
@@ -15421,85 +15436,85 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.12.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.2.0(@opentelemetry/api@1.9.0)
 
-  '@effect/platform-browser@4.1.0(effect@4.1.0)':
+  '@effect/platform-browser@4.1.2(effect@4.1.2)':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@effect/platform-bun@4.1.0(effect@4.1.0)':
+  '@effect/platform-bun@4.1.2(effect@4.1.2)':
     dependencies:
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      effect: 4.1.0
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      effect: 4.1.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node-shared@4.1.0(effect@4.1.0)':
+  '@effect/platform-node-shared@4.1.2(effect@4.1.2)':
     dependencies:
       '@types/ws': 8.18.2
-      effect: 4.1.0
-      ws: 8.22.0
+      effect: 4.1.2
+      ws: 8.22.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))':
+  '@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))':
     dependencies:
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      effect: 4.1.0
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      effect: 4.1.2
       redis: 6.2.1(@opentelemetry/api@1.9.0)
       undici: 8.12.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-sqlite-node@4.1.0(effect@4.1.0)':
+  '@effect/sql-sqlite-node@4.1.2(effect@4.1.2)':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@effect/tsgo-darwin-arm64@0.63.0':
+  '@effect/tsgo-darwin-arm64@0.64.1':
     optional: true
 
-  '@effect/tsgo-darwin-x64@0.63.0':
+  '@effect/tsgo-darwin-x64@0.64.1':
     optional: true
 
-  '@effect/tsgo-linux-arm64@0.63.0':
+  '@effect/tsgo-linux-arm64@0.64.1':
     optional: true
 
-  '@effect/tsgo-linux-arm@0.63.0':
+  '@effect/tsgo-linux-arm@0.64.1':
     optional: true
 
-  '@effect/tsgo-linux-x64@0.63.0':
+  '@effect/tsgo-linux-x64@0.64.1':
     optional: true
 
-  '@effect/tsgo-win32-arm64@0.63.0':
+  '@effect/tsgo-win32-arm64@0.64.1':
     optional: true
 
-  '@effect/tsgo-win32-x64@0.63.0':
+  '@effect/tsgo-win32-x64@0.64.1':
     optional: true
 
-  '@effect/tsgo@0.63.0':
+  '@effect/tsgo@0.64.1':
     optionalDependencies:
-      '@effect/tsgo-darwin-arm64': 0.63.0
-      '@effect/tsgo-darwin-x64': 0.63.0
-      '@effect/tsgo-linux-arm': 0.63.0
-      '@effect/tsgo-linux-arm64': 0.63.0
-      '@effect/tsgo-linux-x64': 0.63.0
-      '@effect/tsgo-win32-arm64': 0.63.0
-      '@effect/tsgo-win32-x64': 0.63.0
+      '@effect/tsgo-darwin-arm64': 0.64.1
+      '@effect/tsgo-darwin-x64': 0.64.1
+      '@effect/tsgo-linux-arm': 0.64.1
+      '@effect/tsgo-linux-arm64': 0.64.1
+      '@effect/tsgo-linux-x64': 0.64.1
+      '@effect/tsgo-win32-arm64': 0.64.1
+      '@effect/tsgo-win32-x64': 0.64.1
 
-  '@effect/vitest@4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.8.1)))':
+  '@effect/vitest@4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.8.1)))':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
       vitest: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.8.1))
 
-  '@effect/vitest@4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))':
+  '@effect/vitest@4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
       vitest: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
 
-  '@effect/vitest@4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))':
+  '@effect/vitest@4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))':
     dependencies:
-      effect: 4.1.0
+      effect: 4.1.2
       vitest: 5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
 
   '@electric-sql/pglite@0.3.16': {}
@@ -15800,32 +15815,32 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@expo/cli@58.1.17(868ed97236b4d37690667ba12cf01f30)':
+  '@expo/cli@58.1.18(17dc5242ab4f2dd6d68ae2ce57472899)':
     dependencies:
       2g: 1.0.1(typescript@7.0.2)
       '@expo/code-signing-certificates': 0.0.7
-      '@expo/config': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/config': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/config-plugins': 58.0.11(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/devcert': 1.2.2(supports-color@10.2.2)
       '@expo/env': 2.5.3(supports-color@10.2.2)
       '@expo/image-utils': 0.12.6(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/inline-modules': 0.2.8(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/json-file': 11.2.1
-      '@expo/log-box': 58.0.13(@expo/dom-webview@58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      '@expo/log-box': 58.0.14(@expo/dom-webview@58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       '@expo/log-box-utils': 58.0.2
       '@expo/metro': 58.0.0(supports-color@10.2.2)
-      '@expo/metro-config': 58.0.19(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/metro-config': 58.0.20(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/metro-file-map': 58.0.5(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/osascript': 2.8.1
       '@expo/package-manager': 1.14.2
       '@expo/platforms': 58.0.1
       '@expo/plist': 0.10.1
-      '@expo/prebuild-config': 58.0.17(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/prebuild-config': 58.0.18(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/require-utils': 58.0.5(supports-color@10.2.2)(typescript@7.0.2)
-      '@expo/router-server': 58.0.19(dc678b38db041ed30f448d7c7706321e)
-      '@expo/schema-utils': 58.0.2
+      '@expo/router-server': 58.0.20(ed291cbfecc52165a7ad042c5283d06b)
+      '@expo/schema-utils': 58.0.3
       '@expo/spawn-async': 1.8.0
-      '@expo/ws-tunnel': 2.0.1(ws@8.22.0)
+      '@expo/ws-tunnel': 2.0.1(ws@8.22.1)
       '@expo/xcpretty': 4.4.7
       '@react-native/asset-utils': 0.88.1
       '@react-native/dev-middleware': 0.88.1(supports-color@10.2.2)
@@ -15840,7 +15855,7 @@ snapshots:
       compression: 1.8.1(supports-color@10.2.2)
       connect: 3.7.0(supports-color@10.2.2)
       dnssd-advertise: 1.1.6
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       expo-server: 58.0.6
       fetch-nodeshim: 0.4.10
       getenv: 2.0.0
@@ -15864,8 +15879,7 @@ snapshots:
       terminal-link: 2.1.1
       toqr: 0.1.1
       wrap-ansi: 7.0.0
-      ws: 8.22.0
-      zod: 3.25.76
+      ws: 8.22.1
     optionalDependencies:
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     transitivePeerDependencies:
@@ -15906,14 +15920,13 @@ snapshots:
 
   '@expo/config-types@58.0.3': {}
 
-  '@expo/config@58.0.9(supports-color@10.2.2)(typescript@7.0.2)':
+  '@expo/config@58.0.10(supports-color@10.2.2)(typescript@7.0.2)':
     dependencies:
       '@expo/config-plugins': 58.0.11(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/config-types': 58.0.3
       '@expo/json-file': 11.2.1
       '@expo/platforms': 58.0.1
       '@expo/require-utils': 58.0.5(supports-color@10.2.2)(typescript@7.0.2)
-      deepmerge: 4.3.1
       getenv: 2.0.0
       glob: 13.0.6
       resolve-workspace-root: 2.0.1
@@ -15930,17 +15943,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/devtools@58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
+  '@expo/devtools@58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
       chalk: 4.1.2
     optionalDependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
-  '@expo/dom-webview@58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
+  '@expo/dom-webview@58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
@@ -15952,7 +15965,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/fingerprint@0.21.7(supports-color@10.2.2)':
+  '@expo/fingerprint@0.21.8(supports-color@10.2.2)':
     dependencies:
       '@expo/env': 2.5.3(supports-color@10.2.2)
       '@expo/spawn-async': 1.8.0
@@ -15993,9 +16006,9 @@ snapshots:
       '@babel/code-frame': 7.29.7
       json5: 2.2.3
 
-  '@expo/local-build-cache-provider@58.0.9(supports-color@10.2.2)(typescript@7.0.2)':
+  '@expo/local-build-cache-provider@58.0.10(supports-color@10.2.2)(typescript@7.0.2)':
     dependencies:
-      '@expo/config': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/config': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
       chalk: 4.1.2
     transitivePeerDependencies:
       - supports-color
@@ -16003,24 +16016,24 @@ snapshots:
 
   '@expo/log-box-utils@58.0.2': {}
 
-  '@expo/log-box@58.0.13(@expo/dom-webview@58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
+  '@expo/log-box@58.0.14(@expo/dom-webview@58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
-      '@expo/dom-webview': 58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      '@expo/dom-webview': 58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       '@expo/log-box-utils': 58.0.2
       anser: 1.4.10
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       stacktrace-parser: 0.1.11
     optionalDependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
 
-  '@expo/metro-config@58.0.19(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)':
+  '@expo/metro-config@58.0.20(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)':
     dependencies:
       2g: 1.0.1(typescript@7.0.2)
       '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/generator': 7.29.8
-      '@expo/config': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/config': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/env': 2.5.3(supports-color@10.2.2)
       '@expo/json-file': 11.2.1
       '@expo/metro': 58.0.0(supports-color@10.2.2)
@@ -16045,7 +16058,7 @@ snapshots:
       postcss: 8.5.32
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -16118,9 +16131,9 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  '@expo/prebuild-config@58.0.17(supports-color@10.2.2)(typescript@7.0.2)':
+  '@expo/prebuild-config@58.0.18(supports-color@10.2.2)(typescript@7.0.2)':
     dependencies:
-      '@expo/config': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/config': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/config-plugins': 58.0.11(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/config-types': 58.0.3
       '@expo/image-utils': 0.12.6(supports-color@10.2.2)(typescript@7.0.2)
@@ -16144,12 +16157,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/router-server@58.0.19(dc678b38db041ed30f448d7c7706321e)':
+  '@expo/router-server@58.0.20(ed291cbfecc52165a7ad042c5283d06b)':
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
-      expo-constants: 58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
-      expo-font: 58.0.11(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo-constants: 58.0.14(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
+      expo-font: 58.0.11(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       expo-server: 58.0.6
       react: 19.3.0
     optionalDependencies:
@@ -16157,7 +16170,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/schema-utils@58.0.2': {}
+  '@expo/schema-utils@58.0.3': {}
 
   '@expo/sdk-runtime-versions@1.0.1': {}
 
@@ -16167,9 +16180,9 @@ snapshots:
 
   '@expo/sudo-prompt@9.3.2': {}
 
-  '@expo/ws-tunnel@2.0.1(ws@8.22.0)':
+  '@expo/ws-tunnel@2.0.1(ws@8.22.1)':
     dependencies:
-      ws: 8.22.0
+      ws: 8.22.1
 
   '@expo/xcpretty@4.4.7':
     dependencies:
@@ -16595,14 +16608,14 @@ snapshots:
       '@parcel/watcher': 2.5.6
       vite: 8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
 
-  '@livestore/graphql@0.5.0(44964eb8831cf7d01010ae4b6b026a6e)':
+  '@livestore/graphql@0.5.0(2c79e0866b688351eaf2c54b0fda7905)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.11.0)
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
@@ -16610,17 +16623,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       graphql: 16.11.0
 
-  '@livestore/graphql@0.5.0(5db41bb5d09ef7f9d1befd2a54cd7498)':
+  '@livestore/graphql@0.5.0(bd131b3a6fe8703c162a12d7c54c6f73)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.11.0)
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
@@ -16628,17 +16641,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       graphql: 16.11.0
 
-  '@livestore/react@file:packages/@livestore/react(05acb309ad88371113293c6566e9085f)':
+  '@livestore/react@file:packages/@livestore/react(a4661c47cef830943a7dbd471702f709)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/framework-toolkit': link:packages/@livestore/framework-toolkit
       '@livestore/livestore': link:packages/@livestore/livestore
@@ -16646,17 +16659,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       react: 19.3.0
 
-  '@livestore/solid@0.5.0(6f6c7dee7e1b277a8b2d8118270d823c)':
+  '@livestore/solid@0.5.0(6648fd76d733227ff12adafa2ac35051)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/framework-toolkit': link:packages/@livestore/framework-toolkit
       '@livestore/livestore': link:packages/@livestore/livestore
@@ -16664,17 +16677,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       solid-js: 1.9.10
 
-  '@livestore/solid@0.5.0(f8ff4065e61c6b90681e886c4fde72bd)':
+  '@livestore/solid@0.5.0(c6bfd0f3871fc5edebb4548192a94a5d)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/framework-toolkit': link:packages/@livestore/framework-toolkit
       '@livestore/livestore': link:packages/@livestore/livestore
@@ -16682,104 +16695,104 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       solid-js: 1.9.10
 
-  '@livestore/svelte@0.5.0(0e4f9bc0d4c272b2112b27be6bc54aa9)':
+  '@livestore/svelte@0.5.0(10ec51220a5584f89578467c46365240)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       svelte: 5.43.14(@typescript-eslint/types@8.59.4)
 
-  '@livestore/svelte@0.5.0(91a7737fddb3847ede88f37fcbbb8beb)':
+  '@livestore/svelte@0.5.0(fb55a59fe64954492a6ccd00aaaac926)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
       svelte: 5.43.14(@typescript-eslint/types@8.59.4)
 
-  '@livestore/sync-electric@0.5.0(4ddbb76b9c6528b0ce52f2a829971c33)':
+  '@livestore/sync-electric@0.5.0(375d75ec361bd83dc30490264c9257c1)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@livestore/sync-electric@0.5.0(bd170ad6cb6ca5ea6e76c4e4da737653)':
+  '@livestore/sync-electric@0.5.0(706fd42accfac001974f26b0e81768a5)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@livestore/sync-s2@0.5.0(4ddbb76b9c6528b0ce52f2a829971c33)':
+  '@livestore/sync-s2@0.5.0(375d75ec361bd83dc30490264c9257c1)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
 
-  '@livestore/sync-s2@0.5.0(bd170ad6cb6ca5ea6e76c4e4da737653)':
+  '@livestore/sync-s2@0.5.0(706fd42accfac001974f26b0e81768a5)':
     dependencies:
-      '@effect/opentelemetry': 4.1.0(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.0)
-      '@effect/platform-browser': 4.1.0(effect@4.1.0)
-      '@effect/platform-bun': 4.1.0(effect@4.1.0)
-      '@effect/platform-node': 4.1.0(effect@4.1.0)(redis@6.2.1(@opentelemetry/api@1.9.0))
-      '@effect/platform-node-shared': 4.1.0(effect@4.1.0)
-      '@effect/vitest': 4.1.0(effect@4.1.0)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
+      '@effect/opentelemetry': 4.1.2(@opentelemetry/api-logs@0.223.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.12.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.2)
+      '@effect/platform-browser': 4.1.2(effect@4.1.2)
+      '@effect/platform-bun': 4.1.2(effect@4.1.2)
+      '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.2.1(@opentelemetry/api@1.9.0))
+      '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
+      '@effect/vitest': 4.1.2(effect@4.1.2)(vitest@5.0.5(@opentelemetry/api@1.9.0)(@types/node@25.3.3)(jsdom@26.1.0(supports-color@10.2.2))(vite@8.3.5(@types/node@25.3.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)))
       '@livestore/common': link:packages/@livestore/common
       '@livestore/livestore': link:packages/@livestore/livestore
       '@livestore/utils': link:packages/@livestore/utils
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.2.0(@opentelemetry/api@1.9.0)
       '@standard-schema/spec': 1.1.0
-      effect: 4.1.0
+      effect: 4.1.2
 
   '@manypkg/find-root@1.1.0':
     dependencies:
@@ -20241,7 +20254,7 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
 
-  babel-preset-expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(@babel/runtime@7.29.2)(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-refresh@0.14.2)(supports-color@10.2.2):
+  babel-preset-expo@58.0.23(@babel/core@7.29.7(supports-color@10.2.2))(@babel/runtime@7.29.2)(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-refresh@0.14.2)(supports-color@10.2.2):
     dependencies:
       '@babel/generator': 7.29.8
       '@babel/helper-module-imports': 7.29.7(supports-color@10.2.2)
@@ -20288,7 +20301,7 @@ snapshots:
       react-refresh: 0.14.2
     optionalDependencies:
       '@babel/runtime': 7.29.2
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -21349,7 +21362,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.1.0: {}
+  effect@4.1.2: {}
 
   electron-to-chromium@1.5.361: {}
 
@@ -21720,45 +21733,45 @@ snapshots:
 
   expect-type@1.4.0: {}
 
-  expo-asset@58.0.19(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2):
+  expo-asset@58.0.19(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2):
     dependencies:
       '@expo/image-utils': 0.12.6(supports-color@10.2.2)(typescript@7.0.2)
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
-      expo-constants: 58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo-constants: 58.0.14(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
       - typescript
 
-  expo-constants@58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2):
+  expo-constants@58.0.14(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2):
     dependencies:
       '@expo/env': 2.5.3(supports-color@10.2.2)
       '@expo/require-utils': 58.0.5(supports-color@10.2.2)(typescript@7.0.2)
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
       - typescript
 
-  expo-crypto@58.0.7(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)):
+  expo-crypto@58.0.7(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)):
     dependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
 
-  expo-file-system@58.0.13(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)):
+  expo-file-system@58.0.13(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)):
     dependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
-  expo-font@58.0.11(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
+  expo-font@58.0.11(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
     dependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
-  expo-keep-awake@58.0.3(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react@19.3.0):
+  expo-keep-awake@58.0.3(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react@19.3.0):
     dependencies:
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
 
   expo-modules-autolinking@58.0.16(supports-color@10.2.2)(typescript@7.0.2):
@@ -21777,7 +21790,7 @@ snapshots:
       '@babel/parser': 7.29.11
       arg: 5.0.2
 
-  expo-modules-core@58.0.28(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
+  expo-modules-core@58.0.29(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
     dependencies:
       expo-modules-jsi: 58.0.21(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
       expo-modules-macros: 0.27.1
@@ -21798,37 +21811,37 @@ snapshots:
 
   expo-server@58.0.6: {}
 
-  expo-sqlite@58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
+  expo-sqlite@58.0.15(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
     dependencies:
       await-lock: 2.2.2
-      expo: 58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
-  expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2):
+  expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2):
     dependencies:
       '@babel/runtime': 7.29.2
-      '@expo/cli': 58.1.17(868ed97236b4d37690667ba12cf01f30)
-      '@expo/config': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/cli': 58.1.18(17dc5242ab4f2dd6d68ae2ce57472899)
+      '@expo/config': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
       '@expo/config-plugins': 58.0.11(supports-color@10.2.2)(typescript@7.0.2)
-      '@expo/devtools': 58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
-      '@expo/dom-webview': 58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
-      '@expo/fingerprint': 0.21.7(supports-color@10.2.2)
-      '@expo/local-build-cache-provider': 58.0.9(supports-color@10.2.2)(typescript@7.0.2)
-      '@expo/log-box': 58.0.13(@expo/dom-webview@58.0.2(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      '@expo/devtools': 58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      '@expo/dom-webview': 58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      '@expo/fingerprint': 0.21.8(supports-color@10.2.2)
+      '@expo/local-build-cache-provider': 58.0.10(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/log-box': 58.0.14(@expo/dom-webview@58.0.2(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0))(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       '@expo/log-box-utils': 58.0.2
       '@expo/metro': 58.0.0(supports-color@10.2.2)
-      '@expo/metro-config': 58.0.19(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)
+      '@expo/metro-config': 58.0.20(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2)
       '@ungap/structured-clone': 1.3.1
-      babel-preset-expo: 58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(@babel/runtime@7.29.2)(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-refresh@0.14.2)(supports-color@10.2.2)
-      expo-asset: 58.0.19(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
-      expo-constants: 58.0.14(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
-      expo-file-system: 58.0.13(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
-      expo-font: 58.0.11(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
-      expo-keep-awake: 58.0.3(expo@58.0.21(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react@19.3.0)
+      babel-preset-expo: 58.0.23(@babel/core@7.29.7(supports-color@10.2.2))(@babel/runtime@7.29.2)(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-refresh@0.14.2)(supports-color@10.2.2)
+      expo-asset: 58.0.19(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2)
+      expo-constants: 58.0.14(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@7.0.2)
+      expo-file-system: 58.0.13(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))
+      expo-font: 58.0.11(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      expo-keep-awake: 58.0.3(expo@58.0.22(@babel/core@7.29.7(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@7.0.2))(react@19.3.0)
       expo-modules-autolinking: 58.0.16(supports-color@10.2.2)(typescript@7.0.2)
       expo-modules-cli: 0.4.0
-      expo-modules-core: 58.0.28(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+      expo-modules-core: 58.0.29(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       pretty-format: 29.7.0
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
@@ -21839,6 +21852,7 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
+      - expo-mcp
       - expo-router
       - expo-widgets
       - react-native-worklets
@@ -27508,6 +27522,8 @@ snapshots:
   ws@8.21.0: {}
 
   ws@8.22.0: {}
+
+  ws@8.22.1: {}
 
   wsl-utils@1.0.1:
     dependencies:

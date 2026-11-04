@@ -1,4 +1,10 @@
-import { catalog, livestorePackageDefaults, packageJson, workspaceMember } from '../../../genie/repo.ts'
+import {
+  catalog,
+  livestorePackageBuildCacheExclusions,
+  livestorePackageDefaults,
+  packageJson,
+  workspaceMember,
+} from '../../../genie/repo.ts'
 
 const runtimeDeps = catalog.compose({
   workspace: workspaceMember('packages/@livestore/wa-sqlite'),
@@ -48,6 +54,7 @@ export default packageJson(
       },
     },
     files: [
+      'vendor/source-ced5652e/**',
       'src/sqlite-constants.js',
       'src/sqlite-api.js',
       'src/types/*',
@@ -57,6 +64,7 @@ export default packageJson(
       'src/examples/*',
       'dist/*',
       'test/*',
+      ...livestorePackageBuildCacheExclusions,
     ],
     scripts: {
       'build-docs': 'typedoc',

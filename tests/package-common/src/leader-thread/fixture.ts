@@ -8,6 +8,8 @@ import {
   StateSqliteDb,
 } from '@livestore/common'
 import { type EventSequenceNumber, Events, makeSchema, State } from '@livestore/common/schema'
+import { fromSyncSource, type SourceOwner } from '@livestore/common/source-db'
+import type { OwnedCreationBoundary } from '@livestore/common/source-db/internal'
 import { Effect, Layer, Schema } from '@livestore/utils/effect'
 
 const todos = State.SQLite.table({
@@ -67,8 +69,8 @@ const state = State.SQLite.makeState({ tables, materializers })
 export const schema = makeSchema({ projectionRevision: 'test-fixture-v1', state, events })
 
 /** Provides the role-specific SQLite handles plus the state services derived from them, as adapters do. */
-export const makeSqliteServicesLayer = ({ dbState, dbEventlog }: { dbState: SqliteDb; dbEventlog: SqliteDb }) => {
-  const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
+export const makeSqliteServicesLayer = ({ dbState, source }: { dbState: SqliteDb; source: SourceOwner }) => {
+  const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(source))
   const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
     Layer.provide(sqliteDbLayer),
   )
@@ -91,3 +93,15 @@ export const getJournalChangeset = (dbState: SqliteDb, key: EventSequenceNumber.
           AND seqNumRebaseGeneration = ${key.rebaseGeneration}
         LIMIT 1`,
   )[0]?.changeset
+
+/** The SOURCE role owns physical cleanup; raw handles remain available only for assertions and fault instrumentation. */
+export const ownSource = (database: SqliteDb, creation?: OwnedCreationBoundary) =>
+  Effect.acquireRelease(fromSyncSource(database, creation), (owner) => owner.close.pipe(Effect.orDie))
+
+/** Call immediately after a test allocates a new memory connection; retained bytes never receive this permit. */
+export const newMemorySource = (database: SqliteDb) =>
+  ownSource(database, {
+    storageName: database.metadata.persistenceInfo.fileName,
+    kind: 'new-memory-connection',
+    isHeld: () => true,
+  })

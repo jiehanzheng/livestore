@@ -11,13 +11,14 @@ import {
   State,
   UNKNOWN_EVENT_SCHEMA_HASH,
 } from '@livestore/common/schema'
+import { SourceContext } from '@livestore/common/source-db'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import { Effect, Queue, Result, Schema } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { getJournalChangeset, getStateHead, makeSqliteServicesLayer } from './fixture.ts'
+import { newMemorySource, getJournalChangeset, getStateHead, makeSqliteServicesLayer } from './fixture.ts'
 
 // Verifies the behaviour of LiveStore's unknown-event handling strategies across
 // materialization paths, ensuring events are either skipped, logged, or cause
@@ -27,10 +28,10 @@ import { getJournalChangeset, getStateHead, makeSqliteServicesLayer } from './fi
 Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
   Vitest.live('warn strategy keeps event in log and continues', (test) =>
     Effect.gen(function* () {
-      const { materializeEvent, dbEventlog, dbState } = yield* setup({ strategy: 'warn' })
+      const { materializeEvent, dbEventlog, dbState, source } = yield* setup({ strategy: 'warn' })
       const event = makeUnknownEncodedEvent()
 
-      yield* materializeEvent(event, { skipEventlog: false })
+      yield* materializeEvent(event, { skipEventlog: false }).pipe(Effect.provideService(SourceContext, source))
 
       expect(getMaterializationChangesetTag(dbState, event.seqNum)).toEqual('no-op')
 
@@ -42,10 +43,10 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
 
   Vitest.live('ignore strategy behaves like warn but silent', (test) =>
     Effect.gen(function* () {
-      const { materializeEvent, dbEventlog, dbState } = yield* setup({ strategy: 'ignore' })
+      const { materializeEvent, dbEventlog, dbState, source } = yield* setup({ strategy: 'ignore' })
       const event = makeUnknownEncodedEvent()
 
-      yield* materializeEvent(event, {})
+      yield* materializeEvent(event, {}).pipe(Effect.provideService(SourceContext, source))
 
       expect(getMaterializationChangesetTag(dbState, event.seqNum)).toEqual('no-op')
 
@@ -56,10 +57,13 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
 
   Vitest.live('fail strategy surfaces UnknownEventError', (test) =>
     Effect.gen(function* () {
-      const { materializeEvent } = yield* setup({ strategy: 'fail' })
+      const { materializeEvent, source } = yield* setup({ strategy: 'fail' })
       const event = makeUnknownEncodedEvent()
 
-      const result = yield* materializeEvent(event, {}).pipe(Effect.result)
+      const result = yield* materializeEvent(event, {}).pipe(
+        Effect.provideService(SourceContext, source),
+        Effect.result,
+      )
       if (Result.isSuccess(result) === true) {
         throw new Error('Expected materializeEvent to fail for fail strategy')
       }
@@ -78,7 +82,7 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
   Vitest.live('callback strategy invokes observer once', (test) =>
     Effect.gen(function* () {
       const calls: Array<{ eventName: string; reason: string }> = []
-      const { materializeEvent, dbState } = yield* setup({
+      const { materializeEvent, dbState, source } = yield* setup({
         strategy: 'callback',
         onUnknownEvent: (context, error) => {
           calls.push({ eventName: context.event.name, reason: error.reason })
@@ -86,7 +90,7 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
       })
       const event = makeUnknownEncodedEvent()
 
-      yield* materializeEvent(event, {})
+      yield* materializeEvent(event, {}).pipe(Effect.provideService(SourceContext, source))
 
       expect(getMaterializationChangesetTag(dbState, event.seqNum)).toEqual('no-op')
       expect(calls).toEqual([{ eventName: event.name, reason: 'event-definition-missing' }])
@@ -111,14 +115,15 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-      yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+      const source = yield* newMemorySource(dbEventlog)
+      const initializedSource = yield* Eventlog.initializeSource(source)
 
       const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
       const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(
-        Effect.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
+        Effect.provide(makeSqliteServicesLayer({ dbState, source })),
       )
-      yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(
-        Effect.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
+      yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(
+        Effect.provide(makeSqliteServicesLayer({ dbState, source })),
       )
       yield* Queue.shutdown(bootStatusQueue)
 
@@ -131,7 +136,7 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
         sessionId: 'session-2',
       })
 
-      yield* materializeEvent(event, {})
+      yield* materializeEvent(event, {}).pipe(Effect.provideService(SourceContext, source))
 
       expect(getMaterializationChangesetTag(dbState, event.seqNum)).toEqual('no-op')
     }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
@@ -139,23 +144,30 @@ Vitest.describe.concurrent('unknown event handling in materializeEvent', () => {
 
   Vitest.live('rematerialization advances the state head over unknown no-op events', (test) =>
     Effect.gen(function* () {
-      const { materializeEvent: sourceMaterializeEvent, dbEventlog, schema } = yield* setup({ strategy: 'warn' })
+      const {
+        materializeEvent: sourceMaterializeEvent,
+        initializedSource,
+        dbEventlog,
+        schema,
+        source,
+      } = yield* setup({ strategy: 'warn' })
       const event = makeUnknownEncodedEvent()
-      yield* sourceMaterializeEvent(event, { skipEventlog: false })
+      yield* sourceMaterializeEvent(event, { skipEventlog: false }).pipe(Effect.provideService(SourceContext, source))
 
       const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
       const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
       const rematerializedState = yield* makeSqliteDb({ _tag: 'in-memory' })
       const rematerializeEvent = yield* makeMaterializeEvent({
         schema,
-      }).pipe(Effect.provide(makeSqliteServicesLayer({ dbState: rematerializedState, dbEventlog })))
+      }).pipe(Effect.provide(makeSqliteServicesLayer({ dbState: rematerializedState, source })))
 
       const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
       yield* recreateDb({
+        initializedSource,
         schema,
         bootStatusQueue,
         materializeEvent: rematerializeEvent,
-      }).pipe(Effect.provide(makeSqliteServicesLayer({ dbState: rematerializedState, dbEventlog })))
+      }).pipe(Effect.provide(makeSqliteServicesLayer({ dbState: rematerializedState, source })))
       yield* Queue.shutdown(bootStatusQueue)
 
       expect(yield* getStateHead(rematerializedState)).toEqual(event.seqNum)
@@ -197,16 +209,17 @@ const setup = (config: UnknownEvents.HandlingConfig) =>
     const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
 
     const schema = makeSchemaWith(config)
-    yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+    const source = yield* newMemorySource(dbEventlog)
+    const initializedSource = yield* Eventlog.initializeSource(source)
 
     const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
     const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(
-      Effect.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
+      Effect.provide(makeSqliteServicesLayer({ dbState, source })),
     )
-    yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(
-      Effect.provide(makeSqliteServicesLayer({ dbState, dbEventlog })),
+    yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(
+      Effect.provide(makeSqliteServicesLayer({ dbState, source })),
     )
     yield* Queue.shutdown(bootStatusQueue)
 
-    return { materializeEvent, dbEventlog, dbState, schema }
+    return { source, initializedSource, materializeEvent, dbEventlog, dbState, schema }
   })

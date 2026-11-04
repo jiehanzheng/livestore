@@ -24,13 +24,14 @@ import {
   SubscriptionRef,
 } from '@livestore/utils/effect'
 
-import { type SqliteDb, UnknownError } from '../adapter-types.ts'
+import { UnknownError } from '../adapter-types.ts'
 import { PullItem } from '../ClientSessionLeaderThreadProxy.ts'
 import { IntentionalShutdownCause, type ProjectionMismatchError } from '../errors.ts'
 import * as EventlogSqliteDb from '../EventlogSqliteDb.ts'
 import type { LiveStoreSchema } from '../schema/mod.ts'
 import { EventSequenceNumber, LiveStoreEvent } from '../schema/mod.ts'
 import { EVENTLOG_META_TABLE, SYNC_STATUS_TABLE } from '../schema/state/sqlite/system-tables/eventlog-tables.ts'
+import type { SourceOwner } from '../source-db/owner.ts'
 import type * as StateSnapshot from '../StateSnapshot.ts'
 import * as StateSqliteDb from '../StateSqliteDb.ts'
 import type { BackendIdMismatchError, IsOfflineError, ServerAheadError } from '../sync/errors.ts'
@@ -1036,7 +1037,7 @@ const runProviderPull = ({
   live: boolean
   syncBackend: SyncBackend.SyncBackend
   devtoolsLatch: Latch.Latch | undefined
-  dbEventlog: SqliteDb
+  dbEventlog: SourceOwner
   pullBatches: Ref.Ref<Map<PullBatchId, Deferred.Deferred<void>>>
   nextPullBatchId: Ref.Ref<number>
   initialBlockingSyncContext: InitialBlockingSyncContext
@@ -1058,7 +1059,9 @@ const runProviderPull = ({
       }),
     )
     yield* Effect.gen(function* () {
-      const cursorInfo = yield* Eventlog.getSyncBackendCursorInfoForDb(dbEventlog, { remoteHead: cursor.global })
+      const cursorInfo = yield* Eventlog.getSyncBackendCursorInfoForDb(dbEventlog.handle, {
+        remoteHead: cursor.global,
+      }).pipe(UnknownError.mapToUnknownError)
       yield* syncBackend.pull(cursorInfo, { live }).pipe(
         Stream.runForEach(({ batch, pageInfo }) =>
           Effect.gen(function* () {

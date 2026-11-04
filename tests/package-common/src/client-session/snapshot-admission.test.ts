@@ -22,6 +22,7 @@ import { PlatformNode } from '@livestore/utils/node'
 
 import { events, makeSqliteServicesLayer, schema, tables } from '../leader-thread/fixture.ts'
 import { makeTestAdapter } from '../test-adapter.ts'
+import { acquireMemorySource } from './source-fixture.ts'
 
 Vitest.live('keeps an accepted snapshot and makes ownership loss terminal without opening another session', (test) =>
   Effect.gen(function* () {
@@ -214,15 +215,13 @@ for (const invariantFailure of [false, true]) {
 const setup = Effect.gen(function* () {
   const sqlite3 = yield* Effect.promise(() => loadSqlite3Wasm())
   const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
+  const source = yield* acquireMemorySource(makeSqliteDb)
+  const initializedSource = yield* Eventlog.initializeSource(source)
   const db = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) => Effect.sync(() => db.close()))
-  const eventlog = yield* Effect.acquireRelease(makeSqliteDb({ _tag: 'in-memory' }), (db) =>
-    Effect.sync(() => db.close()),
-  )
-  yield* Eventlog.initEventlogDb(eventlog, { sourceIsNew: true })
-  const services = makeSqliteServicesLayer({ dbState: db, dbEventlog: eventlog })
+  const services = makeSqliteServicesLayer({ dbState: db, source })
   const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
   const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-  yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(services))
+  yield* recreateDb({ schema, bootStatusQueue, materializeEvent, initializedSource }).pipe(Effect.provide(services))
   const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(services))
   return { makeSqliteDb, db, persistence }
 })

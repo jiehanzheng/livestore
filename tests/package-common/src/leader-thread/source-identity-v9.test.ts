@@ -4,270 +4,283 @@ import path from 'node:path'
 
 import { expect, test } from 'vitest'
 
+import { eventlogSystemTables, LegacyStorageFormatError, SOURCE_IDENTITY_TABLE, type SqliteDb } from '@livestore/common'
+import { configureConnection } from '@livestore/common/leader-thread'
 import {
-  eventlogSystemTables,
-  LegacyStorageFormatError,
-  SOURCE_IDENTITY_TABLE,
+  assertInitialized,
+  fromSyncSource,
+  initializeSource,
   SourceIdentity,
-  type SqliteDb,
-} from '@livestore/common'
-import { configureConnection, Eventlog } from '@livestore/common/leader-thread'
+  type SourceOwner,
+} from '@livestore/common/source-db'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
+import { reserveNodeSource, sqliteDbFactory } from '@livestore/sqlite-wasm/node'
 import { Cause, Effect, Exit, Option } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
+type Observer = (sql: string, run: () => void) => void
+type OpenedSource = { native: SqliteDb; owner: SourceOwner; observe: (observer: Observer) => void }
 type SourceFile = {
-  open: () => Promise<SqliteDb>
-  close: (db: SqliteDb) => void
+  open: () => Promise<OpenedSource>
+  close: (source: OpenedSource) => Promise<void>
   bytes: () => Promise<Uint8Array>
 }
 
 const sourceTest = (name: string, body: (file: SourceFile) => Promise<void>) =>
   test(name, async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'livestore-source-v9-'))
-    const opened = new Set<SqliteDb>()
+    const opened = new Set<OpenedSource>()
+    let first = true
     try {
       const sqlite3 = await loadSqlite3Wasm()
-      const makeSqliteDb = await Effect.runPromise(
+      const make = await Effect.runPromise(
         sqliteDbFactory({ sqlite3 }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer)),
       )
       await body({
         open: async () => {
-          const db = await Effect.runPromise(
-            makeSqliteDb({
+          const sourceCreation = first === false ? undefined : reserveNodeSource(path.join(directory, 'eventlog.db'))
+          first = false
+          const native = await Effect.runPromise(
+            make({
               _tag: 'fs',
               directory,
               fileName: 'eventlog.db',
-              // Factory configuration precedes every write/refusal observer below.
+              create: false,
+              ...(sourceCreation === undefined ? {} : { sourceCreation }),
               configureDb: (db) => Effect.runSync(configureConnection(db, { foreignKeys: true })),
             }),
           )
-          opened.add(db)
-          return db
+          let observer: Observer = (_sql, run) => run()
+          // Observe the real engine under the same owner, without replacing SQL or its transaction semantics.
+          const observed = new Proxy(native, {
+            get: (target, property, receiver) =>
+              property === 'execute'
+                ? (...args: unknown[]) =>
+                    observer(String(args[0]).trim(), () => Reflect.apply(target.execute, target, args))
+                : Reflect.get(target, property, receiver),
+          })
+          const owner = await Effect.runPromise(fromSyncSource(observed, native.metadata.sourceCreation))
+          const source = {
+            native,
+            owner,
+            observe: (next: Observer) => {
+              observer = next
+            },
+          }
+          opened.add(source)
+          return source
         },
-        close: (db) => {
-          db.close()
-          opened.delete(db)
+        close: async (source) => {
+          await Effect.runPromise(source.owner.close)
+          opened.delete(source)
         },
         bytes: async () => new Uint8Array(await readFile(path.join(directory, 'eventlog.db'))),
       })
     } finally {
-      for (const db of opened) db.close()
+      for (const source of opened) await Effect.runPromise(source.owner.close)
       await rm(directory, { recursive: true, force: true })
     }
   })
 
-const initialize = (db: SqliteDb, sourceIsNew: boolean) => Eventlog.initEventlogDb(db, { sourceIsNew })
-
-const snapshot = (db: SqliteDb) => {
-  const schema = db.select<{ name: string; sql: string | null }>(
+const initialize = (source: OpenedSource) => initializeSource(source.owner).pipe(Effect.map((proof) => proof.identity))
+const read = (source: OpenedSource) => Effect.runPromise(SourceIdentity.read(source.owner.handle))
+const snapshot = ({ native }: OpenedSource) => {
+  const schema = native.select<{ name: string; sql: string | null }>(
     "SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name",
   )
   return {
     schema,
     rows: schema.map(({ name }) => ({
       name,
-      rows: db.select(`SELECT * FROM "${name.replaceAll('"', '""')}" ORDER BY rowid`),
+      rows: native.select(`SELECT * FROM "${name.replaceAll('"', '""')}" ORDER BY rowid`),
     })),
-    bytes: Uint8Array.from(db.export()),
+    bytes: Uint8Array.from(native.export()),
   }
 }
-
-/** Observe the real connection without replacing its SQL engine or its transaction semantics. */
-const observeExecute = (db: SqliteDb, execute: (sql: string, run: () => void) => void) =>
-  new Proxy(db, {
-    get: (target, property, receiver) =>
-      property === 'execute'
-        ? (...args: unknown[]) => execute(String(args[0]).trim(), () => Reflect.apply(target.execute, target, args))
-        : Reflect.get(target, property, receiver),
-  })
-
-const expectReadOnlyRefusal = async (db: SqliteDb, sourceIsNew: boolean, file: SourceFile) => {
-  const before = snapshot(db)
-  const fileBytes = await file.bytes()
-  const executed: string[] = []
-  const observed = observeExecute(db, (sql, run) => {
+const expectReadOnlyRefusal = async (source: OpenedSource, file: SourceFile) => {
+  const before = snapshot(source),
+    fileBytes = await file.bytes(),
+    executed: string[] = []
+  const observe: Observer = (sql, run) => {
     executed.push(sql)
     run()
-  })
-  let readError: unknown
-  try {
-    SourceIdentity.read(observed)
-  } catch (error) {
-    readError = error
   }
-  const exit = await Effect.runPromiseExit(initialize(observed, sourceIsNew))
-  // Check preservation before error classification so malformed-proof diagnostics cannot hide writes.
-  expect(executed).toEqual([])
-  expect(snapshot(db)).toEqual(before)
+  source.observe(observe)
+  const readExit = await Effect.runPromiseExit(SourceIdentity.read(source.owner.handle))
+  expect(snapshot(source)).toEqual(before)
   expect(await file.bytes()).toEqual(fileBytes)
-  expect(readError).toBeInstanceOf(LegacyStorageFormatError)
-  expect(Exit.isFailure(exit)).toBe(true)
-  if (Exit.isFailure(exit) === true) {
-    const failure = Cause.findErrorOption(exit.cause)
-    expect(Option.isSome(failure)).toBe(true)
-    if (Option.isSome(failure) === true) expect(failure.value).toBeInstanceOf(LegacyStorageFormatError)
+  // A persisted-invariant refusal may fence its owner; re-open rather than reuse that failed capability.
+  await file.close(source)
+  const validation = await file.open()
+  validation.observe(observe)
+  const exit = await Effect.runPromiseExit(initialize(validation))
+  expect(executed).toEqual([])
+  expect(snapshot(validation)).toEqual(before)
+  expect(await file.bytes()).toEqual(fileBytes)
+  for (const refusal of [readExit, exit]) {
+    expect(Exit.isFailure(refusal)).toBe(true)
+    if (Exit.isFailure(refusal) === true) {
+      const failure = Cause.findErrorOption(refusal.cause)
+      expect(Option.isSome(failure)).toBe(true)
+      if (Option.isSome(failure) === true)
+        expect(failure.value).toMatchObject({ cause: expect.any(LegacyStorageFormatError) })
+    }
   }
 }
 
-const seedSourceFacts = (db: SqliteDb) => {
-  db.execute(`INSERT INTO eventlog (
+const seedSourceFacts = ({ native }: OpenedSource) => {
+  native.execute(`INSERT INTO eventlog (
     seqNumGlobal, seqNumClient, seqNumRebaseGeneration,
     parentSeqNumGlobal, parentSeqNumClient, parentSeqNumRebaseGeneration,
     name, argsJson, clientId, sessionId, schemaHash, syncMetadataJson
   ) VALUES (23, 0, 0, 0, 0, 0, 'retained-event', '{"id":"one"}', 'client', 'session', 11, 'null')`)
-  db.execute("UPDATE __livestore_sync_status SET head = 23, backendId = 'retained-backend'")
+  native.execute("UPDATE __livestore_sync_status SET head = 23, backendId = 'retained-backend'")
 }
 
-sourceTest('fresh empty source atomically creates every format-7 table and one identity proof', async (file) => {
-  const db = await file.open()
+sourceTest('exclusive fresh SOURCE atomically creates every format-7 table and one identity proof', async (file) => {
+  const source = await file.open()
   let observedProof = false
-  const observed = observeExecute(db, (sql, run) => {
+  source.observe((sql, run) => {
     if (sql.startsWith(`INSERT INTO ${SOURCE_IDENTITY_TABLE}`) === true) {
-      const tables = db.select<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
+      const tables = source.native.select<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
       expect(tables.map(({ name }) => name).sort()).toEqual(
         eventlogSystemTables.map((table) => table.sqliteDef.name).sort(),
       )
-      expect(db.select(`SELECT * FROM ${SOURCE_IDENTITY_TABLE}`)).toEqual([])
+      expect(source.native.select(`SELECT * FROM ${SOURCE_IDENTITY_TABLE}`)).toEqual([])
       observedProof = true
     }
     run()
   })
-  const identity = await Effect.runPromise(initialize(observed, true))
+  const identity = await Effect.runPromise(initialize(source))
   expect(observedProof).toBe(true)
   expect(identity.formatVersion).toBe(7)
   expect(identity.incarnation.trim().length).toBeGreaterThan(0)
-  expect(SourceIdentity.read(db)).toEqual(identity)
-  expect(db.select(`SELECT * FROM ${SOURCE_IDENTITY_TABLE}`)).toEqual([{ id: 1, ...identity }])
-  expect(db.select('SELECT * FROM __livestore_sync_status')).toEqual([{ head: 0, backendId: null }])
-  file.close(db)
-  const reopened = await file.open()
-  expect(SourceIdentity.read(reopened)).toEqual(identity)
+  expect(await read(source)).toEqual(identity)
+  expect(source.native.select(`SELECT * FROM ${SOURCE_IDENTITY_TABLE}`)).toEqual([{ id: 1, ...identity }])
+  expect(source.native.select('SELECT * FROM __livestore_sync_status')).toEqual([{ head: 0, backendId: null }])
+  await file.close(source)
+  expect(await read(await file.open())).toEqual(identity)
 })
 
 sourceTest(
-  'existing format-7 source validates without writes and preserves identity, events and backend facts',
+  'retained format-7 SOURCE validates without writes and preserves identity, events and backend facts',
   async (file) => {
-    const db = await file.open()
-    const identity = await Effect.runPromise(initialize(db, true))
-    seedSourceFacts(db)
-    const before = snapshot(db)
-    file.close(db)
-    const reopened = await file.open()
-    const fileBytes = await file.bytes()
-    const executed: string[] = []
-    const observed = observeExecute(reopened, (sql, run) => {
+    const source = await file.open(),
+      identity = await Effect.runPromise(initialize(source))
+    seedSourceFacts(source)
+    const before = snapshot(source)
+    await file.close(source)
+    const reopened = await file.open(),
+      bytes = await file.bytes(),
+      executed: string[] = []
+    reopened.observe((sql, run) => {
       executed.push(sql)
       run()
     })
-    expect(SourceIdentity.read(observed)).toEqual(identity)
-    expect(await Effect.runPromise(initialize(observed, false))).toEqual(identity)
+    expect(await read(reopened)).toEqual(identity)
+    expect(await Effect.runPromise(initialize(reopened))).toEqual(identity)
     expect(executed).toEqual([])
     expect(snapshot(reopened)).toEqual(before)
-    expect(await file.bytes()).toEqual(fileBytes)
+    expect(await file.bytes()).toEqual(bytes)
   },
 )
 
-sourceTest('sourceIsNew cannot authorize replacing a nonempty valid format-7 source', async (file) => {
-  const db = await file.open()
-  const identity = await Effect.runPromise(initialize(db, true))
-  seedSourceFacts(db)
-  const before = snapshot(db)
-  const bytes = await file.bytes()
-  const executed: string[] = []
-  const observed = observeExecute(db, (sql, run) => {
+sourceTest('a spent creation capability cannot replace a nonempty valid SOURCE', async (file) => {
+  const source = await file.open(),
+    identity = await Effect.runPromise(initialize(source))
+  seedSourceFacts(source)
+  const before = snapshot(source),
+    bytes = await file.bytes(),
+    executed: string[] = []
+  source.observe((sql, run) => {
     executed.push(sql)
     run()
   })
-  const exit = await Effect.runPromiseExit(initialize(observed, true))
-  expect(Exit.isFailure(exit)).toBe(true)
+  expect(Exit.isFailure(await Effect.runPromiseExit(initialize(source)))).toBe(true)
   expect(executed).toEqual([])
-  expect(SourceIdentity.read(db)).toEqual(identity)
-  expect(snapshot(db)).toEqual(before)
+  expect(await read(source)).toEqual(identity)
+  expect(snapshot(source)).toEqual(before)
   expect(await file.bytes()).toEqual(bytes)
 })
 
-sourceTest('sourceIsNew refuses an arbitrary nonempty source without writes', async (file) => {
-  const db = await file.open()
-  db.execute('CREATE TABLE retained (id INTEGER PRIMARY KEY, value TEXT)')
-  db.execute("INSERT INTO retained VALUES (1, 'keep me')")
-  await expectReadOnlyRefusal(db, true, file)
+sourceTest('retained arbitrary nonempty SOURCE refuses without writes', async (file) => {
+  const source = await file.open()
+  source.native.execute('CREATE TABLE retained (id INTEGER PRIMARY KEY, value TEXT)')
+  source.native.execute("INSERT INTO retained VALUES (1, 'keep me')")
+  await file.close(source)
+  await expectReadOnlyRefusal(await file.open(), file)
+})
+sourceTest('retained tableless SOURCE refuses without writes', async (file) => {
+  await file.close(await file.open())
+  await expectReadOnlyRefusal(await file.open(), file)
+})
+sourceTest('format-6 SOURCE without identity preserves retained rows and bytes on refusal', async (file) => {
+  const source = await file.open()
+  await Effect.runPromise(initialize(source))
+  seedSourceFacts(source)
+  source.native.execute(`DROP TABLE ${SOURCE_IDENTITY_TABLE}`)
+  await file.close(source)
+  await expectReadOnlyRefusal(await file.open(), file)
 })
 
-sourceTest('existing tableless source is refused without writes', async (file) => {
-  const db = await file.open()
-  file.close(db)
-  await expectReadOnlyRefusal(await file.open(), false, file)
-})
+for (const stage of ['before-proof', 'after-proof-before-commit'] as const)
+  sourceTest(`failed initialization ${stage} fences and later retained open refuses to reset it`, async (file) => {
+    const source = await file.open(),
+      before = snapshot(source),
+      bytes = await file.bytes()
+    let injected = false
+    source.observe((sql, run) => {
+      const stop = stage === 'before-proof' ? sql.startsWith(`INSERT INTO ${SOURCE_IDENTITY_TABLE}`) : sql === 'COMMIT'
+      if (stop === true) {
+        injected = true
+        if (stage === 'after-proof-before-commit')
+          expect(source.native.select(`SELECT * FROM ${SOURCE_IDENTITY_TABLE}`)).toHaveLength(1)
+        throw new Error(`Injected ${stage}`)
+      }
+      run()
+    })
+    expect(Exit.isFailure(await Effect.runPromiseExit(initialize(source)))).toBe(true)
+    expect(injected).toBe(true)
+    expect(Exit.isFailure(await Effect.runPromiseExit(source.owner.handle.select('SELECT 1')))).toBe(true)
+    if (stage === 'before-proof') expect(snapshot(source)).toEqual(before)
+    expect(await file.bytes()).toEqual(bytes)
+    // Rejected COMMIT is uncertain: the owner fences, and native close settles any still-open transaction.
+    await file.close(source)
+    const reopened = await file.open()
+    expect(snapshot(reopened)).toEqual(before)
+    await expectReadOnlyRefusal(reopened, file)
+  })
 
 sourceTest(
-  'format-6 source tables without identity proof are refused without changing retained rows or bytes',
+  'COMMIT succeeding before lost acknowledgement retains proof and later validates read-only',
   async (file) => {
-    const db = await file.open()
-    await Effect.runPromise(initialize(db, true))
-    seedSourceFacts(db)
-    db.execute(`DROP TABLE ${SOURCE_IDENTITY_TABLE}`)
-    file.close(db)
-    await expectReadOnlyRefusal(await file.open(), false, file)
-  },
-)
-
-for (const stage of ['before-proof', 'after-proof-before-commit'] as const) {
-  sourceTest(
-    `failed initialization ${stage} rolls back and a later existing-file open refuses to reset it`,
-    async (file) => {
-      const db = await file.open()
-      const before = snapshot(db)
-      const beforeBytes = await file.bytes()
-      let injected = false
-      const observed = observeExecute(db, (sql, run) => {
-        const stop =
-          stage === 'before-proof' ? sql.startsWith(`INSERT INTO ${SOURCE_IDENTITY_TABLE}`) : sql === 'COMMIT'
-        if (stop === true) {
-          injected = true
-          if (stage === 'after-proof-before-commit') expect(SourceIdentity.read(db).formatVersion).toBe(7)
-          throw new Error(`Injected ${stage}`)
-        }
-        run()
-      })
-      const exit = await Effect.runPromiseExit(initialize(observed, true))
-      expect(injected).toBe(true)
-      expect(Exit.isFailure(exit)).toBe(true)
-      expect(snapshot(db)).toEqual(before)
-      expect(await file.bytes()).toEqual(beforeBytes)
-      file.close(db)
-      await expectReadOnlyRefusal(await file.open(), false, file)
-    },
-  )
-}
-
-sourceTest(
-  'COMMIT that succeeds before throwing retains its proof and later existing-file validation succeeds',
-  async (file) => {
-    const db = await file.open()
-    let committedIdentity: ReturnType<typeof SourceIdentity.read> | undefined
-    const observed = observeExecute(db, (sql, run) => {
+    const source = await file.open()
+    let committedIdentity: { formatVersion: number; incarnation: string } | undefined
+    source.observe((sql, run) => {
       run()
       if (sql === 'COMMIT') {
-        committedIdentity = SourceIdentity.read(db)
+        committedIdentity = source.native.select<{ formatVersion: number; incarnation: string }>(
+          `SELECT formatVersion, incarnation FROM ${SOURCE_IDENTITY_TABLE}`,
+        )[0]
         throw new Error('Injected lost COMMIT acknowledgement')
       }
     })
-    const exit = await Effect.runPromiseExit(initialize(observed, true))
-    expect(Exit.isFailure(exit)).toBe(true)
+    expect(Exit.isFailure(await Effect.runPromiseExit(initialize(source)))).toBe(true)
     expect(committedIdentity?.formatVersion).toBe(7)
-    seedSourceFacts(db)
-    const before = snapshot(db)
-    file.close(db)
-    const reopened = await file.open()
-    const executed: string[] = []
-    const bytes = await file.bytes()
-    const readOnly = observeExecute(reopened, (sql, run) => {
+    expect(Exit.isFailure(await Effect.runPromiseExit(source.owner.handle.select('SELECT 1')))).toBe(true)
+    await file.close(source)
+    const retained = await file.open()
+    seedSourceFacts(retained)
+    const before = snapshot(retained)
+    await file.close(retained)
+    const reopened = await file.open(),
+      executed: string[] = [],
+      bytes = await file.bytes()
+    reopened.observe((sql, run) => {
       executed.push(sql)
       run()
     })
-    expect(await Effect.runPromise(initialize(readOnly, false))).toEqual(committedIdentity)
+    expect(await Effect.runPromise(initialize(reopened))).toEqual(committedIdentity)
     expect(executed).toEqual([])
     expect(snapshot(reopened)).toEqual(before)
     expect(await file.bytes()).toEqual(bytes)
@@ -287,36 +300,42 @@ for (const [name, corrupt] of [
     'partial proof table',
     `DROP TABLE ${SOURCE_IDENTITY_TABLE}; CREATE TABLE ${SOURCE_IDENTITY_TABLE} (id INTEGER PRIMARY KEY)`,
   ],
-] as const) {
-  sourceTest(`${name} is refused read-only and preserves its source bytes`, async (file) => {
-    const db = await file.open()
-    await Effect.runPromise(initialize(db, true))
-    seedSourceFacts(db)
-    for (const statement of corrupt.split(';')) db.execute(statement)
-    file.close(db)
-    await expectReadOnlyRefusal(await file.open(), false, file)
+] as const)
+  sourceTest(`${name} refuses read-only and preserves SOURCE bytes`, async (file) => {
+    const source = await file.open()
+    await Effect.runPromise(initialize(source))
+    seedSourceFacts(source)
+    for (const statement of corrupt.split(';')) source.native.execute(statement)
+    await file.close(source)
+    await expectReadOnlyRefusal(await file.open(), file)
   })
-}
 
-sourceTest('initialization context is bound to the exact database and cannot be copied', async (file) => {
-  const source = await file.open()
-  const initialized = await Effect.runPromise(Eventlog.initializeSource(source, { sourceIsNew: true }))
-  const before = snapshot(source)
-  expect(SourceIdentity.assertInitialized(source, initialized)).toEqual(initialized.identity)
-  const otherHandle = await file.open()
-  expect(() => SourceIdentity.assertInitialized(otherHandle, initialized)).toThrow(LegacyStorageFormatError)
-  expect(() => SourceIdentity.assertInitialized(source, { ...initialized })).toThrow(LegacyStorageFormatError)
+sourceTest('initialization proof binds the exact owner and cannot be copied', async (file) => {
+  const source = await file.open(),
+    initialized = await Effect.runPromise(initializeSource(source.owner)),
+    before = snapshot(source)
+  expect(await Effect.runPromise(assertInitialized(source.owner.handle, initialized))).toEqual(initialized.identity)
+  expect(Exit.isFailure(await Effect.runPromiseExit(assertInitialized(source.owner.handle, { ...initialized })))).toBe(
+    true,
+  )
   expect(snapshot(source)).toEqual(before)
+  // A real handoff preserves durable identity, but the new physical owner must not inherit its predecessor's proof.
+  await file.close(source)
+  const foreign = await file.open()
+  const foreignInitialized = await Effect.runPromise(initializeSource(foreign.owner))
+  expect(foreignInitialized.identity).toEqual(initialized.identity)
+  expect(await Effect.runPromise(assertInitialized(foreign.owner.handle, foreignInitialized))).toEqual(
+    initialized.identity,
+  )
+  expect(Exit.isFailure(await Effect.runPromiseExit(assertInitialized(foreign.owner.handle, initialized)))).toBe(true)
+  expect(snapshot(foreign)).toEqual(before)
 })
-
-sourceTest('source rotation invalidates an issued initialization context without modifying source', async (file) => {
-  const source = await file.open()
-  const initialized = await Effect.runPromise(Eventlog.initializeSource(source, { sourceIsNew: true }))
-  source.execute('BEGIN IMMEDIATE')
-  const rotated = SourceIdentity.rotateWithinTransaction(source)
-  source.execute('COMMIT')
+sourceTest('SOURCE rotation invalidates the issued initialization proof without further modification', async (file) => {
+  const source = await file.open(),
+    initialized = await Effect.runPromise(initializeSource(source.owner))
+  const rotated = await Effect.runPromise(source.owner.write(SourceIdentity.rotate))
   expect(rotated.incarnation).not.toBe(initialized.identity.incarnation)
   const before = snapshot(source)
-  expect(() => SourceIdentity.assertInitialized(source, initialized)).toThrow(LegacyStorageFormatError)
+  expect(Exit.isFailure(await Effect.runPromiseExit(assertInitialized(source.owner.handle, initialized)))).toBe(true)
   expect(snapshot(source)).toEqual(before)
 })

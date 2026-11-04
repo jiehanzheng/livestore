@@ -4,6 +4,7 @@ import type { BootStatus } from '@livestore/common'
 import { SyncState } from '@livestore/common'
 import { Eventlog, makeMaterializeEvent, recreateDb, streamEventsWithSyncState } from '@livestore/common/leader-thread'
 import { EventSequenceNumber, LiveStoreEvent } from '@livestore/common/schema'
+import type { SourceOwner } from '@livestore/common/source-db'
 import { EventFactory } from '@livestore/common/testing'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/node'
@@ -12,6 +13,7 @@ import { Effect, Fiber, Option, Queue, Ref, Schema, Stream, Subscribable } from 
 import { PlatformNode } from '@livestore/utils/node'
 
 import {
+  newMemorySource,
   appConfigSetEvent,
   events as fixtureEvents,
   makeSqliteServicesLayer,
@@ -48,12 +50,15 @@ const makeTestEnvironment = Effect.gen(function* () {
   const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
   const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
 
-  yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+  const source = yield* newMemorySource(dbEventlog)
+  const initializedSource = yield* Eventlog.initializeSource(source)
 
   const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-  const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
+  const servicesLayer = makeSqliteServicesLayer({ dbState, source })
   const materializeEvent = yield* makeMaterializeEvent({ schema: fixtureSchema }).pipe(Effect.provide(servicesLayer))
-  yield* recreateDb({ schema: fixtureSchema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(servicesLayer))
+  yield* recreateDb({ initializedSource, schema: fixtureSchema, bootStatusQueue, materializeEvent }).pipe(
+    Effect.provide(servicesLayer),
+  )
   yield* Queue.shutdown(bootStatusQueue)
 
   const initialSyncState = SyncState.SyncState.make({
@@ -83,7 +88,7 @@ const makeTestEnvironment = Effect.gen(function* () {
 
   const closeHeads = Queue.shutdown(headQueue)
 
-  return { dbEventlog, dbState, syncState, advanceHead, closeHeads }
+  return { source, dbEventlog, dbState, syncState, advanceHead, closeHeads }
 })
 
 const toEncoded = (event: LiveStoreEvent.Global.Encoded): LiveStoreEvent.Client.Encoded =>
@@ -118,7 +123,7 @@ const makeClientOnlyEvent = ({
   }
 }
 
-const insertEvents = (dbEventlog: unknown, events: ReadonlyArray<LiveStoreEvent.Client.Encoded>) =>
+const insertEvents = (source: SourceOwner, events: ReadonlyArray<LiveStoreEvent.Client.Encoded>) =>
   Effect.forEach(events, (event) =>
     Effect.gen(function* () {
       const eventDef = fixtureSchema.eventsDefsMap.get(event.name)
@@ -126,21 +131,59 @@ const insertEvents = (dbEventlog: unknown, events: ReadonlyArray<LiveStoreEvent.
         throw new Error(`Missing schema for event ${event.name}`)
       }
 
-      yield* Eventlog.insertIntoEventlog(
-        event,
-        dbEventlog as any,
-        Schema.hash(eventDef.schema),
-        event.clientId,
-        event.sessionId,
-      )
+      yield* Eventlog.insertIntoEventlog(event, source, Schema.hash(eventDef.schema), event.clientId, event.sessionId)
     }),
   )
 
 Vitest.describe.concurrent('streamEventsWithSyncState', () => {
+  Vitest.live('drains every composite page before advancing a bounded global window', (test) =>
+    withNodeFs(
+      Effect.gen(function* () {
+        const { source, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const make = (global: number, generation: number, name: 'todoCreated' | 'todoCompleted') =>
+          LiveStoreEvent.Client.Encoded.make({
+            name,
+            args:
+              name === 'todoCreated'
+                ? { id: `${global}-${generation}`, text: 'page', completed: false }
+                : { id: 'filtered' },
+            clientId: 'paged-client',
+            sessionId: 'paged-session',
+            seqNum: EventSequenceNumber.Client.Composite.make({ global, client: 0, rebaseGeneration: generation }),
+            parentSeqNum: EventSequenceNumber.Client.ROOT,
+          })
+        yield* insertEvents(source, [
+          make(1, 0, 'todoCreated'),
+          make(1, 1, 'todoCompleted'),
+          make(1, 2, 'todoCreated'),
+          make(2, 0, 'todoCreated'),
+          make(3, 0, 'todoCreated'),
+        ])
+        yield* advanceHead(EventSequenceNumber.Client.Composite.make({ global: 3, client: 0 }))
+        const collected = yield* streamEventsWithSyncState({
+          dbEventlog: source,
+          syncState,
+          options: {
+            batchSize: 1,
+            until: EventSequenceNumber.Client.Composite.make({ global: 2, client: 0 }),
+            filter: ['todoCreated'],
+          },
+        }).pipe(Stream.runCollect)
+        expect(collected.map(({ seqNum }) => [seqNum.global, seqNum.client, seqNum.rebaseGeneration])).toEqual([
+          [1, 0, 0],
+          [1, 0, 2],
+          [2, 0, 0],
+        ])
+        expect(collected.map(({ name }) => name)).toEqual(['todoCreated', 'todoCreated', 'todoCreated'])
+        yield* closeHeads
+      }).pipe(Vitest.withTestCtx(test)),
+    ),
+  )
+
   Vitest.live('emits events as upstream head advances', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -151,10 +194,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           toEncoded(eventFactory.todoCreated.next({ id: '2', text: 'second', completed: false })),
         ]
 
-        yield* insertEvents(dbEventlog, initialEvents)
+        yield* insertEvents(source, initialEvents)
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -170,7 +213,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           toEncoded(eventFactory.todoCreated.next({ id: '4', text: 'fourth', completed: false })),
         ]
 
-        yield* insertEvents(dbEventlog, laterEvents)
+        yield* insertEvents(source, laterEvents)
 
         yield* advanceHead(laterEvents[1]!.seqNum)
 
@@ -196,7 +239,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('filters events by name', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -209,10 +252,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           toEncoded(eventFactory.todoCompleted.next({ id: '2' })),
         ]
 
-        yield* insertEvents(dbEventlog, encodedEvents)
+        yield* insertEvents(source, encodedEvents)
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -233,7 +276,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('finalises when reaching until head', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -245,10 +288,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           toEncoded(eventFactory.todoCreated.next({ id: '3', text: 'third', completed: false })),
         ]
 
-        yield* insertEvents(dbEventlog, encodedEvents)
+        yield* insertEvents(source, encodedEvents)
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -270,7 +313,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('excludes events at the since cursor', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -279,10 +322,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
         const first = toEncoded(eventFactory.todoCreated.next({ id: '1', text: 'first', completed: false }))
         const second = toEncoded(eventFactory.todoCreated.next({ id: '2', text: 'second', completed: false }))
 
-        yield* insertEvents(dbEventlog, [first, second])
+        yield* insertEvents(source, [first, second])
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: first.seqNum,
@@ -302,7 +345,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('filters events by client ID', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const clientAFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-a', 'session-1'),
@@ -316,10 +359,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
         const eventA = toEncoded(clientAFactory.todoCreated.next({ id: '1', text: 'first', completed: false }))
         const eventB = toEncoded(clientBFactory.todoCreated.next({ id: '2', text: 'second', completed: false }))
 
-        yield* insertEvents(dbEventlog, [eventA, eventB])
+        yield* insertEvents(source, [eventA, eventB])
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -340,7 +383,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('filters events by session ID', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const sessionOneFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-shared', 'session-1'),
@@ -358,10 +401,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           sessionTwoFactory.todoCreated.next({ id: '2', text: 'second', completed: false }),
         )
 
-        yield* insertEvents(dbEventlog, [eventSessionOne, eventSessionTwo])
+        yield* insertEvents(source, [eventSessionOne, eventSessionTwo])
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -382,7 +425,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('skips client-only events by default', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -410,10 +453,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           return encoded
         })
 
-        yield* insertEvents(dbEventlog, [...backendApproved, ...clientOnlyEvents])
+        yield* insertEvents(source, [...backendApproved, ...clientOnlyEvents])
 
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -442,7 +485,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
   Vitest.live('respects until marker when batchSize exceeds remaining events', (test) =>
     withNodeFs(
       Effect.gen(function* () {
-        const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+        const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
         const eventFactory = makeFixtureEventFactory({
           client: EventFactory.clientIdentity('client-1', 'session-1'),
@@ -459,13 +502,13 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
           ),
         )
 
-        yield* insertEvents(dbEventlog, allEvents)
+        yield* insertEvents(source, allEvents)
 
         // until is set to event 5, batchSize is 10
         // Bug: stream fetches up to e10 instead of stopping at e5
         const untilEvent = allEvents[4]! // 0-indexed, so index 4 is event 5
         const stream = streamEventsWithSyncState({
-          dbEventlog,
+          dbEventlog: source,
           syncState,
           options: {
             since: EventSequenceNumber.Client.ROOT,
@@ -499,7 +542,7 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
     ([batchSize, eventCount, batchesPerTick], test) =>
       withNodeFs(
         Effect.gen(function* () {
-          const { dbEventlog, syncState, advanceHead, closeHeads } = yield* makeTestEnvironment
+          const { dbEventlog, syncState, advanceHead, closeHeads, source } = yield* makeTestEnvironment
 
           // console.log('batchSize', batchSize, 'eventCount', eventCount, 'batchesPerTick', batchesPerTick)
 
@@ -517,10 +560,10 @@ Vitest.describe.concurrent('streamEventsWithSyncState', () => {
             ),
           )
 
-          yield* insertEvents(dbEventlog, generatedEvents)
+          yield* insertEvents(source, generatedEvents)
 
           const stream = streamEventsWithSyncState({
-            dbEventlog,
+            dbEventlog: source,
             syncState,
             options: {
               since: EventSequenceNumber.Client.ROOT,

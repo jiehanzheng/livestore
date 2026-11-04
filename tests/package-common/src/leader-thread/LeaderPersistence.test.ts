@@ -16,7 +16,7 @@ import { Vitest } from '@livestore/utils-dev/node-vitest'
 import { Deferred, Effect, Exit, Fiber, Option, Queue } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
-import { events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
+import { newMemorySource, events, getStateHead, makeSqliteServicesLayer, schema, tables } from './fixture.ts'
 
 /** Verifies: LS.SYS.STATE-R03, LS.SYS.STATE.SQLITE-R06, LS.SYS.SYNC-R06 */
 Vitest.describe.concurrent('LeaderPersistence', () => {
@@ -24,7 +24,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
     'admits only the exact completed owner transition, including same-position changes and confirmations',
     (test) =>
       Effect.gen(function* () {
-        const { persistence, dbState, dbEventlog, servicesLayer, materializeEvent, makeSqliteDb } = yield* setup
+        const { persistence, dbState, dbEventlog, servicesLayer, materializeEvent, makeSqliteDb, source } = yield* setup
         const original = makeTodoEvent({ global: 1, id: 'original', text: 'Original' })
         yield* persistence.persistLocal({ events: [original] })
         const captured = StateSnapshot.readProvenance(dbState)!
@@ -72,7 +72,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
         expect(confirmed.provenance.ownerId).toBe(captured.ownerId)
         expect(confirmed.provenance.transitionId).not.toBe(stale.provenance.transitionId)
         expect(dbState.select(SystemTables.materializationJournalMetaTable)).toEqual([])
-        expect(Eventlog.getBackendHeadFromDb(dbEventlog)).toBe(1)
+        expect(yield* Eventlog.getBackendHeadFromDb(source.handle)).toBe(1)
         const reopened = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(servicesLayer))
         const changedOwner = yield* reopened.admitSnapshot({
           expectedProjection: StateSnapshot.getProjectionIdentity(schema),
@@ -92,7 +92,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
   for (const failure of ['sql', 'changeset'] as const) {
     Vitest.live(`finishes every materialization session when ${failure} fails`, (test) =>
       Effect.gen(function* () {
-        const { dbState, dbEventlog } = yield* setup
+        const { dbState, dbEventlog, source } = yield* setup
         let opened = 0
         let finished = 0
         const trackedState: SqliteDb = {
@@ -113,7 +113,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
             }
           },
         }
-        const services = makeSqliteServicesLayer({ dbState: trackedState, dbEventlog })
+        const services = makeSqliteServicesLayer({ dbState: trackedState, source })
         const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(services))
         const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(services))
         const first = makeTodoEvent({ global: 1, id: 'duplicate', text: 'First' })
@@ -129,7 +129,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('serializes snapshot exports behind the complete persistence receipt', (test) =>
     Effect.gen(function* () {
-      const { dbState, dbEventlog, servicesLayer, materializeEvent } = yield* setup
+      const { dbState, dbEventlog, servicesLayer, materializeEvent, source } = yield* setup
       const entered = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
       const requested = yield* Deferred.make<void>()
@@ -143,13 +143,15 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
           ),
       }).pipe(Effect.provide(servicesLayer))
       const event = makeTodoEvent({ global: 1, id: 'snapshot', text: 'Snapshot' })
+      const identityBeforeTransition = yield* SourceIdentity.read(source.handle)
+      const headBeforeTransition = yield* Eventlog.getClientHeadFromDb(source.handle)
       const transition = yield* persistence.persistLocal({ events: [event] }).pipe(Effect.forkScoped)
       yield* Deferred.await(entered)
       expect(
         hasCompletedState(dbState, {
           schema,
-          sourceIdentity: SourceIdentity.read(dbEventlog),
-          sourceHead: Eventlog.getClientHeadFromDb(dbEventlog),
+          sourceIdentity: identityBeforeTransition,
+          sourceHead: headBeforeTransition,
         }),
       ).toBe(false)
       const read = yield* Deferred.succeed(requested, undefined).pipe(
@@ -165,8 +167,8 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
       expect(
         hasCompletedState(dbState, {
           schema,
-          sourceIdentity: SourceIdentity.read(dbEventlog),
-          sourceHead: Eventlog.getClientHeadFromDb(dbEventlog),
+          sourceIdentity: yield* SourceIdentity.read(source.handle),
+          sourceHead: yield* Eventlog.getClientHeadFromDb(source.handle),
         }),
       ).toBe(true)
       expect(dbEventlog.select(SystemTables.eventlogMetaTable)).toHaveLength(1)
@@ -175,7 +177,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('commits local events without mutating the plan', (test) =>
     Effect.gen(function* () {
-      const { persistence, dbEventlog, dbState } = yield* setup
+      const { persistence, dbEventlog, dbState, source } = yield* setup
       const event = makeTodoEvent({ global: 1, id: 'local', text: 'Local' })
       const eventBefore = structuredClone(event)
 
@@ -194,7 +196,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('rolls back both databases when an upstream batch fails during materialization', (test) =>
     Effect.gen(function* () {
-      const { persistence, dbEventlog, dbState } = yield* setup
+      const { persistence, dbEventlog, dbState, source } = yield* setup
       const first = makeTodoEvent({ global: 1, id: 'duplicate', text: 'First' })
       const duplicate = makeTodoEvent({ global: 2, parentSeqNum: first.seqNum, id: 'duplicate', text: 'Second' })
 
@@ -216,7 +218,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('rolls back a local batch in both databases when it fails partway', (test) =>
     Effect.gen(function* () {
-      const { persistence, dbEventlog, dbState } = yield* setup
+      const { persistence, dbEventlog, dbState, source } = yield* setup
       const first = makeTodoEvent({ global: 1, id: 'duplicate', text: 'First' })
       const duplicate = makeTodoEvent({ global: 2, parentSeqNum: first.seqNum, id: 'duplicate', text: 'Second' })
 
@@ -232,7 +234,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
     'restores rollback, eventlog, journal and heads when an upstream rebase fails at its last write',
     (test) =>
       Effect.gen(function* () {
-        const { persistence, dbEventlog, dbState } = yield* setup
+        const { persistence, dbEventlog, dbState, source } = yield* setup
         // More than one 100-key chunk, so earlier eventlog and journal delete chunks must be restored too.
         const pending = Array.from({ length: 101 }, (_, i) =>
           makeTodoEvent({
@@ -275,7 +277,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('replaces rolled-back history and advances the backend head in one upstream commit', (test) =>
     Effect.gen(function* () {
-      const { persistence, dbEventlog, dbState } = yield* setup
+      const { persistence, dbEventlog, dbState, source } = yield* setup
       const original = makeTodoEvent({ global: 1, id: 'original', text: 'Original' })
       yield* persistence.persistLocal({ events: [original] })
 
@@ -298,7 +300,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
       expect(
         dbEventlog.select<{ seqNumRebaseGeneration: number }>('SELECT seqNumRebaseGeneration FROM eventlog'),
       ).toEqual([{ seqNumRebaseGeneration: 1 }])
-      expect(Eventlog.getBackendHeadFromDb(dbEventlog)).toEqual(1)
+      expect(yield* Eventlog.getBackendHeadFromDb(source.handle)).toEqual(1)
       expect(yield* getStateHead(dbState)).toEqual(replacement.seqNum)
       expect(dbState.select(SystemTables.materializationJournalMetaTable)).toEqual([])
       expect(receipt.rolledBackEventNums).toEqual([original.seqNum])
@@ -307,7 +309,7 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
 
   Vitest.live('persists confirmation metadata with the matching backend head', (test) =>
     Effect.gen(function* () {
-      const { persistence, dbEventlog, dbState } = yield* setup
+      const { persistence, dbEventlog, dbState, source } = yield* setup
       const pending = makeTodoEvent({
         global: 1,
         rebaseGeneration: 2,
@@ -325,14 +327,14 @@ Vitest.describe.concurrent('LeaderPersistence', () => {
         backendHead: upstream.seqNum,
       })
 
-      const cursorInfo = yield* Eventlog.getSyncBackendCursorInfoForDb(dbEventlog, {
+      const cursorInfo = yield* Eventlog.getSyncBackendCursorInfoForDb(source.handle, {
         remoteHead: upstream.seqNum.global,
       })
       expect(Option.getOrThrow(cursorInfo)).toEqual({
         eventSequenceNumber: 1,
         metadata: Option.some({ cursor: 'confirmed-1' }),
       })
-      expect(Eventlog.getBackendHeadFromDb(dbEventlog)).toEqual(1)
+      expect(yield* Eventlog.getBackendHeadFromDb(source.handle)).toEqual(1)
       expect(dbState.select(SystemTables.materializationJournalMetaTable)).toEqual([])
     }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Vitest.withTestCtx(test)),
   )
@@ -343,18 +345,21 @@ const setup = Effect.gen(function* () {
   const makeSqliteDb = yield* sqliteDbFactory({ sqlite3 })
   const dbState = yield* makeSqliteDb({ _tag: 'in-memory' })
   const dbEventlog = yield* makeSqliteDb({ _tag: 'in-memory' })
-  yield* Eventlog.initEventlogDb(dbEventlog, { sourceIsNew: true })
+  const source = yield* newMemorySource(dbEventlog)
+  const initializedSource = yield* Eventlog.initializeSource(source)
 
-  const servicesLayer = makeSqliteServicesLayer({ dbState, dbEventlog })
+  const servicesLayer = makeSqliteServicesLayer({ dbState, source })
   const materializeEvent = yield* makeMaterializeEvent({ schema }).pipe(Effect.provide(servicesLayer))
 
   const bootStatusQueue = yield* Queue.unbounded<BootStatus>()
-  yield* recreateDb({ schema, bootStatusQueue, materializeEvent }).pipe(Effect.provide(servicesLayer))
+  yield* recreateDb({ initializedSource, schema, bootStatusQueue, materializeEvent }).pipe(
+    Effect.provide(servicesLayer),
+  )
   yield* Queue.shutdown(bootStatusQueue)
 
   const persistence = yield* LeaderPersistence.make({ materializeEvent, schema }).pipe(Effect.provide(servicesLayer))
 
-  return { persistence, dbEventlog, dbState, servicesLayer, materializeEvent, makeSqliteDb }
+  return { persistence, source, dbEventlog, dbState, servicesLayer, materializeEvent, makeSqliteDb }
 })
 
 /** Durable rows a failed persistence transaction must leave untouched. */
@@ -362,7 +367,7 @@ const snapshot = (dbState: SqliteDb, dbEventlog: SqliteDb) => ({
   todos: dbState.select(tables.todos),
   journal: dbState.select(SystemTables.materializationJournalMetaTable),
   eventlog: dbEventlog.select(SystemTables.eventlogMetaTable),
-  backendHead: Eventlog.getBackendHeadFromDb(dbEventlog),
+  backendHead: dbEventlog.select<{ head: number }>(`SELECT head FROM ${SystemTables.SYNC_STATUS_TABLE}`)[0]?.head ?? 0,
 })
 
 const emptySnapshot = { todos: [], journal: [], eventlog: [], backendHead: EventSequenceNumber.Client.ROOT.global }
