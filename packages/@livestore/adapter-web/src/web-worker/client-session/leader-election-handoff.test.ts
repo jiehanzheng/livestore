@@ -63,6 +63,7 @@ describe('leader election release follows receiving-worker physical close', () =
               Scope.provide(leaderScope),
             )
             expect(yield* leader.tryAcquire).toBe(true)
+            yield* lifetime.start
             const sender = yield* Effect.gen(function* () {
               const platform = yield* Worker.WorkerPlatform
               const endpoint = yield* platform.spawn(0)

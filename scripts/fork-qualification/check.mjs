@@ -294,13 +294,15 @@ const main = () => {
   )
 
   const reportFile = path.join(run, 'vitest-runtime-report.json')
+  // Crash fixtures spawn Bun by name and must use the same pinned binary as Genie.
+  const runtimeEnv = { ...env, PATH: [path.dirname(generator[0]), env.PATH].join(path.delimiter) }
   gate(
     run,
     'vitest-eight-project-runtime-suite',
     path.join(root, 'node_modules/.bin/vitest'),
     ['run', '--config', qualificationConfig, '--reporter=json', '--outputFile', reportFile],
     root,
-    env,
+    runtimeEnv,
   )
   const testSummary = verifyRuntimeTests(root, reportFile)
   console.log(

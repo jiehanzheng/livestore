@@ -1,3 +1,6 @@
+import { sourceCompatibility, sdkIdentity } from './qualification-observations.mts'
+import { sdkNames, supportPaths, requiredGates } from './qualification-recipe.mts'
+export { sdkNames, supportPaths, requiredGates, sourceCompatibility, sdkIdentity }
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -23,20 +26,6 @@ export const decisionPath =
   'context/03-delivery/01-composition/01-developer-environment/.decisions/0004-focused-fork-qualification.md'
 export const decisionSha = '879a3eacd0212d2187dd9e28762351f7a52694d9986880c549975181bf2e4e0c'
 export const proposalSha = 'ebda1cec985838b43ecd1db6338f5a1445c549ae016420de64af083b6b525d69'
-export const sdkNames = [
-  'adapter-node',
-  'adapter-expo',
-  'adapter-web',
-  'common',
-  'common-cf',
-  'framework-toolkit',
-  'livestore',
-  'react',
-  'sqlite-wasm',
-  'utils',
-  'wa-sqlite',
-  'webmesh',
-].map((name) => `@livestore/${name}`)
 export const candidateCompatibilityPaths = [
   'context/03-delivery/01-composition/01-developer-environment/spec.md',
   'scripts/fork-qualification/README.md',
@@ -52,48 +41,6 @@ export const candidateCompatibilityPaths = [
   'scripts/fork-qualification/qualification-policy.mjs',
   'scripts/fork-qualification/qualification-runtime.mjs',
 ]
-export const sourceCompatibility = (root, tree, snapshot) => {
-  const before = new Map(
-    snapshot.filter((row) => !row.path.startsWith('repos/effect-utils/')).map((row) => [row.path, row]),
-  )
-  const after = new Map(tree.map((row) => [row.path, row]))
-  const descriptor = (row, current) => {
-    if (row === undefined) return null
-    const stat = current === true ? fs.lstatSync(path.join(root, row.path)) : undefined
-    return {
-      kind: row.kind,
-      executable: current === true ? (stat.mode & 0o111) !== 0 : (row.mode & 0o111) !== 0,
-      sha256: current === true ? hash(fs.readFileSync(path.join(root, row.path))) : row.sha256,
-      ...(row.kind === 'symlink' ? { target: row.target } : {}),
-    }
-  }
-  return [...new Set([...before.keys(), ...after.keys()])].sort(compare).flatMap((name) => {
-    const old = descriptor(before.get(name), false),
-      current = descriptor(after.get(name), true)
-    return digest(old) === digest(current) ? [] : [{ path: name, old, current }]
-  })
-}
-export const supportPaths = [
-  'package.json',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
-  'pnpm-install-contract.json',
-  'tsconfig.fork.json',
-  'scripts/fork-qualification/tool-profile.json',
-]
-export const requiredGates = [
-  'genie-root-bootstrap',
-  'genie-packages',
-  'genie-tests',
-  'genie-scripts',
-  'genie-docs',
-  'source-format',
-  'source-lint-type-aware',
-  'package-files-policy',
-  'commit-evidence-tests',
-  'typecheck-19-projects',
-  'vitest-eight-project-runtime-suite',
-]
 const generatedCatalogFixtureConfig = 'packages/@local/astro-twoslash-code/src/cli/test-fixtures/catalog/tsconfig.json'
 export const fullSetupInput = (name) =>
   name.endsWith('.nix') ||
@@ -106,17 +53,6 @@ const shared = (name) =>
   /^(genie\/|pnpm-|package\.json|tsconfig\.|\.ox)/.test(name) ||
   /\/(package|tsconfig)\.json(?:\.genie\.ts)?$/.test(name)
 
-export const sdkIdentity = (root, tree) => {
-  const prefixes = sdkNames.map((name) => `packages/${name}/`)
-  const row = (name) => ({ path: name, sha256: hash(fs.readFileSync(path.join(root, name))) })
-  return {
-    contract: 'livestore-local-core-candidate-inventory-v1',
-    sdkFiles: tree
-      .filter((entry) => prefixes.some((prefix) => entry.path.startsWith(prefix)))
-      .map((entry) => row(entry.path)),
-    supportFiles: supportPaths.map(row),
-  }
-}
 export const scopeBinding = (manifest) =>
   digest({
     source: manifest.source,

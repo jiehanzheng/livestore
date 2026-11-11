@@ -19,6 +19,7 @@ import { BrowserWorker } from '@livestore/utils/effect/browser'
 import type { SingleTabAdapterOptions } from '../../single-tab/single-tab-adapter.ts'
 import type { WebAdapterOptions } from '../client-session/persisted-adapter.ts'
 import { makePhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
+import { startDedicatedWorker } from '../common/rpc-worker.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
 import { makeWorkerEffect, type WorkerOptions } from './make-leader-worker.ts'
 
@@ -119,8 +120,12 @@ describe('owned worker MessagePort transport', () => {
             ),
             parentScope,
           )
-          yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(Effect.provide(outerContext))
-          yield* lifetime.ready
+          yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(
+            Effect.provide(outerContext),
+            Scope.provide(parentScope),
+          )
+          yield* Scope.addFinalizer(parentScope, lifetime.close.pipe(Effect.orDie))
+          yield* lifetime.start
 
           // The inner runner becomes ready only after the SDK has received and
           // decoded its normal transferable outer InitialMessage.
@@ -133,7 +138,6 @@ describe('owned worker MessagePort transport', () => {
           yield* Deferred.await(ready)
 
           yield* Scope.close(parentScope, Exit.void)
-          yield* lifetime.close
           const exit = yield* Fiber.await(fiber)
           expect(yield* Deferred.await(receipt)).toEqual({ finalized: true, failed: failFinalizer })
           expect(closeGlobal).not.toHaveBeenCalled()
@@ -180,6 +184,55 @@ it('cannot begin native database boot before the outer initial message is consum
         // payload and therefore cannot have constructed its physical owner or DB.
         yield* Scope.close(receiverScope, Exit.void)
         yield* Fiber.await(receiver)
+        expect(load).not.toHaveBeenCalled()
+      }),
+    ),
+  ))
+
+it('joins the real receiver without opening SQLite when its bootstrap post fails', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const data = new MessageChannel()
+        const delivered = vi.fn()
+        const load = vi.spyOn(WasmLoader, 'loadSqlite3Wasm')
+        vi.stubGlobal('self', { name: 'initial-send-failure' })
+        const attempted = yield* Deferred.make<unknown>()
+        const post = data.port1.postMessage.bind(data.port1)
+        const intercept = vi.spyOn(data.port1, 'postMessage').mockImplementationOnce(() => {
+          try {
+            post(() => undefined)
+          } catch (cause) {
+            Deferred.doneUnsafe(attempted, Effect.succeed(cause))
+            throw cause
+          }
+        })
+        data.port2.addEventListener('message', (event) => {
+          if (event.data?.[1]?._tag === 'InitialMessage') delivered()
+        })
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            intercept.mockRestore()
+            load.mockRestore()
+            data.port1.close()
+            data.port2.close()
+          }),
+        )
+        const receiver = yield* makeWorkerEffect({ schema, transport: data.port2, logLevel: 'None' }).pipe(
+          Effect.forkScoped,
+        )
+        const owner = yield* Scope.make()
+        const lifetime = yield* makePhysicalWorkerLifetime
+        yield* Effect.addFinalizer(() => Scope.close(owner, Exit.void))
+        const result = yield* startDedicatedWorker(
+          { transport: data.port1, lifetime, close: lifetime.close.pipe(Effect.orDie) },
+          { storeId: 'initial-send-failure', clientId: 'client' },
+        ).pipe(Scope.provide(owner), Effect.exit)
+        expect(Exit.isFailure(result) && Cause.pretty(result.cause)).toContain('Failed to send message to worker')
+        expect(yield* Deferred.await(attempted)).toMatchObject({ name: 'DataCloneError' })
+        yield* Scope.close(owner, result)
+        yield* Fiber.await(receiver)
+        expect(delivered).not.toHaveBeenCalled()
         expect(load).not.toHaveBeenCalled()
       }),
     ),

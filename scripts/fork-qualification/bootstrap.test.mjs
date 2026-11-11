@@ -10,6 +10,26 @@ import { fileURLToPath } from 'node:url'
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const spec = JSON.parse(fs.readFileSync(path.join(directory, 'tool-profile.json'), 'utf8'))
 
+test('legacy qualification entrypoints use the actual checked owners', async () => {
+  const facts = await import('./qualification-observations.mts')
+  const recipe = await import('./qualification-recipe.mts')
+  const suite = await import('./qualification-runtime.mts')
+  const files = await import('./commit-files.mjs')
+  const consumer = await import('./commit-consumer.mjs')
+  const source = await import('./commit-source.mjs')
+  const policy = await import('./qualification-policy.mjs')
+  const runtime = await import('./qualification-runtime.mjs')
+  for (const name of ['hash', 'canonical', 'digest', 'sourceState', 'fileVector', 'packPayload', 'toolInputs'])
+    assert.equal(files[name], facts[name], name)
+  for (const name of ['consumerGraph', 'resolvePackage']) assert.equal(consumer[name], facts[name], name)
+  for (const name of ['sourceCompatibility', 'sdkIdentity']) assert.equal(source[name], facts[name], name)
+  for (const name of ['sdkNames', 'supportPaths', 'requiredGates']) assert.equal(source[name], recipe[name], name)
+  for (const name of ['PROJECTS', 'PROJECT_TEST_ROOTS', 'REQUIRED_CRASH_CASES', 'declaredCommands'])
+    assert.equal(policy[name], recipe[name], name)
+  for (const name of ['expectedSkippedCases', 'verifyRuntimeTests', 'assertRuntimeSummary'])
+    assert.equal(runtime[name], suite[name], name)
+})
+
 const usingBootstrap = (version, inspect) => {
   const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'livestore-bootstrap-pin-')))
   try {
@@ -22,6 +42,7 @@ const usingBootstrap = (version, inspect) => {
     for (const name of [
       'bootstrap.mjs',
       'qualification-policy.mjs',
+      'qualification-recipe.mts',
       'upstream-source-inputs.mjs',
       'tool-profile.json',
     ]) {

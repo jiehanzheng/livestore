@@ -1,5 +1,6 @@
+import { packageManifest as manifest, consumerGraph, resolvePackage } from './qualification-observations.mts'
+export { consumerGraph, resolvePackage }
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import {
@@ -21,56 +22,6 @@ import {
 } from './commit-files.mjs'
 import { candidateCompatibilityPaths, sourceCompatibility, sdkNames } from './commit-source.mjs'
 
-const manifest = (root) => JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-export const resolvePackage = (from, name) => {
-  ensure(typeof name === 'string' && /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(name), 'Invalid dependency name')
-  // A declared npm package can share a builtin name (punycode); inventory its package, not Node's builtin shortcut.
-  const locations = createRequire(path.join(from, 'package.json')).resolve.paths(`${name}/`) ?? []
-  for (const location of locations) {
-    const candidate = path.join(location, name)
-    if (fs.existsSync(path.join(candidate, 'package.json')) === true) return fs.realpathSync(candidate)
-  }
-  return undefined
-}
-const dependencies = (pkg, includeDev) => {
-  const optional = { ...pkg.optionalDependencies }
-  const required = { ...pkg.dependencies, ...pkg.peerDependencies, ...(includeDev === true ? pkg.devDependencies : {}) }
-  for (const name of Object.keys(pkg.peerDependencies ?? {}))
-    if (pkg.peerDependenciesMeta?.[name]?.optional === true) optional[name] = required[name]
-  return Object.keys({ ...required, ...optional })
-    .sort(compare)
-    .map((name) => ({ name, optional: name in optional }))
-}
-export const consumerGraph = (entries) => {
-  unique(entries, (row) => fs.realpathSync(row.root), 'Duplicate consumer entry root')
-  const queue = entries.map((entry) => ({ root: fs.realpathSync(entry.root), dev: entry.includeDev === true }))
-  const nodes = new Map()
-  while (queue.length > 0) {
-    const { root, dev } = queue.shift()
-    const existing = nodes.get(root)
-    if (existing !== undefined && (existing.dev === true || dev === false)) continue
-    const pkg = manifest(root)
-    ensure(typeof pkg.name === 'string', 'Consumer node lacks package identity')
-    const node = {
-      root,
-      name: pkg.name,
-      dev,
-      manifestSha256: hash(fs.readFileSync(path.join(root, 'package.json'))),
-      edges: [],
-    }
-    nodes.set(root, node)
-    for (const dependency of dependencies(pkg, dev)) {
-      const target = resolvePackage(root, dependency.name)
-      ensure(
-        target !== undefined || dependency.optional === true,
-        `Unresolved required consumer dependency: ${dependency.name} from ${pkg.name} (${root})`,
-      )
-      node.edges.push({ name: dependency.name, root: target ?? null })
-      if (target !== undefined) queue.push({ root: target, dev: false })
-    }
-  }
-  return nodes
-}
 export const runtimeEffects = (graph, sdkRoots) => {
   const seen = new Set()
   const effects = new Map()

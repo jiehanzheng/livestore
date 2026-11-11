@@ -15,3 +15,5 @@ export {
   type WebAdapterOptions,
 } from './web-worker/client-session/persisted-adapter.ts'
 export * as WorkerSchema from './web-worker/common/worker-schema.ts'
+export type { WitnessedWorkerEndpoint } from './web-worker/client-session/worker-shutdown.ts'
+export type { PhysicalWorkerCloseOutcome } from './web-worker/common/physical-worker-lifetime.ts'

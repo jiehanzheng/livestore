@@ -2,21 +2,21 @@ import type { LogConfig } from '@livestore/common'
 import { Devtools, liveStoreVersion, UnknownError } from '@livestore/common'
 import { isDevEnv, LS_DEV } from '@livestore/utils'
 import {
+  Cause,
   Deferred,
   Effect,
   Exit,
   FetchHttpClient,
   identity,
   Layer,
-  Ref,
   References,
   RpcClient,
   RpcServer,
   RpcWorker,
   Schema,
   Scope,
+  Semaphore,
   Stream,
-  SubscriptionRef,
   TaskTracing,
 } from '@livestore/utils/effect'
 import { BrowserWorker, BrowserWorkerRunner } from '@livestore/utils/effect/browser'
@@ -26,6 +26,7 @@ import { dieOnRpcClientError, dieOnRpcClientErrorStream, makeWebmeshWorkerProxy 
 import { makeShutdownChannel } from '../common/shutdown-channel.ts'
 import { makeSharedWorkerNodeName } from '../common/webmesh-node-names.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
+import { makeLeaderGenerations } from './leader-generations.ts'
 
 // Extract from `livestore-shared-worker-${storeId}`
 const storeId = self.name.replace('livestore-shared-worker-', '')
@@ -56,17 +57,14 @@ const makeWorkerRunner = Effect.gen(function* () {
     scope: Scope.Closeable
   }
 
-  const leaderWorkerContextSubRef = yield* SubscriptionRef.make<LeaderWorkerContext | undefined>(undefined)
-
-  const isLeaderWorkerContext = (context: LeaderWorkerContext | undefined): context is LeaderWorkerContext =>
-    context !== undefined
-
-  const waitForWorker = SubscriptionRef.waitUntil(leaderWorkerContextSubRef, isLeaderWorkerContext)
+  const generations = yield* makeLeaderGenerations<LeaderWorkerContext>()
+  const updates = yield* Semaphore.make(1)
+  const waitForWorker = generations.current
 
   const forwardRequest = <A, E, R>(
     tag: string,
     f: (client: RpcClient.FromGroup<typeof WorkerSchema.LeaderWorkerInnerRpcs>) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> =>
+  ): Effect.Effect<A, E | UnknownError, R> =>
     // Forward the request to the active worker and convert transport errors to defects.
     waitForWorker.pipe(
       Effect.flatMap(({ client }) => f(client)),
@@ -82,10 +80,10 @@ const makeWorkerRunner = Effect.gen(function* () {
   const forwardRequestStream = <A, E, R>(
     tag: string,
     f: (client: RpcClient.FromGroup<typeof WorkerSchema.LeaderWorkerInnerRpcs>) => Stream.Stream<A, E, R>,
-  ): Stream.Stream<A, E, R> =>
+  ): Stream.Stream<A, E | UnknownError, R> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`forwardRequestStream: ${tag}`)
-      const { client, scope } = yield* SubscriptionRef.waitUntil(leaderWorkerContextSubRef, isLeaderWorkerContext)
+      const { client, scope } = yield* waitForWorker
       const stream = f(client).pipe(dieOnRpcClientErrorStream)
       // It seems the request stream is not automatically interrupted when the scope shuts down
       // so we need to manually interrupt it when the scope shuts down
@@ -106,31 +104,6 @@ const makeWorkerRunner = Effect.gen(function* () {
       Stream.ensuring(Effect.logDebug(`shutting down stream for ${tag}`)),
     )
 
-  const resetCurrentWorkerCtx = Effect.gen(function* () {
-    const prevWorker = yield* SubscriptionRef.get(leaderWorkerContextSubRef)
-    if (prevWorker !== undefined) {
-      // NOTE we're already unsetting the current worker here, so new incoming requests are queued for the new worker
-      yield* SubscriptionRef.set(leaderWorkerContextSubRef, undefined)
-
-      yield* Effect.yieldNow
-
-      yield* Scope.close(prevWorker.scope, Exit.void).pipe(
-        Effect.logWarnIfTakesLongerThan({
-          label: '@livestore/adapter-web:shared-worker:close-previous-worker',
-          duration: 500,
-        }),
-      )
-    }
-  }).pipe(Effect.withSpan('@livestore/adapter-web:shared-worker:resetCurrentWorkerCtx'))
-
-  const reset = Effect.gen(function* () {
-    yield* Effect.logDebug('reset')
-    // Clear cached invariants so a fresh configuration can be accepted after shutdown
-    yield* Ref.set(invariantsRef, undefined)
-    // Tear down current leader worker context
-    yield* resetCurrentWorkerCtx
-  })
-
   // Cache first-applied invariants to enforce stability across leader transitions
   // Per-client runtime params are intentionally excluded so a new leader can apply its own tuning.
   const InvariantsSchema = Schema.Struct({
@@ -141,14 +114,15 @@ const makeWorkerRunner = Effect.gen(function* () {
     devtoolsEnabled: Schema.Boolean,
   })
   type Invariants = typeof InvariantsSchema.Type
-  const invariantsRef = yield* Ref.make<Invariants | undefined>(undefined)
+  let currentInvariants: Invariants | undefined
   const sameInvariants = Schema.toEquivalence(InvariantsSchema)
 
   return WorkerSchema.SharedWorkerRpcs.of({
     // Whenever the client session leader changes (and thus creates a new leader thread), the new client session leader
     // sends a new MessagePort to the shared worker which proxies messages to the new leader thread.
-    UpdateMessagePort: ({ port, initial, liveStoreVersion: clientLiveStoreVersion }) =>
-      Effect.gen(function* () {
+    UpdateMessagePort: ({ port, generationToken, initial, liveStoreVersion: clientLiveStoreVersion }) => {
+      let adopted = false
+      return Effect.gen(function* () {
         // Enforce configuration stability across leader transitions.
         const invariants: Invariants = {
           storeId: initial.storeId,
@@ -157,7 +131,7 @@ const makeWorkerRunner = Effect.gen(function* () {
           liveStoreVersion: clientLiveStoreVersion,
           devtoolsEnabled: initial.devtoolsEnabled,
         }
-        const prev = yield* Ref.get(invariantsRef)
+        const prev = currentInvariants
         // Early return on mismatch to keep happy path linear
         if (prev !== undefined && sameInvariants(prev, invariants) === false) {
           const diff = Schema.debugDiff(InvariantsSchema)(prev, invariants)
@@ -166,64 +140,104 @@ const makeWorkerRunner = Effect.gen(function* () {
             payload: { diff, previous: prev, next: invariants },
           })
         }
-        // First writer records invariants
-        if (prev === undefined) {
-          yield* Ref.set(invariantsRef, invariants)
-        }
-
-        yield* resetCurrentWorkerCtx
-
         const scope = yield* Scope.make()
-
-        yield* Effect.gen(function* () {
-          const shutdownChannel = yield* makeShutdownChannel(initial.storeId)
-
-          yield* shutdownChannel.listen.pipe(
-            Stream.mapEffect(Effect.fromResult),
-            Stream.tap(() => reset),
-            Stream.runDrain,
-            Effect.tapCauseLogPretty,
-            Effect.forkScoped,
-          )
-
-          const clientContext = yield* Layer.build(
-            RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }).pipe(
-              Layer.provide(BrowserWorker.layer(() => port)),
-              Layer.provide(
-                RpcWorker.layerInitialMessage(
-                  WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema,
-                  Effect.succeed(initial),
+        yield* generations.install(
+          generationToken,
+          Scope.close(scope, Exit.void),
+          (generation) =>
+            Effect.gen(function* () {
+              yield* Scope.addFinalizer(
+                scope,
+                Effect.sync(() => port.close()),
+              )
+              adopted = true
+              currentInvariants = invariants
+              const shutdownChannel = yield* makeShutdownChannel(initial.storeId)
+              yield* shutdownChannel.listen.pipe(
+                Stream.mapEffect(Effect.fromResult),
+                Stream.take(1),
+                Stream.tap(() =>
+                  generations.retire(generation, () => {
+                    currentInvariants = undefined
+                  }),
                 ),
-              ),
-            ),
-          )
-          const client = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
-            Effect.provide(clientContext),
-            Effect.withSpan('@livestore/adapter-web:shared-worker:makeWorkerProxyFromPort'),
-          )
+                Stream.runDrain,
+                Effect.tapCauseLogPretty,
+                Effect.forkScoped({ startImmediately: true, uninterruptible: false }),
+              )
+            }).pipe(Scope.provide(scope)),
+          ({ generation, previous }) =>
+            Effect.gen(function* () {
+              yield* generations.awaitPredecessor(previous)
+              const clientContext = yield* Layer.build(
+                RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }).pipe(
+                  Layer.provide(BrowserWorker.layer(() => port)),
+                  Layer.provide(
+                    RpcWorker.layerInitialMessage(
+                      WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema,
+                      Effect.succeed(initial),
+                    ),
+                  ),
+                ),
+              )
+              const client = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
+                Effect.provide(clientContext),
+                Effect.withSpan('@livestore/adapter-web:shared-worker:makeWorkerProxyFromPort'),
+              )
 
-          // Prepare the web mesh connection for leader worker to be able to connect to the devtools
-          const { node } = yield* WebmeshWorker.CacheService
-          const { storeId, clientId } = initial
+              // Prepare the web mesh connection for leader worker to be able to connect to the devtools
+              const { node } = yield* WebmeshWorker.CacheService
+              const { storeId, clientId } = initial
 
-          yield* WebmeshWorker.connectViaWorker({
-            node,
-            worker: makeWebmeshWorkerProxy(client),
-            target: Devtools.makeNodeName.client.leader({ storeId, clientId }),
-          }).pipe(Effect.tapCauseLogPretty, dieOnRpcClientError, Effect.forkScoped)
+              yield* WebmeshWorker.connectViaWorker({
+                node,
+                worker: makeWebmeshWorkerProxy(client),
+                target: Devtools.makeNodeName.client.leader({ storeId, clientId }),
+              }).pipe(Effect.tapCauseLogPretty, dieOnRpcClientError, Effect.forkScoped)
 
-          yield* SubscriptionRef.set(leaderWorkerContextSubRef, {
-            client: client as RpcClient.FromGroup<typeof WorkerSchema.LeaderWorkerInnerRpcs>,
-            scope,
-          })
-        }).pipe(Effect.tapCauseLogPretty, Scope.provide(scope), Effect.forkIn(scope))
-      }).pipe(Effect.withSpan('@livestore/adapter-web:shared-worker:updateMessagePort'), Effect.tapCauseLogPretty),
+              if (
+                (yield* generations.publish(generation, {
+                  client: client as RpcClient.FromGroup<typeof WorkerSchema.LeaderWorkerInnerRpcs>,
+                  scope,
+                })) === false
+              ) {
+                yield* generations.assertCleanup
+                return yield* new UnknownError({ cause: 'Leader retired before proxy setup completed' })
+              }
+            }).pipe(Scope.provide(scope)),
+        )
+      }).pipe(
+        updates.withPermit,
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) === true && adopted === false ? Effect.sync(() => port.close()) : Effect.void,
+        ),
+        UnknownError.mapToUnknownError,
+        Effect.withSpan('@livestore/adapter-web:shared-worker:updateMessagePort'),
+        Effect.tapCauseLogPretty,
+      )
+    },
+
+    // A normal page close announces retirement before the dedicated server can interrupt OpenSession.
+    // The page still owns the physical-close receipt and election lock.
+    RetireLeaderGeneration: generations.retireByToken,
 
     // Proxied requests
     BootStatusStream: (payload) =>
       forwardRequestStream('BootStatusStream', (client) => client.BootStatusStream(payload)),
-    PushToLeader: (payload) => forwardRequest('PushToLeader', (client) => client.PushToLeader(payload)),
-    OpenSession: (payload) => forwardRequestStream('OpenSession', (client) => client.OpenSession(payload)),
+    PushAdmittedWrite: ({ writeSessionId, batch }) =>
+      generations
+        .runAdmittedWrite(writeSessionId, ({ client }) => client.PushToLeader({ batch }))
+        .pipe(
+          dieOnRpcClientError,
+          Effect.interruptible,
+          Effect.withSpan('@livestore/adapter-web:shared-worker:PushAdmittedWrite'),
+        ),
+    OpenWriteSession: ({ writeSessionId, ...payload }) =>
+      generations.openSession(
+        ({ client }) => dieOnRpcClientErrorStream(client.OpenSession(payload)),
+        (frame) => frame._tag === 'Accepted' || frame._tag === 'StaleSnapshot',
+        writeSessionId,
+      ),
     PullStream: (payload) => forwardRequestStream('PullStream', (client) => client.PullStream(payload)),
     StreamEvents: (payload) => forwardRequestStream('StreamEvents', (client) => client.StreamEvents(payload)),
     Export: (payload) => forwardRequest('Export', (client) => client.Export(payload)),

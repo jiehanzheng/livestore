@@ -1,3 +1,5 @@
+import { PROJECTS, PROJECT_TEST_ROOTS, REQUIRED_CRASH_CASES, declaredCommands } from './qualification-recipe.mts'
+export { PROJECTS, PROJECT_TEST_ROOTS, REQUIRED_CRASH_CASES, declaredCommands }
 import { spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -13,28 +15,6 @@ const readJson = (file) => {
   const text = readFileSync(file, 'utf8')
   return JSON.parse(text.slice(text.indexOf('{')))
 }
-
-export const PROJECTS = [
-  'packages/@livestore/adapter-expo',
-  'packages/@livestore/adapter-node',
-  'packages/@livestore/adapter-cloudflare',
-  'packages/@livestore/adapter-web',
-  'packages/@livestore/common-cf',
-  'packages/@livestore/common',
-  'packages/@livestore/effect-playwright',
-  'packages/@livestore/framework-toolkit',
-  'packages/@livestore/livestore',
-  'packages/@livestore/react',
-  'packages/@livestore/sqlite-wasm',
-  'packages/@livestore/sync-cf',
-  'packages/@livestore/utils-dev',
-  'packages/@livestore/utils',
-  'packages/@livestore/wa-sqlite',
-  'packages/@livestore/webmesh',
-  'tests/package-common',
-  'tests/integration',
-  'tests/wa-sqlite',
-]
 
 const OWNER_ROOTS = [...PROJECTS]
 export const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
@@ -59,18 +39,6 @@ const ROOT_SUPPORT_SOURCES = new Set([
   'genie/docs-effect-api-policy.ts',
 ])
 
-export const PROJECT_TEST_ROOTS = [
-  'packages/@livestore/sqlite-wasm',
-  'tests/wa-sqlite',
-  'packages/@livestore/adapter-node',
-  'packages/@livestore/adapter-expo',
-  'packages/@livestore/react',
-  'packages/@livestore/common',
-  'packages/@livestore/livestore',
-  'packages/@livestore/adapter-web',
-  'tests/package-common',
-]
-
 const TEST_OVERRIDE_PROJECTS = new Set([
   'packages/@livestore/sqlite-wasm',
   'packages/@livestore/adapter-web',
@@ -83,13 +51,6 @@ const TEST_OVERRIDE_PROJECTS = new Set([
   'packages/@livestore/utils-dev',
   'packages/@livestore/webmesh',
 ])
-
-export const REQUIRED_CRASH_CASES = [
-  'crash-before-state',
-  'crash-after-state',
-  'crash-after-eventlog',
-  'crash-after-completion',
-]
 
 const APPROVED_DIAGNOSTIC_EXCEPTIONS = new Map([
   [
@@ -171,6 +132,15 @@ export const createSourcePolicy = (root) => {
           if (existsSync(absolute) === false && lstatSync(absolute, { throwIfNoEntry: false }) === undefined)
             return false
           if (file.startsWith('scripts/fork-qualification/') === true) return SOURCE_EXTENSIONS.has(path.extname(file))
+          if (
+            [
+              'scripts/standalone/stage-source-directory.ts',
+              'scripts/standalone/qualification-source-contract.ts',
+              'scripts/standalone/stage-source-directory.test.ts',
+              'scripts/standalone/tsconfig.json.genie.ts',
+            ].includes(file) === true
+          )
+            return true
           return (
             OWNER_ROOTS.some((owner) => file.startsWith(`${owner}/`)) &&
             SOURCE_EXTENSIONS.has(path.extname(file)) &&
@@ -235,17 +205,3 @@ export const createSourcePolicy = (root) => {
 
   return { validateSourceInventory, sourceInventory, authoredSourceInventory, validateCompilerPolicy, gitFiles }
 }
-
-export const declaredCommands = (profile, typescript) => ({
-  pnpm: [path.join(profile, 'node_modules/.bin/pnpm')],
-  genie: [
-    path.join(profile, 'node_modules/@oven/bun-darwin-aarch64/bin/bun'),
-    path.join(profile, '.canonical-genie/genie.js'),
-  ],
-  compiler: [path.join(profile, 'node_modules/.bin/effect-tsgo'), `tsc@${typescript}`],
-  lint: [
-    path.join(profile, 'node_modules/@oven/bun-darwin-aarch64/bin/bun'),
-    path.join(profile, 'node_modules/oxlint/bin/oxlint'),
-  ],
-  format: [path.join(profile, 'node_modules/.bin/oxfmt')],
-})

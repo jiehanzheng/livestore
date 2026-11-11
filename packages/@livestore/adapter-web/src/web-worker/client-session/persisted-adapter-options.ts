@@ -1,13 +1,15 @@
 import type * as WorkerSchema from '../common/worker-schema.ts'
+import type { DedicatedWorkerEndpoint } from './worker-shutdown.ts'
 
 export type WebAdapterOptions = {
   /**
-   * A factory may return a dedicated Worker or an application-owned MessagePort.
+   * A factory may return a dedicated Worker, an application-owned MessagePort,
+   * or an application-owned endpoint with a witnessed realm-loss signal.
    * For a MessagePort, configure the worker runner with the paired transport port;
    * the application owns and terminates the underlying Worker after joining cleanup.
    */
   worker:
-    | ((options: { name: string }) => globalThis.Worker | MessagePort)
+    | ((options: { name: string }) => DedicatedWorkerEndpoint)
     | (new (options: { name: string }) => globalThis.Worker)
   /**
    * This is mostly an implementation detail and needed to be exposed into app code

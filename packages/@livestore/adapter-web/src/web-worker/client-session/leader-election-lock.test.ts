@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Cause, Deferred, Effect, Exit, Fiber, Scope } from '@livestore/utils/effect'
+import type { BootStatus } from '@livestore/common'
+import { makeSchema, State } from '@livestore/common/schema'
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Scope } from '@livestore/utils/effect'
 
 import { makePhysicalWorkerLifetime, withPhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
+import { makeWorkerDisconnectChannel } from '../common/worker-disconnect-channel.ts'
 import { makeLeaderElectionLock } from './leader-election-lock.ts'
+import { makeWorkerLeadership } from './worker-leadership.ts'
+import { makeWorkerShutdown } from './worker-shutdown.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -138,6 +143,148 @@ describe('leader election lock lifetime', () => {
     ))
 })
 
+it.each(['initial', 'promotion', 'native-post'] as const)(
+  '%s startup reports its failure and joins release',
+  (mode) => {
+    const loss = new AbortController()
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const locks = installLockManager()
+          const lockName = 'livestore-tab-lock-failed-start'
+          const previousOwner = yield* ownedScope
+          if (mode === 'promotion') {
+            const previous = yield* makeLeaderElectionLock(lockName).pipe(Scope.provide(previousOwner))
+            expect(yield* previous.tryAcquire).toBe(true)
+          }
+          const owner = yield* Scope.make()
+          const shared = new MessageChannel()
+          const dedicated = new MessageChannel()
+          const reachedInitial = yield* Deferred.make<string | undefined>()
+          const shutdownRequested = yield* Deferred.make<string>()
+          const releaseReached = yield* Deferred.make<string>()
+          const allowRelease = yield* Deferred.make<void>()
+          const run = yield* Effect.context<never>()
+          const runFork = Effect.runForkWith(run)
+          dedicated.port2.onmessage = ({ data }) => {
+            if (data[1]?._tag !== 'InitialMessage') return
+            // Receive the real transferred port, then lose the worker without arming it.
+            data[1].value.lifetimePort.close()
+            data[1].value.port.close()
+            loss.abort()
+            runFork(Deferred.succeed(reachedInitial, undefined))
+          }
+          if (mode === 'native-post') {
+            const post = dedicated.port1.postMessage.bind(dedicated.port1)
+            const intercept = vi.spyOn(dedicated.port1, 'postMessage').mockImplementationOnce(() => {
+              try {
+                // Ask the real MessagePort to clone a function.
+                post(() => undefined)
+              } catch (cause) {
+                runFork(Deferred.succeed(reachedInitial, cause instanceof DOMException ? cause.name : undefined))
+                throw cause
+              }
+            })
+            yield* Effect.addFinalizer(() => Effect.sync(() => intercept.mockRestore()))
+          }
+          dedicated.port2.postMessage([0])
+          shared.port2.postMessage([0])
+          yield* Effect.addFinalizer((exit) =>
+            Deferred.succeed(allowRelease, undefined).pipe(
+              Effect.andThen(Scope.close(owner, exit)),
+              Effect.ensuring(
+                Effect.sync(() => {
+                  for (const channel of [shared, dedicated]) {
+                    channel.port1.close()
+                    channel.port2.close()
+                  }
+                }),
+              ),
+            ),
+          )
+          const startup = yield* Effect.gen(function* () {
+            const workerShutdown = yield* makeWorkerShutdown
+            return yield* workerShutdown.run(
+              Effect.gen(function* () {
+                const workerDisconnectChannel = yield* makeWorkerDisconnectChannel('failed-start')
+                const sharedWorker = { port: shared.port1 } as SharedWorker
+                const options = {
+                  storage: { type: 'opfs' } as const,
+                  sharedWorker: () => sharedWorker,
+                  worker: () => ({
+                    port: dedicated.port1,
+                    realmLost: loss.signal,
+                    beforeRelease: (outcome: string) =>
+                      Effect.runPromiseWith(run)(
+                        Deferred.succeed(releaseReached, outcome).pipe(Effect.andThen(Deferred.await(allowRelease))),
+                      ),
+                  }),
+                }
+                return yield* makeWorkerLeadership({
+                  adapterArgs: {
+                    schema: makeSchema({
+                      projectionRevision: 'startup-handoff-v1',
+                      events: {},
+                      state: State.SQLite.makeState({ tables: {}, materializers: {} }),
+                    }),
+                    storeId: 'failed-start',
+                    params: { stateRebuildBatchSize: 100 },
+                    devtoolsEnabled: false,
+                    debugInstanceId: 'failed-start',
+                    bootStatusQueue: yield* Queue.unbounded<BootStatus>(),
+                    shutdown: (exit) =>
+                      Deferred.succeed(
+                        shutdownRequested,
+                        Exit.isFailure(exit) === true ? Cause.pretty(exit.cause) : 'unexpected successful shutdown',
+                      ),
+                    connectDevtoolsToStore: () => Effect.void,
+                    syncPayloadSchema: undefined,
+                    syncPayloadEncoded: undefined,
+                  },
+                  options,
+                  clientId: 'client',
+                  sessionId: 'session',
+                  storageOptions: options.storage,
+                  sharedWebWorker: sharedWorker,
+                  workerDisconnectChannel,
+                  workerShutdown,
+                })
+              }),
+            )
+          }).pipe(Scope.provide(owner), Effect.exit, Effect.forkScoped)
+
+          if (mode === 'promotion') {
+            yield* Deferred.await(locks.receipt(2).requested)
+            yield* Scope.close(previousOwner, Exit.void)
+          }
+          const nativeFailure = yield* Deferred.await(reachedInitial)
+          if (mode === 'native-post') expect(nativeFailure).toBe('DataCloneError')
+          const result = yield* Fiber.join(startup)
+          const failure =
+            mode === 'native-post' ? 'Failed to send message to worker' : 'Dedicated worker realm was witnessed lost'
+          if (mode === 'promotion') {
+            expect(Exit.isSuccess(result)).toBe(true)
+            expect(yield* Deferred.await(shutdownRequested)).toContain(failure)
+          } else {
+            expect(Exit.isFailure(result) && Cause.pretty(result.cause)).toContain(failure)
+            expect(yield* Deferred.isDone(shutdownRequested)).toBe(false)
+          }
+          const close = yield* Scope.close(owner, result).pipe(Effect.forkScoped)
+          expect(yield* Deferred.await(releaseReached)).toBe(
+            mode === 'native-post' ? 'never-started' : 'witnessed-realm-loss',
+          )
+          const follower = yield* makeLeaderElectionLock(lockName)
+          expect(yield* follower.tryAcquire).toBe(false)
+          yield* Deferred.succeed(allowRelease, undefined)
+          yield* Fiber.join(close)
+          yield* Deferred.await(locks.receipt(mode === 'promotion' ? 2 : 0).released)
+          expect(yield* follower.tryAcquire).toBe(true)
+        }),
+      ),
+    )
+  },
+)
+
 const ownedScope = Effect.gen(function* () {
   const scope = yield* Scope.make()
   yield* Effect.addFinalizer((exit) => Scope.close(scope, exit))
@@ -260,6 +407,7 @@ it('cancels a queued follower while the real physical close acknowledgement is p
             return yield* Effect.never
           }),
         ).pipe(Effect.forkIn(receiverScope))
+        yield* lifetime.start
         yield* Deferred.await(started)
         const leader = yield* makeLeaderElectionLock('joined-queued', () => lifetime.close).pipe(
           Scope.provide(leaderScope),
@@ -279,6 +427,198 @@ it('cancels a queued follower while the real physical close acknowledgement is p
         yield* Deferred.await(locks.receipt(0).released)
         expect(yield* Deferred.isDone(locks.receipt(1).granted)).toBe(false)
         expect(locks.isHeld('joined-queued')).toBe(false)
+      }),
+    ),
+  ))
+
+for (const mode of ['clean', 'never-started', 'loss', 'app-join-fails', 'sdk-join-fails', 'retire-fails'] as const) {
+  it(`joins surviving SDK and app owners before election release: ${mode}`, () => {
+    const witness = new AbortController()
+    const closesPhysically = mode === 'clean' || mode === 'retire-fails'
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const locks = installLockManager()
+          const page = yield* Scope.make()
+          const data = new MessageChannel()
+          const sdkClosing = yield* Deferred.make<void>()
+          const allowSdkClose = yield* Deferred.make<void>()
+          const appClosing = yield* Deferred.make<void>()
+          const allowAppClose = Promise.withResolvers<void>()
+          const physicalClosing = yield* Deferred.make<void>()
+          const retiring = yield* Deferred.make<void>()
+          const allowRetire = yield* Deferred.make<void>()
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              data.port1.close()
+              data.port2.close()
+            }),
+          )
+          const owner = yield* makeWorkerShutdown.pipe(Scope.provide(page))
+          yield* owner.run(
+            Effect.gen(function* () {
+              const lock = yield* owner.election('surviving-worker')
+              expect(yield* lock.tryAcquire).toBe(true)
+              yield* Effect.addFinalizer(() =>
+                Effect.gen(function* () {
+                  yield* Deferred.succeed(sdkClosing, undefined)
+                  yield* Deferred.await(allowSdkClose)
+                  if (mode === 'sdk-join-fails') return yield* Effect.die('surviving SDK close failed')
+                }),
+              )
+              const { lifetime } = yield* owner.acquireWorker(() => ({
+                port: data.port1,
+                realmLost: witness.signal,
+                beforeRelease: async (outcome) => {
+                  expect(outcome).toBe(
+                    closesPhysically === true
+                      ? 'joined-clean'
+                      : mode === 'never-started'
+                        ? mode
+                        : 'witnessed-realm-loss',
+                  )
+                  Deferred.doneUnsafe(appClosing, Effect.void)
+                  await allowAppClose.promise
+                  if (mode === 'app-join-fails') throw new Error('surviving app close failed')
+                },
+              }))
+              if (mode === 'never-started') return
+              if (closesPhysically === true) {
+                owner.beforePhysicalClose(
+                  Deferred.succeed(retiring, undefined).pipe(
+                    Effect.andThen(Deferred.await(allowRetire)),
+                    Effect.andThen(mode === 'retire-fails' ? Effect.die('coordinator retirement failed') : Effect.void),
+                  ),
+                )
+              }
+              const peer = yield* lifetime.initialPort
+              yield* Effect.addFinalizer(() => Effect.sync(() => peer.close()))
+              yield* Effect.addFinalizer(() => lifetime.close.pipe(Effect.orDie))
+              peer.onmessage = (event) => {
+                if (event.data?.type !== 'physical-close') return
+                Deferred.doneUnsafe(physicalClosing, Effect.void)
+                if (closesPhysically === true) peer.postMessage({ type: 'physical-closed', success: true })
+              }
+              peer.postMessage({ type: 'physical-armed' })
+              yield* lifetime.start
+              if (closesPhysically === false) witness.abort()
+            }),
+          )
+          const close = yield* Effect.exit(Scope.close(page, Exit.void)).pipe(Effect.forkScoped)
+          if (closesPhysically === true) {
+            yield* Deferred.await(retiring)
+            expect(locks.isHeld('surviving-worker')).toBe(true)
+            expect(yield* Deferred.isDone(physicalClosing)).toBe(false)
+            expect(yield* Deferred.isDone(sdkClosing)).toBe(false)
+            yield* Deferred.succeed(allowRetire, undefined)
+            yield* Deferred.await(physicalClosing)
+          }
+          yield* Deferred.await(sdkClosing)
+          expect(locks.isHeld('surviving-worker')).toBe(true)
+          expect(yield* Deferred.isDone(appClosing)).toBe(false)
+          yield* Deferred.succeed(allowSdkClose, undefined)
+          if (mode !== 'sdk-join-fails') {
+            yield* Deferred.await(appClosing)
+            expect(locks.isHeld('surviving-worker')).toBe(true)
+            allowAppClose.resolve()
+          }
+          const result = yield* Fiber.join(close)
+          if (mode === 'sdk-join-fails' || mode === 'app-join-fails') {
+            expect(Exit.isFailure(result)).toBe(true)
+            expect(locks.isHeld('surviving-worker')).toBe(true)
+          } else {
+            if (mode === 'retire-fails') {
+              expect(Exit.isFailure(result) && Cause.pretty(result.cause)).toContain('coordinator retirement failed')
+            } else {
+              expect(Exit.isSuccess(result)).toBe(true)
+            }
+            yield* Deferred.await(locks.receipt(0).released)
+            expect(locks.isHeld('surviving-worker')).toBe(false)
+          }
+        }),
+      ),
+    )
+  })
+}
+
+it('interrupts and joins startup before releasing election', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const locks = installLockManager()
+        const page = yield* Scope.make()
+        const ready = yield* Deferred.make<void>()
+        const finalizing = yield* Deferred.make<void>()
+        const allowClose = yield* Deferred.make<void>()
+        const resourceClosed = yield* Deferred.make<void>()
+        const owner = yield* makeWorkerShutdown.pipe(Scope.provide(page))
+        const opening = yield* owner
+          .run(
+            Effect.gen(function* () {
+              const lock = yield* owner.election('worker-startup')
+              expect(yield* lock.tryAcquire).toBe(true)
+              yield* Effect.addFinalizer(() => Deferred.succeed(resourceClosed, undefined))
+              yield* Deferred.succeed(ready, undefined)
+              return yield* Effect.never.pipe(
+                Effect.ensuring(
+                  Deferred.succeed(finalizing, undefined).pipe(Effect.andThen(Deferred.await(allowClose))),
+                ),
+              )
+            }),
+          )
+          .pipe(Effect.forkScoped)
+        yield* Deferred.await(ready)
+        const close = yield* Scope.close(page, Exit.void).pipe(Effect.forkScoped)
+        yield* Deferred.await(finalizing)
+        expect(locks.isHeld('worker-startup')).toBe(true)
+        expect(yield* Deferred.isDone(resourceClosed)).toBe(false)
+        expect(close.pollUnsafe()).toBeUndefined()
+        yield* Deferred.succeed(allowClose, undefined)
+        yield* Fiber.join(close)
+        expect(Exit.isFailure(yield* Fiber.await(opening))).toBe(true)
+        expect(yield* Deferred.isDone(resourceClosed)).toBe(true)
+        yield* Deferred.await(locks.receipt(0).released)
+        expect(locks.isHeld('worker-startup')).toBe(false)
+      }),
+    ),
+  ))
+
+it('cancels and joins queued election before closing ordinary resources', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const locks = installLockManager()
+        const leaderScope = yield* Scope.make()
+        const page = yield* Scope.make()
+        const leader = yield* makeLeaderElectionLock('worker-election').pipe(Scope.provide(leaderScope))
+        expect(yield* leader.tryAcquire).toBe(true)
+        const owner = yield* makeWorkerShutdown.pipe(Scope.provide(page))
+        const finalizing = yield* Deferred.make<void>()
+        const allowClose = yield* Deferred.make<void>()
+        const resourceClosed = yield* Deferred.make<void>()
+        yield* owner.run(
+          Effect.gen(function* () {
+            const follower = yield* owner.election('worker-election')
+            yield* follower.wait.pipe(
+              Effect.ensuring(Deferred.succeed(finalizing, undefined).pipe(Effect.andThen(Deferred.await(allowClose)))),
+              owner.forkStartup,
+            )
+            yield* Effect.addFinalizer(() => Deferred.succeed(resourceClosed, undefined))
+          }),
+        )
+        yield* Deferred.await(locks.receipt(1).requested)
+        const close = yield* Scope.close(page, Exit.void).pipe(Effect.forkScoped)
+        yield* Deferred.await(finalizing)
+        expect(yield* Deferred.isDone(resourceClosed)).toBe(false)
+        expect(close.pollUnsafe()).toBeUndefined()
+        yield* Deferred.succeed(allowClose, undefined)
+        yield* Fiber.join(close)
+        expect(yield* Deferred.isDone(resourceClosed)).toBe(true)
+        expect(locks.isHeld('worker-election')).toBe(true)
+        yield* Scope.close(leaderScope, Exit.void)
+        yield* Deferred.await(locks.receipt(0).released)
+        expect(yield* Deferred.isDone(locks.receipt(1).granted)).toBe(false)
+        expect(locks.isHeld('worker-election')).toBe(false)
       }),
     ),
   ))

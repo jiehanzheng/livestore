@@ -150,7 +150,7 @@ const makeWorkerRunnerOuter = Effect.fn('@livestore/adapter-web:worker:wrapper:I
         ),
       ),
     ),
-  )
+  ).pipe(Effect.ensuring(Effect.sync(() => incomingRequestsPort.close())))
 })
 
 const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }: WorkerOptions) =>

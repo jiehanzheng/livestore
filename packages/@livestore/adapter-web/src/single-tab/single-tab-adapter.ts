@@ -40,8 +40,8 @@ import {
 } from '@livestore/utils/effect'
 import { BrowserWorker, Opfs } from '@livestore/utils/effect/browser'
 
-import { makeLeaderElectionLock } from '../web-worker/client-session/leader-election-lock.ts'
 import { loadInMemorySqlite3 } from '../web-worker/client-session/sqlite-loader.ts'
+import { makeWorkerShutdown } from '../web-worker/client-session/worker-shutdown.ts'
 import {
   checkOpfsAvailability,
   ensureBrowserRequirements,
@@ -51,11 +51,11 @@ import {
   readPersistedStateDbFromClientSession,
   resetPersistedDataFromClientSession,
 } from '../web-worker/common/persisted-sqlite.ts'
-import * as PhysicalWorker from '../web-worker/common/physical-worker-lifetime.ts'
 import {
   type WithoutRpcClientError,
   dieOnRpcClientError,
   dieOnRpcClientErrorStream,
+  startDedicatedWorker,
 } from '../web-worker/common/rpc-worker.ts'
 import { makeShutdownChannel } from '../web-worker/common/shutdown-channel.ts'
 import * as WorkerSchema from '../web-worker/common/worker-schema.ts'
@@ -98,301 +98,270 @@ export const makeSingleTabAdapter =
   (options: SingleTabAdapterOptions): Adapter =>
   (adapterArgs) =>
     Effect.gen(function* () {
-      const { schema, storeId, bootStatusQueue, shutdown, syncPayloadEncoded, params } = adapterArgs
-      // Note: devtoolsEnabled is ignored in single-tab mode (devtools require SharedWorker)
+      const workerShutdown = yield* makeWorkerShutdown
+      return yield* workerShutdown.run(
+        Effect.gen(function* () {
+          const { schema, storeId, bootStatusQueue, shutdown, syncPayloadEncoded, params } = adapterArgs
+          // Note: devtoolsEnabled is ignored in single-tab mode (devtools require SharedWorker)
 
-      yield* ensureBrowserRequirements
+          yield* ensureBrowserRequirements
 
-      // This mode cannot join an existing owner. Refuse immediately instead of waiting
-      // forever behind a private worker, while sharing the normal physical owner lock.
-      let physicalLifetime: PhysicalWorker.PhysicalWorkerLifetime | undefined
-      const ownership = yield* makeLeaderElectionLock(
-        `livestore-tab-lock-${storeId}`,
-        () => physicalLifetime?.close ?? Effect.void,
-      )
-      if ((yield* ownership.tryAcquire) === false) {
-        return yield* new UnknownError({
-          cause: 'Single-tab storage already has an active owner; close it before opening another store',
-        })
-      }
+          // This mode cannot join an existing owner. Refuse immediately instead of waiting
+          // forever behind a private worker, while sharing the normal physical owner lock.
+          const ownership = yield* workerShutdown.election(`livestore-tab-lock-${storeId}`)
+          if ((yield* ownership.tryAcquire) === false) {
+            return yield* new UnknownError({
+              cause: 'Single-tab storage already has an active owner; close it before opening another store',
+            })
+          }
 
-      yield* Queue.offer(bootStatusQueue, { stage: 'loading' })
+          yield* Queue.offer(bootStatusQueue, { stage: 'loading' })
 
-      const sqlite3 = yield* Effect.promise(() => loadInMemorySqlite3())
-      const makeSqliteDb = yield* inMemorySqliteDbFactory({ sqlite3 })
+          const sqlite3 = yield* Effect.promise(() => loadInMemorySqlite3())
+          const makeSqliteDb = yield* inMemorySqliteDbFactory({ sqlite3 })
 
-      const storageOptions = yield* Schema.decodeEffect(WorkerSchema.StorageType)(options.storage)
+          const storageOptions = yield* Schema.decodeEffect(WorkerSchema.StorageType)(options.storage)
 
-      const shutdownChannel = yield* makeShutdownChannel(storeId)
+          const shutdownChannel = yield* makeShutdownChannel(storeId)
 
-      // Check OPFS availability early and notify user if storage is unavailable (e.g. private browsing)
-      const opfsWarning = yield* checkOpfsAvailability
-      if (opfsWarning !== undefined) {
-        yield* Effect.logWarning('[@livestore/adapter-web:single-tab] OPFS unavailable', opfsWarning)
-      }
+          // Check OPFS availability early and notify user if storage is unavailable (e.g. private browsing)
+          const opfsWarning = yield* checkOpfsAvailability
+          if (opfsWarning !== undefined) {
+            yield* Effect.logWarning('[@livestore/adapter-web:single-tab] OPFS unavailable', opfsWarning)
+          }
 
-      if (options.resetPersistence === true && opfsWarning === undefined) {
-        yield* shutdownChannel.send(IntentionalShutdownCause.make({ reason: 'adapter-reset' }))
-        yield* resetPersistedDataFromClientSession({ storageOptions, storeId })
-      } else if (options.resetPersistence === true) {
-        yield* Effect.logWarning(
-          '[@livestore/adapter-web:single-tab] Skipping persistence reset because storage is unavailable',
-          opfsWarning,
-        )
-      }
+          if (options.resetPersistence === true && opfsWarning === undefined) {
+            yield* shutdownChannel.send(IntentionalShutdownCause.make({ reason: 'adapter-reset' }))
+            yield* resetPersistedDataFromClientSession({ storageOptions, storeId })
+          } else if (options.resetPersistence === true) {
+            yield* Effect.logWarning(
+              '[@livestore/adapter-web:single-tab] Skipping persistence reset because storage is unavailable',
+              opfsWarning,
+            )
+          }
 
-      // Fast-path: try to load snapshot directly from storage
-      const dataFromFile =
-        options.experimental?.disableFastPath === true || opfsWarning !== undefined
-          ? undefined
-          : yield* readPersistedStateDbFromClientSession({ storageOptions, storeId, schema, makeSqliteDb }).pipe(
-              Effect.tapError((error) =>
-                Effect.logDebug('[@livestore/adapter-web:single-tab] Could not read persisted state db', error, {
-                  storeId,
-                }),
+          // Fast-path: try to load snapshot directly from storage
+          const dataFromFile =
+            options.experimental?.disableFastPath === true || opfsWarning !== undefined
+              ? undefined
+              : yield* readPersistedStateDbFromClientSession({ storageOptions, storeId, schema, makeSqliteDb }).pipe(
+                  Effect.tapError((error) =>
+                    Effect.logDebug('[@livestore/adapter-web:single-tab] Could not read persisted state db', error, {
+                      storeId,
+                    }),
+                  ),
+                  Effect.orElseSucceed(() => undefined),
+                )
+
+          const clientId = options.clientId ?? getPersistedId(`clientId:${storeId}`, 'local')
+          const sessionId = options.sessionId ?? getPersistedId(`sessionId:${storeId}`, 'session')
+
+          yield* shutdownChannel.listen.pipe(
+            Stream.mapEffect(Effect.fromResult),
+            Stream.tap((cause) =>
+              shutdown(cause._tag === 'IntentionalShutdownCause' ? Exit.succeed(cause) : Exit.fail(cause)),
+            ),
+            Stream.runDrain,
+            Effect.interruptible,
+            Effect.tapCauseLogPretty,
+            Effect.forkScoped,
+          )
+
+          // In single-tab mode, we always have the lock (we're always the leader)
+          const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
+
+          const worker = yield* workerShutdown.acquireWorker(() =>
+            tryAsFunctionAndNew(options.worker, { name: `livestore-worker-${storeId}-${sessionId}` }),
+          )
+          const innerPort = yield* startDedicatedWorker(worker, { storeId, clientId }).pipe(
+            Effect.withSpan('@livestore/adapter-web:single-tab:setupDedicatedWorker'),
+          )
+
+          // Set up the inner worker communication via the direct port (like SharedWorker would do)
+          // BrowserWorker.layer accepts a MessagePort as well as a Worker
+          const innerWorkerContext = yield* Layer.build(
+            RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }).pipe(
+              Layer.provide(BrowserWorker.layer(() => innerPort)),
+              Layer.provide(
+                RpcWorker.layerInitialMessage(
+                  WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema,
+                  Effect.succeed({
+                    storageOptions,
+                    storeId,
+                    clientId,
+                    // Devtools disabled in single-tab mode (requires SharedWorker)
+                    devtoolsEnabled: false,
+                    debugInstanceId: adapterArgs.debugInstanceId,
+                    syncPayloadEncoded,
+                    params,
+                  }),
+                ),
               ),
-              Effect.orElseSucceed(() => undefined),
+            ),
+          )
+          const innerWorker = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
+            Effect.provide(innerWorkerContext),
+            Effect.tapCauseLogPretty,
+            mapToAdapterError,
+            Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
+            Effect.withSpan('@livestore/adapter-web:single-tab:setupInnerWorker'),
+          )
+
+          // Helper to run requests against the worker
+          const runInWorker = <A, E, R>(
+            tag: string,
+            effect: Effect.Effect<A, E, R>,
+          ): Effect.Effect<A, WithoutRpcClientError<E>, R> =>
+            effect.pipe(
+              dieOnRpcClientError,
+              Effect.logWarnIfTakesLongerThan({
+                label: `@livestore/adapter-web:single-tab:runInWorker:${tag}`,
+                duration: 2000,
+              }),
+              Effect.withSpan(`@livestore/adapter-web:single-tab:runInWorker:${tag}`),
             )
 
-      const clientId = options.clientId ?? getPersistedId(`clientId:${storeId}`, 'local')
-      const sessionId = options.sessionId ?? getPersistedId(`sessionId:${storeId}`, 'session')
+          const runInWorkerStream = <A, E, R>(
+            tag: string,
+            stream: Stream.Stream<A, E, R>,
+          ): Stream.Stream<A, WithoutRpcClientError<E>, R> =>
+            stream.pipe(
+              dieOnRpcClientErrorStream,
+              Stream.withSpan(`@livestore/adapter-web:single-tab:runInWorkerStream:${tag}`),
+            )
 
-      yield* shutdownChannel.listen.pipe(
-        Stream.mapEffect(Effect.fromResult),
-        Stream.tap((cause) =>
-          shutdown(cause._tag === 'IntentionalShutdownCause' ? Exit.succeed(cause) : Exit.fail(cause)),
-        ),
-        Stream.runDrain,
-        Effect.interruptible,
-        Effect.tapCauseLogPretty,
-        Effect.forkScoped,
-      )
+          // Forward boot status from worker
+          const bootStatusFiber = yield* runInWorkerStream('BootStatusStream', innerWorker.BootStatusStream({})).pipe(
+            Stream.tap((_) => Queue.offer(bootStatusQueue, _)),
+            Stream.runDrain,
+            Effect.tapCause((cause) =>
+              Cause.hasInterruptsOnly(cause) === true ? Effect.void : shutdown(Exit.failCause(cause)),
+            ),
+            Effect.interruptible,
+            Effect.tapCauseLogPretty,
+            Effect.forkScoped,
+          )
 
-      // In single-tab mode, we always have the lock (we're always the leader)
-      const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
+          yield* Queue.await(bootStatusQueue).pipe(
+            Effect.andThen(Fiber.interrupt(bootStatusFiber)),
+            Effect.interruptible,
+            Effect.tapCauseLogPretty,
+            Effect.forkScoped,
+          )
 
-      // Create MessageChannel for direct communication with the dedicated worker
-      const mc = new MessageChannel()
+          // Get initial snapshot (either from fast-path or from worker)
+          const { sqliteDb, snapshotByteLength, migrationsReport, pull } = yield* openSnapshotSession({
+            expectedProjection: StateSnapshot.getProjectionIdentity(schema),
+            candidate: dataFromFile,
+            makeSqliteDb,
+            open: (request) => runInWorkerStream('OpenSession', innerWorker.OpenSession(request)),
+          })
 
-      const lifetime = yield* PhysicalWorker.makePhysicalWorkerLifetime.pipe(
-        Effect.tap((owner) =>
-          Effect.sync(() => {
-            physicalLifetime = owner
-          }),
-        ),
-        Effect.uninterruptible,
-      )
+          const numberOfTables =
+            sqliteDb.select<{ count: number }>(`select count(*) as count from sqlite_master`)[0]?.count ?? 0
+          if (numberOfTables === 0) {
+            return yield* UnknownError.make({
+              cause: `Encountered empty or corrupted database`,
+              payload: { snapshotByteLength, storageOptions: options.storage },
+            })
+          }
 
-      // Create the dedicated worker directly (no SharedWorker proxy)
-      const worker = tryAsFunctionAndNew(options.worker, { name: `livestore-worker-${storeId}-${sessionId}` })
+          // The state snapshot carries its own cursor, so the fast path does not
+          // need to export or transfer the eventlog database.
+          const stateHead = yield* StateHead.make.pipe(Effect.provideService(StateSqliteDb.StateSqliteDb, sqliteDb))
+          const initialLeaderHead = yield* stateHead.get
 
-      // Set up communication with the dedicated worker via the outer protocol
-      const outerWorkerContext = yield* Layer.build(
-        RpcClient.layerProtocolWorker({ size: 1 }).pipe(
-          Layer.provide(BrowserWorker.layer(() => worker)),
-          Layer.provide(
-            RpcWorker.layerInitialMessage(
-              WorkerSchema.LeaderWorkerOuterInitialMessage.payloadSchema,
-              lifetime.initialPort.pipe(
-                Effect.map((lifetimePort) => ({ port: mc.port1, lifetimePort, storeId, clientId })),
+          yield* Effect.addFinalizer((ex: Exit.Exit<unknown, unknown>) =>
+            Effect.gen(function* () {
+              if (Exit.isFailure(ex) === true) {
+                const cause = ex.cause
+                if (
+                  Exit.hasInterrupts(ex) === false &&
+                  Schema.is(IntentionalShutdownCause)(Cause.squash(cause)) === false &&
+                  Schema.is(StoreInterrupted)(Cause.squash(cause)) === false
+                ) {
+                  yield* Effect.logError('[@livestore/adapter-web:single-tab] client-session shutdown', cause)
+                  return
+                }
+              }
+
+              yield* Effect.logDebug('[@livestore/adapter-web:single-tab] client-session shutdown', ex)
+            }).pipe(Effect.tapCauseLogPretty, Effect.orDie),
+          )
+
+          const leaderThread: ClientSession['leaderThread'] = {
+            export: runInWorker('Export', innerWorker.Export({})).pipe(
+              Effect.timeoutOrDie(10_000),
+              Effect.withSpan('@livestore/adapter-web:single-tab:export'),
+            ),
+
+            events: {
+              pull: () => pull,
+              push: (batch) =>
+                runInWorker('PushToLeader', innerWorker.PushToLeader({ batch })).pipe(
+                  Effect.withSpan('@livestore/adapter-web:single-tab:pushToLeader', {
+                    attributes: { batchSize: batch.length },
+                  }),
+                ),
+              stream: (options) =>
+                runInWorkerStream('StreamEvents', innerWorker.StreamEvents(options)).pipe(
+                  Stream.withSpan('@livestore/adapter-web:single-tab:streamEvents'),
+                  Stream.orDie,
+                ),
+            },
+
+            initialState: {
+              leaderHead: initialLeaderHead,
+              migrationsReport,
+              storageMode: opfsWarning === undefined ? 'persisted' : 'in-memory',
+            },
+
+            getEventlogData: runInWorker('ExportEventlog', innerWorker.ExportEventlog({})).pipe(
+              Effect.timeoutOrDie(10_000),
+              Effect.withSpan('@livestore/adapter-web:single-tab:getEventlogData'),
+            ),
+
+            syncState: Subscribable.make({
+              get: runInWorker('GetLeaderSyncState', innerWorker.GetLeaderSyncState({})).pipe(
+                Effect.withSpan('@livestore/adapter-web:single-tab:getLeaderSyncState'),
               ),
-            ),
-          ),
-        ),
-      )
-      yield* RpcClient.make(WorkerSchema.LeaderWorkerOuterRpcs).pipe(
-        Effect.provide(outerWorkerContext),
-        mapToAdapterError,
-        Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
-        Effect.withSpan('@livestore/adapter-web:single-tab:setupDedicatedWorker'),
-        Effect.tapCauseLogPretty,
-      )
+              changes: runInWorkerStream('SyncStateStream', innerWorker.SyncStateStream({})).pipe(Stream.orDie),
+            }),
 
-      yield* lifetime.ready
+            sendDevtoolsMessage: (_message) =>
+              // Devtools not supported in single-tab mode
+              Effect.void,
 
-      // Set up the inner worker communication via port2 (like SharedWorker would do)
-      // BrowserWorker.layer accepts a MessagePort as well as a Worker
-      const innerWorkerContext = yield* Layer.build(
-        RpcClient.layerProtocolWorker({ size: 1, concurrency: 100 }).pipe(
-          Layer.provide(BrowserWorker.layer(() => mc.port2)),
-          Layer.provide(
-            RpcWorker.layerInitialMessage(
-              WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema,
-              Effect.succeed({
-                storageOptions,
-                storeId,
-                clientId,
-                // Devtools disabled in single-tab mode (requires SharedWorker)
-                devtoolsEnabled: false,
-                debugInstanceId: adapterArgs.debugInstanceId,
-                syncPayloadEncoded,
-                params,
-              }),
-            ),
-          ),
-        ),
-      )
-      const innerWorker = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(
-        Effect.provide(innerWorkerContext),
-        Effect.tapCauseLogPretty,
-        mapToAdapterError,
-        Effect.tapCause((cause) => shutdown(Exit.failCause(cause))),
-        Effect.withSpan('@livestore/adapter-web:single-tab:setupInnerWorker'),
-      )
-
-      // Helper to run requests against the worker
-      const runInWorker = <A, E, R>(
-        tag: string,
-        effect: Effect.Effect<A, E, R>,
-      ): Effect.Effect<A, WithoutRpcClientError<E>, R> =>
-        effect.pipe(
-          dieOnRpcClientError,
-          Effect.logWarnIfTakesLongerThan({
-            label: `@livestore/adapter-web:single-tab:runInWorker:${tag}`,
-            duration: 2000,
-          }),
-          Effect.withSpan(`@livestore/adapter-web:single-tab:runInWorker:${tag}`),
-        )
-
-      const runInWorkerStream = <A, E, R>(
-        tag: string,
-        stream: Stream.Stream<A, E, R>,
-      ): Stream.Stream<A, WithoutRpcClientError<E>, R> =>
-        stream.pipe(
-          dieOnRpcClientErrorStream,
-          Stream.withSpan(`@livestore/adapter-web:single-tab:runInWorkerStream:${tag}`),
-        )
-
-      // Forward boot status from worker
-      const bootStatusFiber = yield* runInWorkerStream('BootStatusStream', innerWorker.BootStatusStream({})).pipe(
-        Stream.tap((_) => Queue.offer(bootStatusQueue, _)),
-        Stream.runDrain,
-        Effect.tapCause((cause) =>
-          Cause.hasInterruptsOnly(cause) === true ? Effect.void : shutdown(Exit.failCause(cause)),
-        ),
-        Effect.interruptible,
-        Effect.tapCauseLogPretty,
-        Effect.forkScoped,
-      )
-
-      yield* Queue.await(bootStatusQueue).pipe(
-        Effect.andThen(Fiber.interrupt(bootStatusFiber)),
-        Effect.interruptible,
-        Effect.tapCauseLogPretty,
-        Effect.forkScoped,
-      )
-
-      // Get initial snapshot (either from fast-path or from worker)
-      const { sqliteDb, snapshotByteLength, migrationsReport, pull } = yield* openSnapshotSession({
-        expectedProjection: StateSnapshot.getProjectionIdentity(schema),
-        candidate: dataFromFile,
-        makeSqliteDb,
-        open: (request) => runInWorkerStream('OpenSession', innerWorker.OpenSession(request)),
-      })
-
-      const numberOfTables =
-        sqliteDb.select<{ count: number }>(`select count(*) as count from sqlite_master`)[0]?.count ?? 0
-      if (numberOfTables === 0) {
-        return yield* UnknownError.make({
-          cause: `Encountered empty or corrupted database`,
-          payload: { snapshotByteLength, storageOptions: options.storage },
-        })
-      }
-
-      // The state snapshot carries its own cursor, so the fast path does not
-      // need to export or transfer the eventlog database.
-      const stateHead = yield* StateHead.make.pipe(Effect.provideService(StateSqliteDb.StateSqliteDb, sqliteDb))
-      const initialLeaderHead = yield* stateHead.get
-
-      yield* Effect.addFinalizer((ex: Exit.Exit<unknown, unknown>) =>
-        Effect.gen(function* () {
-          if (Exit.isFailure(ex) === true) {
-            const cause = ex.cause
-            if (
-              Exit.hasInterrupts(ex) === false &&
-              Schema.is(IntentionalShutdownCause)(Cause.squash(cause)) === false &&
-              Schema.is(StoreInterrupted)(Cause.squash(cause)) === false
-            ) {
-              yield* Effect.logError('[@livestore/adapter-web:single-tab] client-session shutdown', cause)
-              return
-            }
+            networkStatus: Subscribable.make({
+              get: runInWorker('GetNetworkStatus', innerWorker.GetNetworkStatus({})).pipe(Effect.orDie),
+              changes: runInWorkerStream('NetworkStatusStream', innerWorker.NetworkStatusStream({})).pipe(Stream.orDie),
+            }),
           }
 
-          yield* Effect.logDebug('[@livestore/adapter-web:single-tab] client-session shutdown', ex)
-        }).pipe(Effect.tapCauseLogPretty, Effect.orDie),
+          const clientSession = yield* makeClientSession({
+            ...adapterArgs,
+            sqliteDb,
+            lockStatus,
+            clientId,
+            sessionId,
+            isLeader: true, // Always leader in single-tab mode
+            leaderThread,
+            webmeshMode: 'direct',
+            origin: globalThis.location?.origin,
+            // No webmesh connection in single-tab mode (devtools disabled)
+            connectWebmeshNode: () => Effect.void,
+            registerBeforeUnload: (onBeforeUnload) => {
+              if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+                window.addEventListener('beforeunload', onBeforeUnload)
+                return () => window.removeEventListener('beforeunload', onBeforeUnload)
+              }
+              return () => {}
+            },
+          })
+
+          return clientSession
+        }),
       )
-
-      const leaderThread: ClientSession['leaderThread'] = {
-        export: runInWorker('Export', innerWorker.Export({})).pipe(
-          Effect.timeoutOrDie(10_000),
-          Effect.withSpan('@livestore/adapter-web:single-tab:export'),
-        ),
-
-        events: {
-          pull: () => pull,
-          push: (batch) =>
-            runInWorker('PushToLeader', innerWorker.PushToLeader({ batch })).pipe(
-              Effect.withSpan('@livestore/adapter-web:single-tab:pushToLeader', {
-                attributes: { batchSize: batch.length },
-              }),
-            ),
-          stream: (options) =>
-            runInWorkerStream('StreamEvents', innerWorker.StreamEvents(options)).pipe(
-              Stream.withSpan('@livestore/adapter-web:single-tab:streamEvents'),
-              Stream.orDie,
-            ),
-        },
-
-        initialState: {
-          leaderHead: initialLeaderHead,
-          migrationsReport,
-          storageMode: opfsWarning === undefined ? 'persisted' : 'in-memory',
-        },
-
-        getEventlogData: runInWorker('ExportEventlog', innerWorker.ExportEventlog({})).pipe(
-          Effect.timeoutOrDie(10_000),
-          Effect.withSpan('@livestore/adapter-web:single-tab:getEventlogData'),
-        ),
-
-        syncState: Subscribable.make({
-          get: runInWorker('GetLeaderSyncState', innerWorker.GetLeaderSyncState({})).pipe(
-            Effect.withSpan('@livestore/adapter-web:single-tab:getLeaderSyncState'),
-          ),
-          changes: runInWorkerStream('SyncStateStream', innerWorker.SyncStateStream({})).pipe(Stream.orDie),
-        }),
-
-        sendDevtoolsMessage: (_message) =>
-          // Devtools not supported in single-tab mode
-          Effect.void,
-
-        networkStatus: Subscribable.make({
-          get: runInWorker('GetNetworkStatus', innerWorker.GetNetworkStatus({})).pipe(Effect.orDie),
-          changes: runInWorkerStream('NetworkStatusStream', innerWorker.NetworkStatusStream({})).pipe(Stream.orDie),
-        }),
-      }
-
-      const clientSession = yield* makeClientSession({
-        ...adapterArgs,
-        sqliteDb,
-        lockStatus,
-        clientId,
-        sessionId,
-        isLeader: true, // Always leader in single-tab mode
-        leaderThread,
-        webmeshMode: 'direct',
-        origin: globalThis.location?.origin,
-        // No webmesh connection in single-tab mode (devtools disabled)
-        connectWebmeshNode: () => Effect.void,
-        registerBeforeUnload: (onBeforeUnload) => {
-          if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-            window.addEventListener('beforeunload', onBeforeUnload)
-            return () => window.removeEventListener('beforeunload', onBeforeUnload)
-          }
-          return () => {}
-        },
-      })
-
-      return clientSession
     }).pipe(Effect.provide(Opfs.layer), mapToAdapterError)
 
 /** Persists clientId/sessionId to storage */

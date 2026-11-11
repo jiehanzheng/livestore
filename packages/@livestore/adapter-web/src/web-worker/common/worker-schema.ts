@@ -18,6 +18,8 @@ import { EventSequenceNumber, LiveStoreEvent } from '@livestore/common/schema'
 import { Rpc, RpcGroup, Schema, Transferable } from '@livestore/utils/effect'
 import * as WebmeshWorker from '@livestore/webmesh/worker'
 
+import { LeaderWriteUnconfirmed, StaleWriteAdmission } from './write-admission-errors.ts'
+
 export const StorageTypeOpfs = Schema.Struct({
   type: Schema.Literal('opfs'),
   /**
@@ -238,6 +240,7 @@ export class LeaderWorkerInnerRpcs extends RpcGroup.make(
 export class SharedWorkerUpdateMessagePort extends Rpc.make('UpdateMessagePort', {
   payload: {
     port: Transferable.MessagePort,
+    generationToken: Schema.String,
     // Version gate to prevent mixed LiveStore builds talking to the same SharedWorker
     liveStoreVersion: Schema.Literal(liveStoreVersion),
     /**
@@ -252,14 +255,35 @@ export class SharedWorkerUpdateMessagePort extends Rpc.make('UpdateMessagePort',
   error: UnknownError,
 }) {}
 
+export class SharedWorkerRetireLeaderGeneration extends Rpc.make('RetireLeaderGeneration', {
+  payload: { generationToken: Schema.String },
+  success: Schema.Void,
+  error: UnknownError,
+}) {}
+
+// Separate tags keep legacy coordinators from decoding and dispatching capability-bound writes.
+export class SharedWorkerPushAdmittedWrite extends Rpc.make('PushAdmittedWrite', {
+  payload: { ...LeaderWorkerInnerPushToLeader.payloadSchema.fields, writeSessionId: Schema.String },
+  success: Schema.Void,
+  error: Schema.Union([RejectedPushError, WorkerInitializationError, StaleWriteAdmission, LeaderWriteUnconfirmed]),
+}) {}
+
+export class SharedWorkerOpenWriteSession extends Rpc.make('OpenWriteSession', {
+  payload: { ...LeaderWorkerInnerOpenSession.payloadSchema.fields, writeSessionId: Schema.String },
+  success: OpenSessionFrame,
+  error: WorkerInitializationError,
+  stream: true,
+}) {}
+
 export class SharedWorkerRpcs extends RpcGroup.make(
   SharedWorkerUpdateMessagePort,
+  SharedWorkerRetireLeaderGeneration,
 
   // Proxied requests
   LeaderWorkerInnerBootStatusStream,
-  LeaderWorkerInnerPushToLeader,
+  SharedWorkerPushAdmittedWrite,
   LeaderWorkerInnerPullStream,
-  LeaderWorkerInnerOpenSession,
+  SharedWorkerOpenWriteSession,
   LeaderWorkerInnerStreamEvents,
   LeaderWorkerInnerExport,
   LeaderWorkerInnerGetRecreateSnapshot,

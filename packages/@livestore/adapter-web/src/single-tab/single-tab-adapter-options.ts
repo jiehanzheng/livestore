@@ -1,3 +1,4 @@
+import type { DedicatedWorkerEndpoint } from '../web-worker/client-session/worker-shutdown.ts'
 import type * as WorkerSchema from '../web-worker/common/worker-schema.ts'
 
 /**
@@ -23,12 +24,13 @@ export type SingleTabAdapterOptions = {
    * })
    * ```
    *
-   * A factory may return a dedicated Worker or an application-owned MessagePort.
+   * A factory may return a dedicated Worker, an application-owned MessagePort,
+   * or an application-owned endpoint with a witnessed realm-loss signal.
    * For a MessagePort, configure the worker runner with the paired transport port;
    * the application owns and terminates the underlying Worker after joining cleanup.
    */
   worker:
-    | ((options: { name: string }) => globalThis.Worker | MessagePort)
+    | ((options: { name: string }) => DedicatedWorkerEndpoint)
     | (new (options: { name: string }) => globalThis.Worker)
 
   /**
