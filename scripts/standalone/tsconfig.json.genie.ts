@@ -13,6 +13,8 @@ export default tsconfigJson({
     declarationMap: false,
   },
   include: [
+    './export-sdk.ts',
+    './export-sdk.test.ts',
     './qualification-source-contract.ts',
     './stage-source-directory.ts',
     './stage-source-directory.test.ts',

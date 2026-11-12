@@ -134,6 +134,8 @@ export const createSourcePolicy = (root) => {
           if (file.startsWith('scripts/fork-qualification/') === true) return SOURCE_EXTENSIONS.has(path.extname(file))
           if (
             [
+              'scripts/standalone/export-sdk.ts',
+              'scripts/standalone/export-sdk.test.ts',
               'scripts/standalone/stage-source-directory.ts',
               'scripts/standalone/qualification-source-contract.ts',
               'scripts/standalone/stage-source-directory.test.ts',

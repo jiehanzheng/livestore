@@ -292,3 +292,28 @@ Producer tests use real disposable Git repositories and normal pinned pnpm
 selection with explicitly synthetic unit receipts. They do not qualify an SDK
 build. Run them with the pinned Node 24 toolchain after normal tool bootstrap:
 `node --test scripts/standalone/stage-source-directory.test.ts`.
+
+## Export the SDK from a clean commit
+
+Check out the intended fork commit and the `effectUtilsRevision` from
+`tool-profile.json` at `repos/effect-utils`. With the pinned Node and pnpm,
+run `pnpm run fork:bootstrap` and put the prepared profile's `node_modules/.bin`
+first on `PATH`. Run the following from the fork root:
+
+```sh
+pnpm install --frozen-lockfile --strict-peer-dependencies
+pnpm run fork:check
+node scripts/standalone/export-sdk.ts /path/to/absent-sdk-directory
+```
+
+The output's parent must exist outside the checkout. The command checks for a
+clean Git checkout, uses the pinned pnpm pack selection, and copies only the
+selected files with their modes. It writes `candidate-artifact-inventory.json`
+last and removes an incomplete output on failure. An existing directory is
+never replaced.
+
+Pass the export directory to the downstream project's SDK staging tool. Verify
+the inventory hash and package files against the project's committed pin, then
+install with its frozen lockfile and strict peer dependency checks.
+
+Run the focused regression with `node --test scripts/standalone/export-sdk.test.ts`.

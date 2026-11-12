@@ -40,6 +40,11 @@ export const candidateCompatibilityPaths = [
   'scripts/fork-qualification/commit-source.mjs',
   'scripts/fork-qualification/qualification-policy.mjs',
   'scripts/fork-qualification/qualification-runtime.mjs',
+  // The exporter is checked tooling outside SDK identity. Compare these exact paths to retain prior package evidence.
+  'scripts/standalone/export-sdk.ts',
+  'scripts/standalone/export-sdk.test.ts',
+  'scripts/standalone/tsconfig.json',
+  'scripts/standalone/tsconfig.json.genie.ts',
 ]
 const generatedCatalogFixtureConfig = 'packages/@local/astro-twoslash-code/src/cli/test-fixtures/catalog/tsconfig.json'
 export const fullSetupInput = (name) =>
