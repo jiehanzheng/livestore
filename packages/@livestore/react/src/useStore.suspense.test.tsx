@@ -366,3 +366,79 @@ it('preserves asynchronous load errors without an observer-created unhandled rej
     await registry.dispose()
   }
 })
+
+it('keeps a first-warm store and later use distinct during early registry publication', async () => {
+  const registry = new StoreRegistry()
+  const base = makeInMemoryAdapter()
+  const warm = { storeId: 'first-warm', schema, adapter: base, disableDevtools: true }
+  await registry.preload(warm)
+  const gate = Deferred.makeUnsafe<void>()
+  const delayed: Adapter = (args) => Deferred.await(gate).pipe(Effect.flatMap(() => base(args)))
+  const cold = { ...warm, storeId: 'early-publication', adapter: delayed }
+  const initial = registry.getOrLoadPromise(cold)
+  if (!(initial instanceof Promise)) throw new Error('Expected the gated cold store to be loading')
+  let settled = false
+  void initial.then(() => {
+    settled = true
+  })
+  const later = Promise.resolve('unrelated')
+  const recovered: unknown[] = []
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container, { onRecoverableError: (error) => recovered.push(error) })
+  let fallbackCommitted = false
+  let earlyWindowObserved = false
+  const Fallback = () => {
+    React.useEffect(() => {
+      fallbackCommitted = true
+    }, [])
+    return <div>Loading</div>
+  }
+  const fallback = React.createElement(Fallback)
+  const Consumer = ({ revision }: { revision: number }) => {
+    const a = useStore(warm)
+    const b = useStore(cold)
+    const value = React.use(later)
+    expect(a).not.toBe(b)
+    expect(value).toBe('unrelated')
+    return <output>{`${a.storeId}/${b.storeId}/${value}/${revision}`}</output>
+  }
+  const render = (revision: number) =>
+    root.render(
+      <StoreRegistryProvider storeRegistry={registry}>
+        <React.Suspense fallback={fallback}>
+          <Consumer revision={revision} />
+        </React.Suspense>
+      </StoreRegistryProvider>,
+    )
+  try {
+    render(0)
+    await vi.waitFor(() => expect(fallbackCommitted).toBe(true))
+    const publication = Effect.runPromise(
+      registry.getOrLoad(cold).pipe(
+        Effect.tap((store) =>
+          Effect.sync(() => {
+            earlyWindowObserved = registry.getOrLoadPromise(cold) === store && !settled
+            flushSync(() => render(1))
+          }),
+        ),
+        Effect.scoped,
+      ),
+    )
+    await Effect.runPromise(Deferred.succeed(gate, undefined))
+    await publication
+    await initial
+    expect(earlyWindowObserved).toBe(true)
+    await vi.waitFor(() =>
+      expect(container.querySelector('output')?.textContent).toBe('first-warm/early-publication/unrelated/1'),
+    )
+    expect(recovered).toEqual([])
+    expect(errors.mock.calls).toEqual([])
+  } finally {
+    root.unmount()
+    container.remove()
+    errors.mockRestore()
+    await registry.dispose()
+  }
+})

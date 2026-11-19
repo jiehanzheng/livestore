@@ -244,8 +244,16 @@ digest of its entire authored source tree). The root review binds that pin
 and the candidate's exact patch, changed paths and postimage hashes. The
 producer replays the patch in a temporary index and compares paths, bytes
 and modes. This mode admits regular files in the reviewed candidate scope.
-Shared inputs, Full Setup inputs and changes to the producer recipe are
-excluded. The build, generator and installed package selection belong to
+Shared inputs require a `shared` array on the source manifest, using the same
+`{path, review}` references as the final commit scope. Every changed shared
+path needs an exact current path/hash in a `livestore-fork-shared-input-v1`
+proof, direct/transitive `affectedOwners`, explicit `unqualifiedOwners`, and
+both `finiteSdkOnly: true` and `fullSetupRetained: true`. Missing, duplicate,
+extra or stale reviews fail. These references join the root-reviewed manifest
+binding and final reference revalidation. The fixed legacy profiles do not
+accept this authority; Full Setup inputs remain excluded even with a review.
+Changes to the producer recipe still require their separate `producerPatch`.
+The build, generator and installed package selection belong to
 the candidate checkout. Its export includes only its own authored and
 produced files. The existing fixed profiles use the original manifest form.
 

@@ -8,7 +8,7 @@
 import { livestoreCurrentPackageNames, workspaceCatalogForPackageNames } from './repo-topology.ts'
 
 /** One maintained runtime cohort is shared by all supported repository owners. */
-export const effectVersion = '4.1.2'
+export const effectVersion = '4.1.4'
 export const effectV4Catalog = {
   effect: effectVersion,
   '@effect/ai-openai': effectVersion,
@@ -48,9 +48,10 @@ export const livestoreContribPackageJsonNames = [
 
 /** Native modules and their renderer are qualified as one consumer-owned Expo cohort. */
 export const nativeExpoQualificationCatalog = {
-  expo: '58.0.22',
-  'expo-sqlite': '58.0.15',
-  'expo-file-system': '58.0.13',
+  expo: '58.0.26',
+  'expo-sqlite': '58.0.18',
+  'expo-file-system': '58.0.14',
+  'expo-crypto': '58.0.8',
   'react-native': '0.88.1',
   react: '19.3.0',
   // Expo's router server is part of its CLI graph and must share this consumer's React patch.

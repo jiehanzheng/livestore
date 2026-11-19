@@ -334,6 +334,144 @@ test('combined source requires disjoint exact product and producer postimages', 
   }
 })
 
+test('shared inputs require exact current reviews before patch admission', () => {
+  const f = fixture(false, ['genie/external.ts', 'pnpm-lock.yaml'], true)
+  try {
+    const base = f.binding.base
+    const changes = sourceState(f.root, base).changed
+    const proof = {
+      contract: 'livestore-fork-shared-input-v1',
+      inputs: changes.map((row) => {
+        assert(row.kind === 'file')
+        return { path: row.path, sha256: row.sha256 }
+      }),
+      affectedOwners: ['packages/@livestore/common'],
+      unqualifiedOwners: ['Full Setup'],
+      finiteSdkOnly: true,
+      fullSetupRetained: true,
+    }
+    const verify = (value: unknown, paths = changes.map((row) => row.path), patch = fs.readFileSync(f.patch)) => {
+      const reference = f.json(value)
+      verifyReviewedPatches(f.root, base, patch, changes, undefined, {
+        reviews: paths.map((name) => ({ path: name, review: reference })),
+        readReview: (ref): unknown => {
+          const bytes = fs.readFileSync(ref.path)
+          assert.equal(hash(bytes), ref.sha256)
+          return JSON.parse(bytes.toString())
+        },
+      })
+    }
+    verify(proof)
+    assert.throws(() => verify(proof, []), /Missing shared\/direct-transitive/)
+    assert.throws(() => verify(proof, ['genie/external.ts']), /Missing shared\/direct-transitive/)
+    assert.throws(
+      () => verify(proof, [...changes.map((row) => row.path), 'package.json']),
+      /Missing shared\/direct-transitive/,
+    )
+    assert.throws(() => verify(proof, ['genie/external.ts', 'genie/external.ts']), /Duplicate shared-input/)
+    assert.throws(() => verify({ ...proof, contract: 'another-contract' }), /Wrong shared-input/)
+    assert.throws(
+      () => verify({ ...proof, inputs: [{ path: 'genie/external.ts', sha256: '0'.repeat(64) }] }),
+      /Stale or deleted/,
+    )
+    assert.throws(() => verify({ ...proof, finiteSdkOnly: false }), /Excluded owners/)
+    assert.throws(() => verify({ ...proof, fullSetupRetained: false }), /Excluded owners/)
+    assert.throws(() => verify({ ...proof, affectedOwners: [] }), /Empty shared closure/)
+    assert.throws(() => verify({ ...proof, unqualifiedOwners: undefined }), /unqualifiedOwners/)
+    assert.throws(() => verify({ ...proof, affectedOwners: [1] }), /Invalid shared owner/)
+    const mutated = Buffer.from(
+      fs.readFileSync(f.patch, 'utf8').replace('+export const fixture = 1', '+export const fixture = 2'),
+    )
+    assert.throws(() => verify(proof, undefined, mutated), /Reviewed patch bytes differ/)
+    assert.throws(
+      () =>
+        verifyReviewedPatches(
+          f.root,
+          base,
+          fs.readFileSync(f.patch),
+          changes.map((row) => ({ ...row, executable: true })),
+          undefined,
+          {
+            reviews: changes.map((row) => ({ path: row.path, review: f.json(proof) })),
+            readReview: () => proof,
+          },
+        ),
+      /Reviewed patch mode differs/,
+    )
+    assert.throws(
+      () => verifyReviewedPatches(f.root, base, fs.readFileSync(f.patch), changes),
+      /Missing shared\/direct-transitive/,
+    )
+  } finally {
+    f.dispose()
+  }
+})
+
+test('a reviewed shared cohort stages qualification only and revalidates proof bytes', () => {
+  const f = fixture(false, ['genie/external.ts'], true)
+  try {
+    const current = sourceState(f.root, f.binding.base).changed[0]!
+    assert(current.kind === 'file')
+    const proof = f.json({
+      contract: 'livestore-fork-shared-input-v1',
+      inputs: [{ path: current.path, sha256: current.sha256 }],
+      affectedOwners: ['packages/@livestore/common'],
+      unqualifiedOwners: ['Full Setup'],
+      finiteSdkOnly: true,
+      fullSetupRetained: true,
+    })
+    const binding = { ...f.binding, shared: [{ path: current.path, review: proof }] }
+    const { reviewedProducer: _pin, ...legacyBinding } = binding
+    const legacyReview = f.json({
+      contract: 'livestore-fork-qualification-source-review-v1',
+      bindingSha256: digest(legacyBinding),
+    })
+    f.args.sourceSnapshot = f.json({ ...legacyBinding, review: legacyReview }).path
+    assert.throws(() => inspectQualification(f.args), /Shared review requires a reviewed producer/)
+    const review = f.json({ contract: 'livestore-fork-qualification-source-review-v1', bindingSha256: digest(binding) })
+    f.args.sourceSnapshot = f.json({ ...binding, review }).path
+    const inspection = inspectQualification(f.args)
+    assert.equal(inspection.references.get(fs.realpathSync(proof.path)), proof.sha256)
+    fs.appendFileSync(proof.path, '\n')
+    assert.throws(() => stageQualification(f.args), /changed|differs/i)
+    assert.equal(fs.existsSync(f.args.output), false)
+    fs.writeFileSync(proof.path, fs.readFileSync(proof.path).subarray(0, -1))
+    const result = stageQualification(f.args)
+    assert.equal(result.qualificationOnly, true)
+    assert.equal(result.commitEligible, false)
+  } finally {
+    f.dispose()
+  }
+})
+
+test('Full Setup inputs remain excluded even with exact shared review authority', () => {
+  const f = fixture(false, ['genie/unsafe.nix'], true)
+  try {
+    const changes = sourceState(f.root, f.binding.base).changed
+    const proof = {
+      contract: 'livestore-fork-shared-input-v1',
+      inputs: changes.map((row) => {
+        assert(row.kind === 'file')
+        return { path: row.path, sha256: row.sha256 }
+      }),
+      affectedOwners: ['packages/@livestore/common'],
+      unqualifiedOwners: ['Full Setup'],
+      finiteSdkOnly: true,
+      fullSetupRetained: true,
+    }
+    assert.throws(
+      () =>
+        verifyReviewedPatches(f.root, f.binding.base, fs.readFileSync(f.patch), changes, undefined, {
+          reviews: changes.map((row) => ({ path: row.path, review: f.json(proof) })),
+          readReview: () => proof,
+        }),
+      /Excluded reviewed source/,
+    )
+  } finally {
+    f.dispose()
+  }
+})
+
 test('reviewed source stages a product tree under a separately pinned producer', () => {
   const f = fixture(false, ['packages/@livestore/common/src/migration.ts'], true)
   try {
@@ -413,10 +551,10 @@ test('reviewed source stages a product tree under a separately pinned producer',
   }
 })
 
-test('reviewed source does not authorize shared dependency inputs', () => {
+test('a reviewed producer pin alone does not authorize shared dependency inputs', () => {
   const f = fixture(false, ['pnpm-lock.yaml'], true)
   try {
-    assert.throws(() => inspectQualification(f.args), /Excluded reviewed source: pnpm-lock.yaml/)
+    assert.throws(() => inspectQualification(f.args), /Missing shared\/direct-transitive input review/)
   } finally {
     f.dispose()
   }

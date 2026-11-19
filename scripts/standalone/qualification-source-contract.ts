@@ -29,7 +29,11 @@ import {
   qualificationFixturePaths,
 } from '../fork-qualification/qualification-recipe.mts'
 import { assertRuntimeSummary } from '../fork-qualification/qualification-runtime.mts'
-import { fullSetupInput, shared } from '../fork-qualification/qualification-source-policy.mts'
+import {
+  fullSetupInput,
+  verifySharedInputReviews,
+  type SharedInputReview,
+} from '../fork-qualification/qualification-source-policy.mts'
 
 // Worktree diff refreshes stale stat entries to distinguish them from edits.
 // Run that refresh against a copy so neither result requires writing the source index.
@@ -185,6 +189,7 @@ const Manifest = Schema.Struct({
       sourceTreeSha256: Schema.String,
     }),
   ),
+  shared: Schema.optional(Schema.Array(Schema.Struct({ path: Schema.String, review: Ref }))),
   producerInputs: Schema.Array(Schema.Struct({ path: Schema.String, sha256: Schema.String })),
   producerChecks: Schema.Array(Schema.Struct({ name: Schema.String, ...Step.fields })),
 })
@@ -342,12 +347,25 @@ export const verifyReviewedPatches = (
   patch: Buffer,
   changed: readonly SourceChange[],
   producerPatch?: Buffer,
+  sharedInputs?: {
+    reviews: readonly SharedInputReview[]
+    readReview: (reference: SharedInputReview['review']) => unknown
+  },
 ) => {
+  verifySharedInputReviews(
+    changed,
+    readSourceState(root, base).tree,
+    sharedInputs?.reviews ?? [],
+    sharedInputs?.readReview ??
+      (() => {
+        throw new Error('Missing shared-input reader')
+      }),
+  )
   const product: SourceChange[] = []
   const producer: SourceChange[] = []
   for (const row of changed) {
     assert(row.kind === 'file', 'Reviewed changes must be regular files')
-    assert(!fullSetupInput(row.path) && !shared(row.path), `Excluded reviewed source: ${row.path}`)
+    assert(!fullSetupInput(row.path), `Excluded reviewed source: ${row.path}`)
     if (producerPaths.includes(row.path) === true) {
       assert(
         producerPatch !== undefined &&
@@ -415,6 +433,7 @@ export const inspectQualification = (args: StageArguments) => {
   same(state.tree, manifest.tree, 'Frozen authored source differs')
   same(state.changed, manifest.changed, 'Frozen changed source differs')
   if (manifest.reviewedProducer === undefined) {
+    assert.equal(manifest.shared, undefined, 'Shared review requires a reviewed producer')
     assert.equal(manifest.producerPatch, undefined, 'Producer patch requires a reviewed producer')
     assertQualificationSourceScope(state.changed)
   } else {
@@ -423,7 +442,10 @@ export const inspectQualification = (args: StageArguments) => {
       assert.equal(manifest.reviewedProducer.base, args.sourceBase, 'Combined producer base differs')
       assert.equal(manifest.reviewedProducer.sourceTreeSha256, digest(state.tree), 'Combined producer tree differs')
     }
-    verifyReviewedPatches(root, args.sourceBase, patch, state.changed, producerPatch && read(evidence, producerPatch))
+    verifyReviewedPatches(root, args.sourceBase, patch, state.changed, producerPatch && read(evidence, producerPatch), {
+      reviews: manifest.shared ?? [],
+      readReview: (reference): unknown => JSON.parse(read(evidence, reference).toString('utf8')),
+    })
   }
   const fixtureChanges = state.changed.filter((row) => qualificationFixturePaths.includes(row.path))
   if (fixtureChanges.length > 0) {

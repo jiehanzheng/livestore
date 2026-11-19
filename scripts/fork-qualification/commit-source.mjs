@@ -5,8 +5,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import {
-  array,
-  compare,
   capture,
   digest,
   ensure,
@@ -21,7 +19,7 @@ import {
   readRef,
 } from './commit-files.mjs'
 import { assertRuntimeSummary } from './qualification-runtime.mjs'
-import { fullSetupInput, shared } from './qualification-source-policy.mts'
+import { fullSetupInput, verifySharedInputReviews } from './qualification-source-policy.mts'
 export { fullSetupInput } from './qualification-source-policy.mts'
 
 export const decisionPath =
@@ -104,32 +102,7 @@ export const verifyScope = (context, manifest) =>
       state.changed.every((row) => !fullSetupInput(row.path)),
       'Full Setup domain changed; finite lane cannot qualify it',
     )
-    const changedShared = state.changed.filter((row) => shared(row.path)).map((row) => row.path)
-    unique(expected.shared, (row) => row.path, 'Duplicate shared-input review')
-    equal(
-      expected.shared.map((row) => row.path).sort(compare),
-      changedShared.sort(compare),
-      'Missing shared/direct-transitive input review',
-    )
-    for (const row of expected.shared) {
-      const proof = jsonRef(context, row.review)
-      ensure(proof.contract === 'livestore-fork-shared-input-v1', 'Wrong shared-input review')
-      ensure(
-        state.tree.some(
-          (entry) =>
-            entry.path === row.path &&
-            proof.inputs?.some((input) => input.path === row.path && input.sha256 === entry.sha256),
-        ),
-        'Stale or deleted shared input',
-      )
-      ensure(
-        proof.finiteSdkOnly === true && proof.fullSetupRetained === true,
-        'Excluded owners cannot be qualified implicitly',
-      )
-      array(proof.affectedOwners, 'Shared review needs direct/transitive affected owners')
-      array(proof.unqualifiedOwners, 'Shared review must record excluded owner limits')
-      ensure(proof.affectedOwners.length > 0, 'Empty shared closure review')
-    }
+    verifySharedInputReviews(state.changed, state.tree, expected.shared, (reference) => jsonRef(context, reference))
     ensure(
       manifest.tools.specSha256 ===
         hash(fs.readFileSync(path.join(context.root, 'scripts/fork-qualification/tool-profile.json'))),
