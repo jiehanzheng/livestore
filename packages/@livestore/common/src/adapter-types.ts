@@ -114,7 +114,13 @@ export type MigrationHooks = {
   post: MigrationHook
 }
 
-export type MigrationHook = (db: SqliteDb) => void | Promise<void> | Effect.Effect<void, unknown>
+/** The event log validated by the leader for this reconstruction. */
+export type MigrationContext = Readonly<{ sourceIncarnation: string }>
+
+export type MigrationHook = (
+  db: SqliteDb,
+  context: MigrationContext,
+) => void | Promise<void> | Effect.Effect<void, unknown>
 
 export interface ClientSessionDevtoolsChannel extends WebChannel.WebChannel<
   Devtools.ClientSession.MessageToApp,

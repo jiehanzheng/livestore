@@ -1,8 +1,9 @@
 import { expect, test, vi } from 'vitest'
 
 import { liveStoreStorageFormatVersion } from '@livestore/common'
+import { fromSyncSource, initializeSource } from '@livestore/common/source-db'
 import { sqliteDbFactory, type OpfsSourceInventory } from '@livestore/sqlite-wasm/browser'
-import { consumeOpfsSourceInventory } from '@livestore/sqlite-wasm/browser/internal-source'
+import { certifyOpfsSourceInventory, consumeOpfsSourceInventory } from '@livestore/sqlite-wasm/browser/internal-source'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { Effect, Exit, Scope } from '@livestore/utils/effect'
 import { Opfs } from '@livestore/utils/effect/browser'
@@ -160,16 +161,14 @@ test('existing associated empty SOURCE never receives another creation receipt',
       Scope.provide(aScope),
     ),
   )
-  const discovered = await Effect.runPromise(
-    discoverPersistedSource({ ...options, namespace: a }).pipe(Effect.provideService(Opfs.Opfs, fs.service)),
-  )
+  // Recreate an association left by an older writer that never recorded ownership.
   await Effect.runPromise(
     first
       .make({
         _tag: 'opfs',
         opfsDirectory: directory,
         fileName: 'eventlog.db',
-        sourceInventory: inventoryOf(discovered),
+        sourceInventory: certifyOpfsSourceInventory(a, directory, true),
       })
       .pipe(Scope.provide(aChild), Effect.provideService(Opfs.Opfs, fs.service)),
   )
@@ -200,12 +199,67 @@ test('existing associated empty SOURCE never receives another creation receipt',
         .pipe(Scope.provide(bChild), Effect.provideService(Opfs.Opfs, fs.service)),
     )
     expect(db.metadata.sourceCreation).toBeUndefined()
+    const owner = await Effect.runPromise(fromSyncSource(db, undefined, b.isHeld))
+    expect(await Effect.runPromise(initializeSource(owner).pipe(Effect.result))).toMatchObject({
+      _tag: 'Failure',
+      failure: { cause: { _tag: 'LegacyStorageFormatError' } },
+    })
   } finally {
     await close(bChild)
     await close(bScope)
     await close(second.owned)
   }
 })
+
+test.each(['before association', 'before identity', 'before marker removal'] as const)(
+  'first SOURCE open can resume after stopping %s',
+  async (cutpoint) => {
+    const native = locks()
+    const fs = makeOwnedOpfsFixture()
+    const boot = async (stop?: typeof cutpoint) => {
+      const owner = await factory(),
+        authority = await scope(),
+        connection = await scope()
+      const run = <A, E>(effect: Effect.Effect<A, E, Opfs.Opfs | Scope.Scope>) =>
+        Effect.runPromise(effect.pipe(Effect.provideService(Opfs.Opfs, fs.service), Scope.provide(connection)))
+      try {
+        const namespace = await Effect.runPromise(
+          acquireSourceNamespace({
+            directory,
+            locks: native.manager,
+            closePhysicalOwner: owner.make.close,
+          }).pipe(Scope.provide(authority)),
+        )
+        const discovery = await run(discoverPersistedSource({ ...options, namespace }))
+        if (stop === 'before association') return
+        const db = await run(
+          owner.make({
+            _tag: 'opfs',
+            opfsDirectory: directory,
+            fileName: 'eventlog.db',
+            sourceInventory: inventoryOf(discovery),
+          }),
+        )
+        if (stop === 'before identity') return
+        const source = await run(fromSyncSource(db, db.metadata.sourceCreation, namespace.isHeld))
+        const initialized = await run(initializeSource(source))
+        if (stop === undefined && discovery.finishInitialization !== undefined)
+          await run(discovery.finishInitialization)
+        return initialized.identity.incarnation
+      } finally {
+        await close(connection)
+        await close(authority)
+        await close(owner.owned)
+        expect(fs.activeHandles()).toBe(0)
+      }
+    }
+    const first = await boot(cutpoint)
+    const resumed = await boot()
+    expect(resumed).toBeTruthy()
+    if (first !== undefined) expect(resumed).toBe(first)
+    expect(await boot()).toBe(resumed)
+  },
+)
 
 test('physical teardown failure keeps namespace authority and pool handles held', async () => {
   const native = locks(),

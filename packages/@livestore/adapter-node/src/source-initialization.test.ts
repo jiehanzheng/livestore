@@ -64,6 +64,40 @@ test('actual retained source without identity refuses before any state factory a
   }
 })
 
+test('reads the persisted SOURCE backend ID after reopening the Node Store', async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'source-backend-id-'))
+  const storage = { type: 'fs', baseDirectory: base } as const
+  const withStoreRead = () =>
+    Effect.runPromise(
+      Effect.scoped(
+        createStore({
+          schema,
+          storeId: 'replica',
+          disableDevtools: true,
+          adapter: makeAdapter({ storage, clientId: 'stable' }),
+        }).pipe(Effect.flatMap((store) => Effect.promise(() => store.getSourceBackendId()))),
+      ).pipe(provideOtel({}), Effect.provide(PlatformNode.NodeFileSystem.layer)),
+    )
+  try {
+    expect(await withStoreRead()).toBeNull()
+    const sqlite3 = await loadSqlite3Wasm()
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const make = yield* sqliteDbFactory({ sqlite3 })
+          const { dbEventlog } = yield* openDatabases({ schema, storeId: 'replica' }, storage, make)
+          yield* dbEventlog.write((transaction) =>
+            transaction.execute('UPDATE __livestore_sync_status SET backendId = ?', ['persisted-backend']),
+          )
+        }),
+      ).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer)),
+    )
+    expect(await withStoreRead()).toBe('persisted-backend')
+  } finally {
+    await fs.rm(base, { recursive: true, force: true })
+  }
+})
+
 test.each(['in-memory', 'fs'] as const)(
   'actual %s SOURCE admission closes its owner and invalidates proof',
   async (type) => {

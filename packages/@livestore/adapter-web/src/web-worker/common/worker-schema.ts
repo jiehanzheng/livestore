@@ -29,6 +29,8 @@ export const StorageTypeOpfs = Schema.Struct({
    * conflicts with other LiveStore apps.
    */
   directory: Schema.optional(Schema.String),
+  /** Require the elected leader to open persistent storage. Defaults to allowing memory fallback. */
+  requirePersistence: Schema.optional(Schema.Boolean),
 })
 
 export type StorageTypeOpfs = typeof StorageTypeOpfs.Type
@@ -109,11 +111,13 @@ export const OpenSessionFrame = Schema.Union([
   Schema.TaggedStruct('Accepted', {
     provenance: StateSnapshot.Provenance,
     migrationsReport: MigrationsReport,
+    persisted: Schema.optional(Schema.Literal(true)),
   }),
   Schema.TaggedStruct('StaleSnapshot', {
     provenance: StateSnapshot.Provenance,
     snapshot: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
     migrationsReport: MigrationsReport,
+    persisted: Schema.optional(Schema.Literal(true)),
   }),
   Schema.TaggedStruct('Pull', { item: ClientSessionLeaderThreadProxy.PullItem }),
 ])
@@ -122,6 +126,7 @@ export class LeaderWorkerInnerOpenSession extends Rpc.make('OpenSession', {
   payload: {
     expectedProjection: StateSnapshot.ProjectionIdentity,
     candidate: Schema.UndefinedOr(StateSnapshot.Provenance),
+    requirePersistence: Schema.optional(Schema.Boolean),
   },
   success: OpenSessionFrame,
   error: WorkerInitializationError,
@@ -153,6 +158,18 @@ export class LeaderWorkerInnerExport extends Rpc.make('Export', {
 export class LeaderWorkerInnerExportEventlog extends Rpc.make('ExportEventlog', {
   payload: {},
   success: Transferable.Uint8Array as Schema.Codec<Uint8Array<ArrayBuffer>>,
+  error: WorkerInitializationError,
+}) {}
+
+export class LeaderWorkerInnerGetSourceIncarnation extends Rpc.make('GetSourceIncarnation', {
+  payload: {},
+  success: Schema.String,
+  error: WorkerInitializationError,
+}) {}
+
+export class LeaderWorkerInnerGetSourceBackendId extends Rpc.make('GetSourceBackendId', {
+  payload: {},
+  success: Schema.NullOr(Schema.String),
   error: WorkerInitializationError,
 }) {}
 
@@ -226,6 +243,8 @@ export class LeaderWorkerInnerRpcs extends RpcGroup.make(
   LeaderWorkerInnerStreamEvents,
   LeaderWorkerInnerExport,
   LeaderWorkerInnerExportEventlog,
+  LeaderWorkerInnerGetSourceIncarnation,
+  LeaderWorkerInnerGetSourceBackendId,
   LeaderWorkerInnerGetRecreateSnapshot,
   LeaderWorkerInnerGetLeaderHead,
   LeaderWorkerInnerGetLeaderSyncState,
@@ -275,9 +294,23 @@ export class SharedWorkerOpenWriteSession extends Rpc.make('OpenWriteSession', {
   stream: true,
 }) {}
 
+export class SharedWorkerGetSourceIncarnation extends Rpc.make('GetSourceIncarnation', {
+  payload: { writeSessionId: Schema.String },
+  success: Schema.String,
+  error: WorkerInitializationError,
+}) {}
+
+export class SharedWorkerGetSourceBackendId extends Rpc.make('GetSourceBackendId', {
+  payload: { writeSessionId: Schema.String },
+  success: Schema.NullOr(Schema.String),
+  error: WorkerInitializationError,
+}) {}
+
 export class SharedWorkerRpcs extends RpcGroup.make(
   SharedWorkerUpdateMessagePort,
   SharedWorkerRetireLeaderGeneration,
+  SharedWorkerGetSourceIncarnation,
+  SharedWorkerGetSourceBackendId,
 
   // Proxied requests
   LeaderWorkerInnerBootStatusStream,

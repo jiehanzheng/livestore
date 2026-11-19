@@ -189,6 +189,25 @@ export const makeLeaderGenerations = <Context>() =>
         }),
       retireByToken: ({ generationToken }: { readonly generationToken: string }) =>
         markRetired((active) => active.token === generationToken),
+      runAdmittedRead: <A, E, R>(sessionId: string, read: (context: Context) => Effect.Effect<A, E, R>) =>
+        Effect.gen(function* () {
+          const admission = writeAdmissions.get(sessionId)
+          const closed = UnknownError.make({ cause: 'SOURCE read requires the Store’s active leader admission' })
+          if (admission === undefined || Deferred.isDoneUnsafe(admission.generation.retired) === true) {
+            return yield* closed
+          }
+          // A SOURCE identity read must never move to the next leader after retirement.
+          const value = yield* untilRetired(read(admission.context), admission.generation.retired).pipe(
+            Effect.catchIf(isRetirement, () => Effect.fail(closed)),
+          )
+          if (
+            writeAdmissions.get(sessionId) !== admission ||
+            Deferred.isDoneUnsafe(admission.generation.retired) === true
+          ) {
+            return yield* closed
+          }
+          return value
+        }),
       runAdmittedWrite: <A, E, R>(sessionId: string, write: (context: Context) => Effect.Effect<A, E, R>) =>
         Effect.gen(function* () {
           const admission = writeAdmissions.get(sessionId)

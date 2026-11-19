@@ -41,8 +41,17 @@ export const initializeSource = (owner: SourceOwner) =>
     }
     let identity: SourceIdentity
     if (owner.fresh !== undefined) {
-      yield* consumeFreshSource(owner.handle, owner.fresh)
-      identity = yield* owner.write((transaction) => Identity.initializeWithinTransaction(transaction, epoch))
+      const kind = yield* consumeFreshSource(owner.handle, owner.fresh)
+      identity = yield* owner.write((transaction) =>
+        Effect.gen(function* () {
+          // The worker may have stopped after SQLite committed but before retiring the marker.
+          if (kind === 'exclusive-opfs-source-recovery') {
+            const schema = yield* transaction.select('SELECT 1 FROM sqlite_master LIMIT 1')
+            if (schema.length !== 0) return yield* Identity.read(transaction)
+          }
+          return yield* Identity.initializeWithinTransaction(transaction, epoch)
+        }),
+      )
     } else if (owner.persistence.kind === 'native-shared-host') {
       identity = yield* owner.write((transaction) =>
         Effect.gen(function* () {

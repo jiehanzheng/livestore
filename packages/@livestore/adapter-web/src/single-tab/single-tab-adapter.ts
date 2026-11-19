@@ -44,6 +44,7 @@ import { loadInMemorySqlite3 } from '../web-worker/client-session/sqlite-loader.
 import { makeWorkerShutdown } from '../web-worker/client-session/worker-shutdown.ts'
 import {
   checkOpfsAvailability,
+  confirmPersistedAdmission,
   ensureBrowserRequirements,
   getPersistedId,
 } from '../web-worker/common/browser-environment.ts'
@@ -254,7 +255,14 @@ export const makeSingleTabAdapter =
             expectedProjection: StateSnapshot.getProjectionIdentity(schema),
             candidate: dataFromFile,
             makeSqliteDb,
-            open: (request) => runInWorkerStream('OpenSession', innerWorker.OpenSession(request)),
+            open: (request) =>
+              runInWorkerStream(
+                'OpenSession',
+                innerWorker.OpenSession({
+                  ...request,
+                  ...(storageOptions.requirePersistence === true ? { requirePersistence: true } : {}),
+                }),
+              ).pipe(confirmPersistedAdmission(storageOptions.requirePersistence)),
           })
 
           const numberOfTables =
@@ -313,9 +321,12 @@ export const makeSingleTabAdapter =
             initialState: {
               leaderHead: initialLeaderHead,
               migrationsReport,
-              storageMode: opfsWarning === undefined ? 'persisted' : 'in-memory',
+              storageMode:
+                storageOptions.requirePersistence === true || opfsWarning === undefined ? 'persisted' : 'in-memory',
             },
 
+            getSourceIncarnation: runInWorker('GetSourceIncarnation', innerWorker.GetSourceIncarnation({})),
+            getSourceBackendId: runInWorker('GetSourceBackendId', innerWorker.GetSourceBackendId({})),
             getEventlogData: runInWorker('ExportEventlog', innerWorker.ExportEventlog({})).pipe(
               Effect.timeoutOrDie(10_000),
               Effect.withSpan('@livestore/adapter-web:single-tab:getEventlogData'),

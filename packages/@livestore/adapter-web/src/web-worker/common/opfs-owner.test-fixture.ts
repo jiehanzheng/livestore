@@ -124,7 +124,10 @@ export const makeOwnedOpfsFixture = (): OwnedOpfsFixture => {
         this.files.delete(name)
         return
       }
-      if (this.directories.has(name) === true && options.recursive === true) {
+      const directory = this.directories.get(name)
+      if (directory !== undefined) {
+        if (options.recursive !== true && (directory.directories.size !== 0 || directory.files.size !== 0))
+          throw new DOMException('Synthetic directory is not empty', 'InvalidModificationError')
         this.directories.delete(name)
         return
       }

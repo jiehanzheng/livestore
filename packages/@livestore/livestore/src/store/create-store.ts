@@ -2,7 +2,7 @@ import * as otel from '@opentelemetry/api'
 
 import {
   type Adapter,
-  type AdapterError,
+  AdapterError,
   type BootStatus,
   type ClientSession,
   type ClientSessionDevtoolsChannel,
@@ -480,11 +480,11 @@ export const createStore = <
         requestShutdown(exit).pipe(Effect.flatMap((request) => awaitTeardownWithSoftBound(request.core)))
       const rejectShutdownAdmission = Effect.suspend(() => {
         if (request === undefined) return Effect.void
-        const cause = Exit.isFailure(request.exit) === true ? Cause.squash(request.exit.cause) : request.exit.value
-        return Effect.fail(
-          Schema.is(UnknownError)(cause) === true
-            ? cause
-            : UnknownError.make({ cause, note: 'Store shut down during acquisition' }),
+        if (Exit.isSuccess(request.exit) === true) return Effect.interrupt
+        return Effect.failCause(
+          Cause.map(request.exit.cause, (error) =>
+            Schema.is(AdapterError)(error) === true ? error : UnknownError.make({ cause: error }),
+          ),
         )
       })
 
@@ -493,33 +493,53 @@ export const createStore = <
           ? undefined
           : yield* Schema.encodeEffect(resolvedSyncPayloadSchema)(syncPayload).pipe(UnknownError.mapToUnknownError)
 
-      const clientSession: ClientSession = yield* adapter({
-        schema,
-        storeId,
-        params: { stateRebuildBatchSize },
-        devtoolsEnabled: getDevtoolsEnabled(disableDevtools),
-        bootStatusQueue,
-        shutdown,
-        connectDevtoolsToStore: connectDevtoolsToStore_,
-        debugInstanceId,
-        syncPayloadSchema: resolvedSyncPayloadSchema,
-        syncPayloadEncoded,
-      }).pipe(
-        Effect.withPerformanceMeasure('livestore:makeAdapter'),
-        Effect.withSpan('createStore:makeAdapter'),
-        Effect.catchCause((cause) =>
-          request === undefined
-            ? Effect.failCause(cause)
-            : rejectShutdownAdmission.pipe(Effect.andThen(Effect.failCause(cause))),
-        ),
-        Effect.onExit((exit) =>
-          Exit.isFailure(exit) === true ? Deferred.succeed(adapterShutdown, undefined) : Effect.void,
-        ),
+      const clientSession: ClientSession = yield* Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          const acquired = yield* restore(
+            adapter({
+              schema,
+              storeId,
+              params: { stateRebuildBatchSize },
+              devtoolsEnabled: getDevtoolsEnabled(disableDevtools),
+              bootStatusQueue,
+              shutdown,
+              connectDevtoolsToStore: connectDevtoolsToStore_,
+              debugInstanceId,
+              syncPayloadSchema: resolvedSyncPayloadSchema,
+              syncPayloadEncoded,
+            }),
+          ).pipe(
+            Effect.withPerformanceMeasure('livestore:makeAdapter'),
+            Effect.withSpan('createStore:makeAdapter'),
+            Effect.exit,
+          )
+          // Publish acquisition's outcome before joining teardown: its hook owner
+          // waits for this signal even when acquisition never returned a session.
+          yield* Deferred.succeed(
+            adapterShutdown,
+            Exit.isSuccess(acquired) === true ? acquired.value.shutdown : undefined,
+          )
+          const failures: Cause.Cause<AdapterError>[] = []
+          if (request !== undefined && Exit.isFailure(request.exit) === true)
+            failures.push(
+              Cause.map(request.exit.cause, (error) =>
+                Schema.is(AdapterError)(error) === true ? error : UnknownError.make({ cause: error }),
+              ),
+            )
+          if (Exit.isFailure(acquired) === true) failures.push(acquired.cause)
+          if (request !== undefined) {
+            const cleanup = yield* Fiber.join(request.completion).pipe(Effect.exit)
+            if (Exit.isFailure(cleanup) === true) failures.push(cleanup.cause)
+          }
+          if (failures.length !== 0)
+            return yield* Effect.failCause(
+              failures.slice(1).reduce((combined, cause) => Cause.combine(combined, cause), failures[0]!),
+            )
+          if (request !== undefined) return yield* Effect.interrupt
+          if (Exit.isFailure(acquired) === true) return yield* Effect.failCause(acquired.cause)
+          return acquired.value
+        }),
       )
-      // A shutdown can arrive before acquisition returns a session. Register its hook exactly once, then
-      // reject admission before constructing a Store over resources the core may already have closed.
-      yield* Deferred.succeed(adapterShutdown, clientSession.shutdown)
-      yield* rejectShutdownAdmission
 
       if (LS_DEV === true && clientSession.leaderThread.initialState.migrationsReport.migrations.length > 0) {
         yield* Effect.logDebug(

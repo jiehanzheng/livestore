@@ -11,8 +11,9 @@ import {
   type SyncOptions,
 } from '@livestore/common'
 import { LeaderThreadCtx, makeLeaderThreadLayer, streamEventsWithSyncState } from '@livestore/common/leader-thread'
+import { SourceEvents } from '@livestore/common/source-db'
 import type { MakeNodeSqliteDb } from '@livestore/sqlite-wasm/node'
-import { Effect, Fiber, Layer, Queue, Stream } from '@livestore/utils/effect'
+import { Effect, Fiber, Layer, Option, Queue, Stream } from '@livestore/utils/effect'
 
 import { createShutdownChannel } from './shutdown.ts'
 import { openDatabases, type NodeStorage } from './storage.ts'
@@ -91,6 +92,14 @@ export const createLeader = (args: AdapterArgs, options: Options, makeSqliteDb: 
             storageMode: options.storage.type === 'fs' ? 'persisted' : 'in-memory',
           },
           export: exportSnapshot,
+          ...(options.storage.type === 'fs'
+            ? {
+                getSourceBackendId: SourceEvents.readBackendId(dbEventlog.handle).pipe(
+                  Effect.map(Option.getOrNull),
+                  Effect.mapError(toAdapterError),
+                ),
+              }
+            : {}),
           getEventlogData:
             dbEventlog.image === undefined
               ? Effect.fail(toAdapterError('SOURCE image export is unavailable'))

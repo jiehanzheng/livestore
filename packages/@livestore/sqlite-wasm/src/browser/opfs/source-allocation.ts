@@ -15,12 +15,12 @@ export interface OpfsSourceInventory {
 }
 export interface OpfsSourceCreation {
   readonly storageName: string
-  readonly kind: 'exclusive-opfs-source-association'
+  readonly kind: 'exclusive-opfs-source-association' | 'exclusive-opfs-source-recovery'
   readonly isHeld: () => boolean
 }
 
 type NamespaceBinding = { authority: SourceAuthority; closed: boolean }
-type InventoryBinding = { namespace: OpfsSourceNamespace; sourceWasAbsent: boolean }
+type InventoryBinding = { namespace: OpfsSourceNamespace; sourceWasAbsent: boolean; resumeInitialization: boolean }
 const namespaces = new WeakMap<OpfsSourceNamespace, NamespaceBinding>()
 const inventories = new WeakMap<OpfsSourceInventory, InventoryBinding>()
 // Failed physical teardown must keep the real callback and its held namespace authority reachable.
@@ -72,12 +72,13 @@ export const certifyOpfsSourceInventory = (
   namespace: OpfsSourceNamespace,
   directory: string,
   sourceWasAbsent: boolean,
+  resumeInitialization = false,
 ): OpfsSourceInventory => {
   if (namespaces.has(namespace) === false || namespace.directory !== directory || namespace.isHeld() === false) {
     throw new Error('OPFS SOURCE inventory requires its exact live namespace authority')
   }
   const inventory: OpfsSourceInventory = Object.freeze({ [inventoryBrand]: true as const })
-  inventories.set(inventory, { namespace, sourceWasAbsent })
+  inventories.set(inventory, { namespace, sourceWasAbsent, resumeInitialization })
   return inventory
 }
 
@@ -95,6 +96,12 @@ export const creationFromOpfsAssociation = (
   inventory: InventoryBinding,
   association: OpfsSourceAssociation | undefined,
 ): OpfsSourceCreation | undefined => {
+  if (inventory.resumeInitialization === true && inventory.sourceWasAbsent === false)
+    return Object.freeze({
+      storageName: `opfs:${inventory.namespace.directory}/eventlog.db`,
+      kind: 'exclusive-opfs-source-recovery' as const,
+      isHeld: inventory.namespace.isHeld,
+    })
   if (inventory.sourceWasAbsent === false || association === undefined) return undefined
   const associationHeld = consumeOpfsSourceAssociation(association, inventory.namespace.directory)
   return Object.freeze({

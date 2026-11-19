@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import { StateSnapshot } from '@livestore/common'
 import { makeSchema, State } from '@livestore/common/schema'
 import * as WasmLoader from '@livestore/sqlite-wasm/load-wasm'
 import {
@@ -12,12 +13,15 @@ import {
   RpcClient,
   RpcWorker,
   Scope,
+  Stream,
   Worker,
 } from '@livestore/utils/effect'
-import { BrowserWorker } from '@livestore/utils/effect/browser'
+import { BrowserWorker, Opfs } from '@livestore/utils/effect/browser'
 
 import type { SingleTabAdapterOptions } from '../../single-tab/single-tab-adapter.ts'
 import type { WebAdapterOptions } from '../client-session/persisted-adapter.ts'
+import { checkOpfsAvailability, confirmPersistedAdmission } from '../common/browser-environment.ts'
+import { makeOwnedOpfsFixture } from '../common/opfs-owner.test-fixture.ts'
 import { makePhysicalWorkerLifetime } from '../common/physical-worker-lifetime.ts'
 import { startDedicatedWorker } from '../common/rpc-worker.ts'
 import * as WorkerSchema from '../common/worker-schema.ts'
@@ -30,6 +34,111 @@ const schema = makeSchema({
 })
 
 afterEach(() => vi.unstubAllGlobals())
+
+it('requires actual worker persistence for strict admission and preserves the default fallback', () =>
+  Effect.runPromise(
+    Effect.forEach(
+      [
+        { available: false, requirePersistence: true },
+        { available: false, requirePersistence: false },
+        { available: true, requirePersistence: true },
+      ],
+      ({ available, requirePersistence }) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const data = new MessageChannel()
+            const filesystem = makeOwnedOpfsFixture()
+            const pageProbe = yield* checkOpfsAvailability.pipe(Effect.provideService(Opfs.Opfs, filesystem.service))
+            expect(pageProbe).toBeUndefined()
+            const getDirectory =
+              available === true
+                ? vi.fn().mockResolvedValue(filesystem.rootDirectory)
+                : vi.fn().mockRejectedValue(new DOMException('Worker OPFS denied', 'SecurityError'))
+            // Only the receiver probes navigator.storage in this test. The caller sends the normal wire payload.
+            vi.stubGlobal('navigator', {
+              storage: { getDirectory },
+              locks: {
+                request: (name: string, _options: LockOptions, use: (lock: Lock) => Promise<unknown>) =>
+                  use({ name, mode: 'exclusive' }),
+              },
+            })
+            vi.stubGlobal('self', { name: 'strict-opfs-worker' })
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => {
+                data.port1.close()
+                data.port2.close()
+              }),
+            )
+            yield* makeWorkerEffect({ schema, transport: data.port2, logLevel: 'None' }).pipe(Effect.forkScoped)
+            const lifetime = yield* makePhysicalWorkerLifetime
+            const storeId = `strict-opfs-worker-${requirePersistence}`
+            const clientId = 'client'
+            const innerPort = yield* startDedicatedWorker(
+              { transport: data.port1, lifetime, close: lifetime.close.pipe(Effect.orDie) },
+              { storeId, clientId },
+            )
+            const context = yield* Layer.build(
+              RpcClient.layerProtocolWorker({ size: 1 }).pipe(
+                Layer.provide(BrowserWorker.layer(() => innerPort)),
+                Layer.provide(
+                  RpcWorker.layerInitialMessage(
+                    WorkerSchema.LeaderWorkerInnerInitialMessage.payloadSchema,
+                    Effect.succeed({
+                      storageOptions: { type: 'opfs', requirePersistence },
+                      storeId,
+                      clientId,
+                      devtoolsEnabled: false,
+                      debugInstanceId: 'strict-opfs-test',
+                      syncPayloadEncoded: undefined,
+                      params: { stateRebuildBatchSize: 100 },
+                    }),
+                  ),
+                ),
+              ),
+            )
+            const client = yield* RpcClient.make(WorkerSchema.LeaderWorkerInnerRpcs).pipe(Effect.provide(context))
+            const open = { expectedProjection: StateSnapshot.getProjectionIdentity(schema), candidate: undefined }
+            const firstFrame = (strict: boolean, requireConfirmation = strict) =>
+              client
+                .OpenSession({ ...open, requirePersistence: strict })
+                .pipe(confirmPersistedAdmission(requireConfirmation), Stream.take(1), Stream.runCollect, Effect.exit)
+            const strict = yield* firstFrame(true)
+            expect(getDirectory).toHaveBeenCalled()
+            if (available === true) {
+              expect(Exit.isSuccess(strict) && strict.value[0]).toMatchObject({
+                _tag: 'StaleSnapshot',
+                persisted: true,
+              })
+              if (Exit.isSuccess(strict) === true && strict.value[0]?._tag === 'StaleSnapshot') {
+                const incarnation = yield* client.GetSourceIncarnation({})
+                expect(incarnation).toBe(strict.value[0].provenance.sourceIncarnation)
+                expect(yield* client.GetSourceBackendId({})).toBeNull()
+              }
+            } else {
+              expect(Exit.isFailure(strict) && Cause.pretty(strict.cause)).toContain(
+                requirePersistence === true ? 'leader OPFS is unavailable' : 'leader uses in-memory storage',
+              )
+            }
+            if (requirePersistence === false) {
+              const fallback = yield* firstFrame(false)
+              expect(Exit.isSuccess(fallback) && fallback.value[0]?._tag).toBe('StaleSnapshot')
+              const ignoredRequirement = yield* firstFrame(false, true)
+              expect(Exit.isFailure(ignoredRequirement) && Cause.pretty(ignoredRequirement.cause)).toContain(
+                'Leader did not confirm persistent LiveStore storage',
+              )
+              const backend = yield* client.GetSourceBackendId({}).pipe(Effect.exit)
+              expect(Exit.isFailure(backend) && Cause.pretty(backend.cause)).toContain(
+                'does not expose a persisted SOURCE backend identity',
+              )
+              const source = yield* client.GetSourceIncarnation({}).pipe(Effect.exit)
+              expect(Exit.isFailure(source) && Cause.pretty(source.cause)).toContain(
+                'does not expose a persisted SOURCE incarnation',
+              )
+            }
+          }),
+        ),
+    ),
+  ))
 
 describe('owned worker MessagePort transport', () => {
   it('accepts port factories while preserving Worker constructors', () => {

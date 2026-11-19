@@ -164,6 +164,10 @@ export const sanitizeOpfsDir = Effect.fn('@livestore/adapter-web:sanitizeOpfsDir
   return `${directory}@${liveStoreStorageFormatVersion}`
 })
 
+// A directory entry is durable without a partial marker payload. Only the first
+// owner may create it, and a successor must hold the same namespace to resume.
+const SOURCE_INITIALIZATION_MARKER = '.livestore-source-initializing-v1'
+
 /** Discover before opening either database: pool creation would erase the distinction between absent and empty source. */
 export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discoverPersistedSource')(function* ({
   storageOptions,
@@ -175,8 +179,10 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
   namespace?: OpfsSourceNamespace
 }) {
   const directory = yield* sanitizeOpfsDir(storageOptions.directory, storeId)
-  const certify = (sourceWasAbsent: boolean) =>
-    namespace === undefined ? undefined : certifyOpfsSourceInventory(namespace, directory, sourceWasAbsent)
+  const certify = (sourceWasAbsent: boolean, resumeInitialization = false) =>
+    namespace === undefined
+      ? undefined
+      : certifyOpfsSourceInventory(namespace, directory, sourceWasAbsent, resumeInitialization)
   if (namespace !== undefined && (namespace.directory !== directory || namespace.isHeld() === false)) {
     return yield* Effect.die(new Error('OPFS discovery requires its exact live namespace authority'))
   }
@@ -199,11 +205,11 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
       reason: 'Legacy OPFS storage requires explicit migration before opening this store',
     })
   }
-  if (entries.some((entry) => entry.kind === 'directory' && entry.name === directory) === false) {
-    const inventory = certify(true)
-    return { sourceIsNew: true, ...(inventory === undefined ? {} : { inventory }) }
-  }
-  const current = yield* opfs.getDirectoryHandle(root, directory).pipe(Effect.mapError(unreadableStorage))
+  const exists = entries.some((entry) => entry.kind === 'directory' && entry.name === directory)
+  if (exists === false && namespace === undefined) return { sourceIsNew: true }
+  const current = yield* opfs
+    .getDirectoryHandle(root, directory, { create: !exists })
+    .pipe(Effect.mapError(unreadableStorage))
   const { entries: currentEntries, filenames } = yield* readOpfsSourceInventory(current).pipe(
     Effect.mapError(
       () =>
@@ -215,7 +221,16 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
     ),
   )
   const sourceIsNew = filenames.includes('/eventlog.db') === false
-  if (sourceIsNew === true && currentEntries.some((entry) => entry.kind === 'directory') === true) {
+  const marker = currentEntries.find((entry) => entry.name === SOURCE_INITIALIZATION_MARKER)
+  if (marker !== undefined) {
+    if (marker.kind !== 'directory') return yield* unreadableStorage()
+    const contents = yield* opfs
+      .values(marker as FileSystemDirectoryHandle)
+      .pipe(Stream.runFirst, Effect.mapError(unreadableStorage))
+    if (Option.isSome(contents) === true || filenames.filter((name) => name === '/eventlog.db').length > 1)
+      return yield* unreadableStorage()
+  }
+  if (sourceIsNew === true && currentEntries.some((entry) => entry.kind === 'directory' && entry !== marker) === true) {
     return yield* new LegacyStorageFormatError({
       expectedFormatVersion: liveStoreStorageFormatVersion,
       storageBase,
@@ -229,8 +244,21 @@ export const discoverPersistedSource = Effect.fn('@livestore/adapter-web:discove
       reason: 'Retained database associations exist without the authoritative eventlog',
     })
   }
-  const inventory = certify(sourceIsNew)
-  return { sourceIsNew, ...(inventory === undefined ? {} : { inventory }) }
+  if (namespace !== undefined && sourceIsNew === true && marker === undefined) {
+    yield* opfs
+      .getDirectoryHandle(current, SOURCE_INITIALIZATION_MARKER, { create: true })
+      .pipe(Effect.mapError(unreadableStorage))
+  }
+  const inventory = certify(sourceIsNew, marker !== undefined)
+  const finishInitialization =
+    namespace !== undefined && (sourceIsNew === true || marker !== undefined)
+      ? opfs.removeEntry(current, SOURCE_INITIALIZATION_MARKER).pipe(Effect.mapError(unreadableStorage))
+      : undefined
+  return {
+    sourceIsNew,
+    ...(inventory === undefined ? {} : { inventory }),
+    ...(finishInitialization === undefined ? {} : { finishInitialization }),
+  }
 })
 
 export const getStateDbFileName = (schema: LiveStoreSchema) => `${getStateDbBaseName(schema)}.db`

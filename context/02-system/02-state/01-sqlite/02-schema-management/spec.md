@@ -124,6 +124,11 @@ database:
 6. Run the `post` migration hook.
 7. Insert the singleton consistency row (`id = 1`) in `__livestore_state_consistency`.
 
+The leader passes the validated event-log incarnation as read-only migration
+hook context. It revalidates SOURCE before the post hook and again before
+publishing completion, because an observation made at the replay checkpoint
+must belong to the event log the leader still owns.
+
 Replay consumes eventlog pages in order, with each page committed in one
 state-database savepoint. The per-client runtime parameter
 `createStore.params.stateRebuildBatchSize` accepts positive integers and defaults

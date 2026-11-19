@@ -2,6 +2,7 @@ import {
   ClientSessionLeaderThreadProxy,
   EventlogSqliteDb,
   MaterializationJournal,
+  SourceIdentity,
   StateSnapshot,
   toAdapterError,
   openSnapshotSession,
@@ -11,8 +12,8 @@ import {
   type SyncOptions,
 } from '@livestore/common'
 import { LeaderThreadCtx, makeLeaderThreadLayer, streamEventsWithSyncState } from '@livestore/common/leader-thread'
-import { fromSyncSource, initializeSource } from '@livestore/common/source-db'
-import { Effect, Exit, FetchHttpClient, Fiber, Layer, Queue, Stream } from '@livestore/utils/effect'
+import { fromSyncSource, initializeSource, SourceEvents } from '@livestore/common/source-db'
+import { Effect, Exit, FetchHttpClient, Fiber, Layer, Option, Queue, Stream } from '@livestore/utils/effect'
 
 import { expoPersistencePaths, type ExpoStorage } from './paths.ts'
 import { createExpoShutdownChannel } from './shutdown.ts'
@@ -116,6 +117,14 @@ export const createExpoLeader = function (
         },
         initialState: { leaderHead, migrationsReport, storageMode: 'persisted' },
         export: exportSnapshot,
+        getSourceIncarnation: SourceIdentity.read(dbEventlog.handle).pipe(
+          Effect.map(({ incarnation }) => incarnation),
+          Effect.mapError(toAdapterError),
+        ),
+        getSourceBackendId: SourceEvents.readBackendId(dbEventlog.handle).pipe(
+          Effect.map(Option.getOrNull),
+          Effect.mapError(toAdapterError),
+        ),
         getEventlogData:
           dbEventlog.image === undefined
             ? Effect.fail(toAdapterError('SOURCE image export is unavailable'))

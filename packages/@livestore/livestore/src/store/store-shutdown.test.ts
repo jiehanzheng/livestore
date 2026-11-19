@@ -2,7 +2,7 @@ import { describe, expect, it } from '@effect/vitest'
 
 import { makeInMemoryAdapter } from '@livestore/adapter-web'
 import { type Adapter, IntentionalShutdownCause, provideOtel, UnknownError } from '@livestore/common'
-import { Cause, Deferred, Effect, Exit, Fiber, Scope, TestClock } from '@livestore/utils/effect'
+import { Cause, Deferred, Effect, Exit, Fiber, Logger, Scope, TestClock } from '@livestore/utils/effect'
 
 import { events, schema } from '../utils/tests/fixture.ts'
 import { createStore } from './create-store.ts'
@@ -375,6 +375,231 @@ describe('shutdown request ownership', () => {
     }).pipe(Effect.scoped),
   )
 
+  for (const mode of ['returned-hook', 'acquisition-and-cleanup'] as const) {
+    it.effect(`preserves failed shutdown request with ${mode}`, () =>
+      Effect.gen(function* () {
+        const owner = yield* Scope.make()
+        const requestError = UnknownError.make({ cause: 'original shutdown request' })
+        const acquisitionError = UnknownError.make({ cause: 'original acquisition failure' })
+        const cleanupError = new Error('original cleanup defect')
+        const entered = yield* Deferred.make<void>()
+        const release = yield* Deferred.make<void>()
+        const continued = yield* Deferred.make<void>()
+        const finished = yield* Deferred.make<void>()
+        const logs: unknown[] = []
+        const adapter: Adapter = (args) =>
+          Effect.gen(function* () {
+            const session = mode === 'returned-hook' ? yield* makeInMemoryAdapter()(args) : undefined
+            yield* Effect.addFinalizer(() =>
+              Deferred.succeed(entered, undefined).pipe(
+                Effect.andThen(Deferred.await(release)),
+                Effect.andThen(mode === 'acquisition-and-cleanup' ? Effect.die(cleanupError) : Effect.void),
+                Effect.ensuring(
+                  mode === 'acquisition-and-cleanup' ? Deferred.succeed(finished, undefined) : Effect.void,
+                ),
+              ),
+            )
+            yield* args.shutdown(Exit.fail(requestError)).pipe(Effect.exit)
+            yield* Deferred.succeed(continued, undefined)
+            if (session === undefined) return yield* acquisitionError
+            return {
+              ...session,
+              shutdown: () => Effect.die(cleanupError).pipe(Effect.ensuring(Deferred.succeed(finished, undefined))),
+            }
+          }).pipe(Effect.uninterruptible)
+        const creating = yield* createStore({ schema, storeId: `combined-${mode}`, adapter }).pipe(
+          provideOtel({}),
+          Scope.provide(owner),
+          Effect.tapCauseLogPretty,
+          Effect.exit,
+          Effect.provide(
+            Logger.layer([
+              Logger.make(({ message }) => {
+                logs.push(message)
+              }),
+            ]),
+          ),
+          Effect.forkScoped,
+        )
+        yield* Deferred.await(entered)
+        yield* TestClock.adjust(1000)
+        yield* Deferred.await(continued)
+        yield* Deferred.succeed(release, undefined)
+        const result = yield* Fiber.join(creating)
+        expect(Exit.isFailure(result)).toBe(true)
+        if (Exit.isFailure(result) === true) {
+          const reasons = result.cause.reasons
+          expect(reasons.some((reason) => reason._tag === 'Fail' && reason.error === requestError)).toBe(true)
+          expect(reasons.some((reason) => reason._tag === 'Die' && reason.defect === cleanupError)).toBe(true)
+          if (mode === 'acquisition-and-cleanup')
+            expect(reasons.some((reason) => reason._tag === 'Fail' && reason.error === acquisitionError)).toBe(true)
+          expect(reasons[0]?._tag === 'Fail' && reasons[0].error).toBe(requestError)
+        }
+        expect(yield* Deferred.isDone(finished)).toBe(true)
+        expect(logs.length).toBeGreaterThan(0)
+        yield* Scope.close(owner, Exit.void)
+      }).pipe(Effect.scoped),
+    )
+  }
+
+  it.effect('joins detached pre-session finalizer failure after the shutdown soft wait', () =>
+    Effect.gen(function* () {
+      const owner = yield* Scope.make()
+      const entered = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const acquisitionContinued = yield* Deferred.make<void>()
+      const cleanupFinished = yield* Deferred.make<void>()
+      const defect = new Error('detached pre-session finalizer failed')
+      const logs: unknown[] = []
+      const adapter: Adapter = (args) =>
+        Effect.gen(function* () {
+          yield* Effect.addFinalizer(() =>
+            Deferred.succeed(entered, undefined).pipe(
+              Effect.andThen(Deferred.await(release)),
+              Effect.andThen(Effect.die(defect)),
+              Effect.ensuring(Deferred.succeed(cleanupFinished, undefined)),
+            ),
+          )
+          yield* args.shutdown(Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })))
+          yield* Deferred.succeed(acquisitionContinued, undefined)
+          return yield* Effect.interrupt
+        }).pipe(Effect.uninterruptible)
+      const creating = yield* createStore({ schema, storeId: 'detached-pre-session', adapter }).pipe(
+        provideOtel({}),
+        Scope.provide(owner),
+        Effect.tapCauseLogPretty,
+        Effect.exit,
+        Effect.provide(
+          Logger.layer([
+            Logger.make(({ message }) => {
+              logs.push(message)
+            }),
+          ]),
+        ),
+        Effect.forkScoped,
+      )
+      yield* Deferred.await(entered)
+      yield* TestClock.adjust(1000)
+      yield* Deferred.await(acquisitionContinued)
+      yield* Effect.sync(() => expect(creating.pollUnsafe()).toBeUndefined()).pipe(
+        Effect.ensuring(Deferred.succeed(release, undefined)),
+      )
+      const result = yield* Fiber.join(creating)
+      expect(Exit.isFailure(result)).toBe(true)
+      if (Exit.isFailure(result) === true)
+        expect(result.cause.reasons.some((reason) => reason._tag === 'Die' && reason.defect === defect)).toBe(true)
+      expect(yield* Deferred.isDone(cleanupFinished)).toBe(true)
+      expect(logs.length).toBeGreaterThan(0)
+      yield* Scope.close(owner, Exit.void)
+    }).pipe(Effect.scoped),
+  )
+
+  for (const failurePoint of [
+    'interrupted-acquisition',
+    'returned-session-hook',
+    'returned-session-finalizer',
+  ] as const) {
+    it.effect(`keeps acquisition cleanup failure visible for ${failurePoint}`, () =>
+      Effect.gen(function* () {
+        const owner = yield* Scope.make()
+        const logs: unknown[] = []
+        const defect = new Error(`acquisition cleanup failure: ${failurePoint}`)
+        const cleanupFinished = yield* Deferred.make<void>()
+        const adapter: Adapter = (args) =>
+          Effect.gen(function* () {
+            if (failurePoint === 'interrupted-acquisition') {
+              return yield* Effect.gen(function* () {
+                yield* args.shutdown(Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })))
+                return yield* Effect.interrupt
+              }).pipe(
+                Effect.ensuring(Effect.die(defect).pipe(Effect.ensuring(Deferred.succeed(cleanupFinished, undefined)))),
+              )
+            }
+            const session = yield* makeInMemoryAdapter()(args)
+            if (failurePoint === 'returned-session-finalizer')
+              yield* Effect.addFinalizer(() =>
+                Effect.die(defect).pipe(Effect.ensuring(Deferred.succeed(cleanupFinished, undefined))),
+              )
+            yield* args.shutdown(Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })))
+            return {
+              ...session,
+              shutdown:
+                failurePoint === 'returned-session-hook'
+                  ? () => Effect.die(defect).pipe(Effect.ensuring(Deferred.succeed(cleanupFinished, undefined)))
+                  : session.shutdown,
+            }
+          }).pipe(Effect.uninterruptible)
+        const result = yield* createStore({ schema, storeId: `cleanup-${failurePoint}`, adapter }).pipe(
+          provideOtel({}),
+          Scope.provide(owner),
+          Effect.tapCauseLogPretty,
+          Effect.exit,
+          Effect.provide(
+            Logger.layer([
+              Logger.make(({ message }) => {
+                logs.push(message)
+              }),
+            ]),
+          ),
+        )
+        expect(Exit.isFailure(result)).toBe(true)
+        if (Exit.isFailure(result) === true)
+          expect(result.cause.reasons.some((reason) => reason._tag === 'Die' && reason.defect === defect)).toBe(true)
+        expect(yield* Deferred.isDone(cleanupFinished)).toBe(true)
+        expect(logs.length).toBeGreaterThan(0)
+        yield* Scope.close(owner, Exit.void)
+      }).pipe(Effect.scoped),
+    )
+  }
+
+  for (const stage of ['before-session', 'after-session-before-return'] as const) {
+    for (const failAfterShutdown of [false, true]) {
+      it.effect(`classifies intentional acquisition shutdown ${stage}; real failure=${failAfterShutdown}`, () =>
+        Effect.gen(function* () {
+          const owner = yield* Scope.make()
+          const logs: unknown[] = []
+          const failure = UnknownError.make({ cause: 'real failure after intentional shutdown' })
+          const adapter: Adapter = (args) =>
+            Effect.gen(function* () {
+              if (stage === 'before-session') {
+                yield* args.shutdown(Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })))
+                return yield* failAfterShutdown === true ? failure : Effect.interrupt
+              }
+              const session = yield* makeInMemoryAdapter()(args)
+              if (stage === 'after-session-before-return')
+                yield* args.shutdown(Exit.succeed(IntentionalShutdownCause.make({ reason: 'manual' })))
+              if (failAfterShutdown === true) return yield* failure
+              return session
+            }).pipe(Effect.uninterruptible)
+          const result = yield* createStore({ schema, storeId: `intentional-${stage}`, adapter }).pipe(
+            provideOtel({}),
+            Scope.provide(owner),
+            Effect.tapCauseLogPretty,
+            Effect.exit,
+            Effect.provide(
+              Logger.layer([
+                Logger.make(({ message }) => {
+                  logs.push(message)
+                }),
+              ]),
+            ),
+          )
+          expect(Exit.isFailure(result)).toBe(true)
+          if (Exit.isFailure(result) === true) {
+            if (failAfterShutdown === true) {
+              expect(Cause.squash(result.cause)).toBe(failure)
+              expect(logs.length).toBeGreaterThan(0)
+            } else {
+              expect(Cause.hasInterruptsOnly(result.cause)).toBe(true)
+              expect(logs).toEqual([])
+            }
+          }
+          yield* Scope.close(owner, Exit.void)
+        }).pipe(Effect.scoped),
+      )
+    }
+  }
+
   for (const stage of ['before-session', 'after-session-before-return'] as const) {
     it.effect(`rejects admission after an adapter shutdown ${stage} and registers only a returned session's hook`, () =>
       Effect.gen(function* () {
@@ -411,7 +636,11 @@ describe('shutdown request ownership', () => {
             Scope.provide(owner),
           ),
         )
-        expect(Exit.isFailure(result) && Cause.squash(result.cause)).toBe(firstError)
+        expect(Exit.isFailure(result)).toBe(true)
+        if (Exit.isFailure(result) === true)
+          expect(result.cause.reasons.some((reason) => reason._tag === 'Fail' && reason.error === firstError)).toBe(
+            true,
+          )
         const notified = yield* Effect.exit(Deferred.await(notification))
         expect(Exit.isFailure(notified) && Cause.squash(notified.cause)).toBe(firstError)
         if (stage === 'after-session-before-return') yield* Deferred.await(hookFinished)

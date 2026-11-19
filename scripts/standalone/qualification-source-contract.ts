@@ -9,10 +9,11 @@ import { Schema } from '@livestore/utils/effect'
 import {
   consumerGraph,
   digest,
+  git,
   hash,
   relative,
   packPayload,
-  sourceState,
+  sourceState as observeSourceState,
   type SourceChange,
   toolInputs,
   sourceCompatibility,
@@ -22,11 +23,37 @@ import {
   declaredCommands,
   requiredGates,
   sdkNames,
+  supportPaths,
   recipePaths,
   producerChangePaths,
   qualificationFixturePaths,
 } from '../fork-qualification/qualification-recipe.mts'
 import { assertRuntimeSummary } from '../fork-qualification/qualification-runtime.mts'
+import { fullSetupInput, shared } from '../fork-qualification/qualification-source-policy.mts'
+
+// Worktree diff refreshes stale stat entries to distinguish them from edits.
+// Run that refresh against a copy so neither result requires writing the source index.
+export const readSourceState = (root: string, base: string) => {
+  const directory = fs.mkdtempSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../../temp_nocommit/source-observation-'),
+  )
+  const previousIndex = process.env.GIT_INDEX_FILE
+  try {
+    const index = git(root, ['rev-parse', '--path-format=absolute', '--git-path', 'index']).trimEnd()
+    const scratch = path.join(directory, 'index')
+    const modifiedSeconds = fs.statSync(index, { bigint: true }).mtimeNs / 1_000_000_000n
+    fs.copyFileSync(index, scratch)
+    // A newer copied index can hide same-size edits made within Git's racy timestamp window.
+    // Round down to keep the copy at least as conservative as the original.
+    fs.utimesSync(scratch, Number(modifiedSeconds), Number(modifiedSeconds))
+    process.env.GIT_INDEX_FILE = scratch
+    return observeSourceState(root, base)
+  } finally {
+    if (previousIndex === undefined) delete process.env.GIT_INDEX_FILE
+    else process.env.GIT_INDEX_FILE = previousIndex
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+}
 
 const Ref = Schema.Struct({ path: Schema.String, sha256: Schema.String })
 const SourceRow = Schema.Struct({
@@ -134,6 +161,7 @@ const Manifest = Schema.Struct({
   tree: Schema.Array(SourceRow),
   changed: Schema.Array(SourceRow),
   patch: Ref,
+  producerPatch: Schema.optional(Ref),
   build: Ref,
   review: Ref,
   tools: Ref,
@@ -150,6 +178,13 @@ const Manifest = Schema.Struct({
   }),
   baseInventory: Ref,
   baseChanges: Schema.Array(Delta),
+  reviewedProducer: Schema.optional(
+    Schema.Struct({
+      contract: Schema.Literal('livestore-fork-reviewed-source-producer-v1'),
+      base: Schema.String,
+      sourceTreeSha256: Schema.String,
+    }),
+  ),
   producerInputs: Schema.Array(Schema.Struct({ path: Schema.String, sha256: Schema.String })),
   producerChecks: Schema.Array(Schema.Struct({ name: Schema.String, ...Step.fields })),
 })
@@ -174,6 +209,7 @@ export const producerPaths = [
   'scripts/standalone/stage-source-directory.test.ts',
   'scripts/standalone/tsconfig.json.genie.ts',
   'scripts/standalone/tsconfig.json',
+  'scripts/fork-qualification/qualification-source-policy.mts',
   ...recipePaths,
 ]
 const replayAllowed = new Set([...replayChanges, ...producerChangePaths, ...qualificationFixturePaths])
@@ -266,6 +302,69 @@ export const assertQualificationSourceScope = (changed: readonly SourceChange[])
     'Missing reviewed SDK change',
   )
 }
+const verifyPatchPostimage = (root: string, base: string, patch: Buffer, changed: readonly SourceChange[]) => {
+  assert(changed.length > 0, 'Reviewed source scope is empty')
+  // Git apply writes postimage blobs even with a temporary index. Keep both writes in scratch storage.
+  const directory = fs.mkdtempSync(path.join(root, 'temp_nocommit/reviewed-source-index-'))
+  try {
+    const objects = path.join(directory, 'objects')
+    fs.mkdirSync(path.join(objects, 'info'), { recursive: true })
+    const candidateObjects = git(root, ['rev-parse', '--path-format=absolute', '--git-path', 'objects']).trimEnd()
+    fs.writeFileSync(path.join(objects, 'info/alternates'), candidateObjects + '\n')
+    const env = {
+      ...process.env,
+      GIT_INDEX_FILE: path.join(directory, 'index'),
+      GIT_OBJECT_DIRECTORY: objects,
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: '',
+    }
+    git(root, ['read-tree', base], { env })
+    git(root, ['apply', '--cached', '-'], { env, input: patch })
+    const paths = git(root, ['diff', '--cached', '--name-only', '-z', base], { env }).split('\0').filter(Boolean)
+    same(paths.sort(), changed.map((row) => row.path).sort(), 'Reviewed patch path set differs')
+    for (const row of changed) {
+      assert(row.kind === 'file')
+      const mode = git(root, ['ls-files', '--stage', '--', row.path], { env }).split(' ')[0]
+      assert.equal(mode, row.executable === true ? '100755' : '100644', 'Reviewed patch mode differs')
+      assert.equal(
+        hash(git(root, ['show', `:${row.path}`], { env, encoding: 'buffer' })),
+        row.sha256,
+        'Reviewed patch bytes differ',
+      )
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+export const verifyReviewedPatches = (
+  root: string,
+  base: string,
+  patch: Buffer,
+  changed: readonly SourceChange[],
+  producerPatch?: Buffer,
+) => {
+  const product: SourceChange[] = []
+  const producer: SourceChange[] = []
+  for (const row of changed) {
+    assert(row.kind === 'file', 'Reviewed changes must be regular files')
+    assert(!fullSetupInput(row.path) && !shared(row.path), `Excluded reviewed source: ${row.path}`)
+    if (producerPaths.includes(row.path) === true) {
+      assert(
+        producerPatch !== undefined &&
+          (producerChangePaths.includes(row.path) ||
+            row.path === 'scripts/fork-qualification/qualification-source-policy.mts'),
+        `Producer change requires its own reviewed patch: ${row.path}`,
+      )
+      producer.push(row)
+    } else {
+      product.push(row)
+    }
+  }
+  // Replaying each patch against the common base makes overlapping or omitted paths fail exact set comparison.
+  verifyPatchPostimage(root, base, patch, product)
+  if (producerPatch !== undefined) verifyPatchPostimage(root, base, producerPatch, producer)
+}
+
 const decode = <A>(schema: Schema.Codec<A>, bytes: Uint8Array): A =>
   Schema.decodeUnknownSync(schema)(JSON.parse(Buffer.from(bytes).toString('utf8')))
 export const same = (actual: unknown, expected: unknown, message: string) =>
@@ -308,13 +407,24 @@ export const inspectQualification = (args: StageArguments) => {
   same(hash(fs.readFileSync(args.sourcePatch)), hash(patch), 'Source patch argument differs')
   const reverse = spawnSync('git', ['apply', '--reverse', '--check', '--', fs.realpathSync(args.sourcePatch)], {
     cwd: root,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
     encoding: 'utf8',
   })
   assert.equal(reverse.status, 0, 'Reviewed source patch is not applied to this context')
-  const state = sourceState(root, args.sourceBase)
+  const state = readSourceState(root, args.sourceBase)
   same(state.tree, manifest.tree, 'Frozen authored source differs')
   same(state.changed, manifest.changed, 'Frozen changed source differs')
-  assertQualificationSourceScope(state.changed)
+  if (manifest.reviewedProducer === undefined) {
+    assert.equal(manifest.producerPatch, undefined, 'Producer patch requires a reviewed producer')
+    assertQualificationSourceScope(state.changed)
+  } else {
+    const producerPatch = manifest.producerPatch
+    if (producerPatch !== undefined) {
+      assert.equal(manifest.reviewedProducer.base, args.sourceBase, 'Combined producer base differs')
+      assert.equal(manifest.reviewedProducer.sourceTreeSha256, digest(state.tree), 'Combined producer tree differs')
+    }
+    verifyReviewedPatches(root, args.sourceBase, patch, state.changed, producerPatch && read(evidence, producerPatch))
+  }
   const fixtureChanges = state.changed.filter((row) => qualificationFixturePaths.includes(row.path))
   if (fixtureChanges.length > 0) {
     assert(manifest.fixtures !== undefined, 'Missing distinct fixture review')
@@ -331,6 +441,13 @@ export const inspectQualification = (args: StageArguments) => {
     read(evidence, manifest.fixtures.review)
   } else assert.equal(manifest.fixtures, undefined, 'Fixture review does not match source changes')
   const producerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+  const reviewedProducer = manifest.reviewedProducer
+  const verifyProducerPin = () => {
+    if (reviewedProducer === undefined) return
+    const observed = readSourceState(producerRoot, reviewedProducer.base)
+    assert.equal(digest(observed.tree), reviewedProducer.sourceTreeSha256, 'Pinned producer source tree differs')
+  }
+  verifyProducerPin()
   same(
     manifest.producerInputs.map((row) => row.path),
     producerPaths,
@@ -341,7 +458,12 @@ export const inspectQualification = (args: StageArguments) => {
     assert.equal(fs.lstatSync(file).isFile(), true, 'Running recipe must be regular source')
     assert.equal(hash(fs.readFileSync(file)), row.sha256, 'Running producer recipe differs')
     references.set(fs.realpathSync(file), row.sha256)
-    assert.equal(hash(fs.readFileSync(path.join(root, row.path))), row.sha256, 'Producer omitted from frozen source')
+    if (reviewedProducer === undefined || supportPaths.includes(row.path) === true)
+      assert.equal(
+        hash(fs.readFileSync(path.join(root, row.path))),
+        row.sha256,
+        'Producer input differs from frozen source',
+      )
   }
   same(
     manifest.producerChecks.map((row) => row.name),
@@ -367,7 +489,7 @@ export const inspectQualification = (args: StageArguments) => {
   same(tools.commands, declaredCommands(tools.profile, profile.packages.typescript), 'Unrecognized tool commands')
   assert.equal(manifest.external.base, profile.effectUtilsRevision)
   const externalRoot = path.join(root, manifest.external.root)
-  const external = sourceState(externalRoot, manifest.external.base)
+  const external = readSourceState(externalRoot, manifest.external.base)
   same(external.changed, [], 'Pinned generator source is dirty')
   same(external.tree, manifest.external.tree, 'Pinned generator source differs')
   const buildBytes = read(evidence, manifest.build)
@@ -444,5 +566,6 @@ export const inspectQualification = (args: StageArguments) => {
     tools,
     toolInputsSha256: local.toolInputsSha256,
     manifestSha256: hash(manifestBytes),
+    verifyProducerPin,
   }
 }

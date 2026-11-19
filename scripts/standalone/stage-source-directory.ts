@@ -6,15 +6,8 @@ import { parseArgs } from 'node:util'
 
 import { Schema } from '@livestore/utils/effect'
 
-import {
-  digest,
-  fileVector,
-  hash,
-  relative,
-  sourceState,
-  toolInputs,
-} from '../fork-qualification/qualification-observations.mts'
-import { inspectQualification, same, type StageArguments } from './qualification-source-contract.ts'
+import { digest, fileVector, hash, relative, toolInputs } from '../fork-qualification/qualification-observations.mts'
+import { inspectQualification, readSourceState, same, type StageArguments } from './qualification-source-contract.ts'
 
 export { inspectQualification, producerPaths, type StageArguments } from './qualification-source-contract.ts'
 
@@ -141,9 +134,9 @@ export const stageQualification = (args: StageArguments, receiptOperations: Rece
       [...union.keys(), 'candidate-source-inventory.json', 'candidate-artifact-inventory.json'].sort(),
       'Immutable union membership differs',
     )
-    same(sourceState(plan.root, args.sourceBase).tree, plan.state.tree, 'Source changed during materialization')
+    same(readSourceState(plan.root, args.sourceBase).tree, plan.state.tree, 'Source changed during materialization')
     same(
-      sourceState(plan.externalRoot, plan.manifest.external.base).tree,
+      readSourceState(plan.externalRoot, plan.manifest.external.base).tree,
       plan.external.tree,
       'Generator changed during materialization',
     )
@@ -165,11 +158,12 @@ export const stageQualification = (args: StageArguments, receiptOperations: Rece
     closeAttempted = true
     receiptOperations.closeSync(descriptor)
     descriptor = undefined
+    plan.verifyProducerPin()
     for (const [file, expected] of plan.references) {
       assert.equal(hash(fs.readFileSync(file)), expected, 'Qualification input changed during materialization')
     }
     assert.equal(digest(toolInputs(plan.tools)), plan.toolInputsSha256, 'Actual tool inputs changed before publication')
-    same(sourceState(plan.root, args.sourceBase).tree, plan.state.tree, 'Receipt must not change authored source')
+    same(readSourceState(plan.root, args.sourceBase).tree, plan.state.tree, 'Receipt must not change authored source')
     return result
   } catch (primary) {
     // A failed close may already have closed/reused the FD. Never retry it or remove

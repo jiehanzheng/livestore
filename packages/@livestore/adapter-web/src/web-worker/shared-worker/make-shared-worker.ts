@@ -222,6 +222,14 @@ const makeWorkerRunner = Effect.gen(function* () {
     RetireLeaderGeneration: generations.retireByToken,
 
     // Proxied requests
+    GetSourceIncarnation: ({ writeSessionId }) =>
+      generations
+        .runAdmittedRead(writeSessionId, ({ client }) => client.GetSourceIncarnation({}))
+        .pipe(dieOnRpcClientError),
+    GetSourceBackendId: ({ writeSessionId }) =>
+      generations
+        .runAdmittedRead(writeSessionId, ({ client }) => client.GetSourceBackendId({}))
+        .pipe(dieOnRpcClientError),
     BootStatusStream: (payload) =>
       forwardRequestStream('BootStatusStream', (client) => client.BootStatusStream(payload)),
     PushAdmittedWrite: ({ writeSessionId, batch }) =>

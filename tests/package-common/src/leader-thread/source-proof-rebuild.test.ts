@@ -19,7 +19,7 @@ import { PlatformNode } from '@livestore/utils/node'
 
 import { newMemorySource } from './fixture.ts'
 
-for (const stage of ['post-hook', 'after-completion-insert'] as const)
+for (const stage of ['before-post-hook', 'post-hook', 'after-completion-insert'] as const)
   test(`same-identity import ${stage} refuses rebuild completion and destroys incomplete STATE`, async () => {
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -42,6 +42,13 @@ for (const stage of ['post-hook', 'after-completion-insert'] as const)
           ...rawState,
           execute: SqliteDbHelper.makeExecute((...args) => {
             const result = rawState.execute(...args)
+            if (
+              stage === 'before-post-hook' &&
+              args[0].startsWith(`DELETE FROM ${SystemTables.MATERIALIZATION_JOURNAL_META_TABLE}`) === true &&
+              args[0].includes('WHERE seqNumGlobal < ') === true
+            ) {
+              pending.push(Effect.runPromiseWith(runtime)(image.import(bytes)))
+            }
             if (args[0].startsWith(`INSERT OR REPLACE INTO ${SystemTables.REBUILD_META_TABLE}`) === true) {
               completionWrites++
               if (stage === 'after-completion-insert') pending.push(Effect.runPromiseWith(runtime)(image.import(bytes)))
@@ -54,15 +61,34 @@ for (const stage of ['post-hook', 'after-completion-insert'] as const)
             rawState.destroy()
           },
         }
+        const observed: string[] = []
+        let hookReceiver: unknown
         const schema = makeSchema({
           projectionRevision: 'source-proof-rebuild',
           events: [],
           state: State.SQLite.makeState({
             tables: [],
             materializers: {},
-            migrations: { hooks: { post: () => (stage === 'post-hook' ? image.import(bytes) : Effect.void) } },
+            migrations: {
+              hooks: {
+                init: (_db, context) => {
+                  observed.push(`init:${context.sourceIncarnation}`)
+                },
+                pre: (_db, context) => {
+                  observed.push(`pre:${context.sourceIncarnation}`)
+                },
+                post(db, context) {
+                  expect(this).toBe(hookReceiver)
+                  expect(Object.isFrozen(context)).toBe(true)
+                  expect(StateSnapshot.readProvenance(db)).toBeUndefined()
+                  observed.push(`post:${context.sourceIncarnation}`)
+                  return stage === 'post-hook' ? image.import(bytes) : Effect.void
+                },
+              },
+            },
           }),
         })
+        hookReceiver = schema.state.sqlite.migrations.hooks
         const base = Layer.mergeAll(StateSqliteDb.layer(state), Layer.succeed(SourceContext, source))
         const services = Layer.mergeAll(
           base,
@@ -77,8 +103,13 @@ for (const stage of ['post-hook', 'after-completion-insert'] as const)
         yield* Effect.promise(() => Promise.all(pending))
         expect(Exit.isFailure(result)).toBe(true)
         expect(destroyed).toBe(1)
-        expect(completionWrites).toBe(stage === 'post-hook' ? 0 : 1)
+        expect(completionWrites).toBe(stage === 'after-completion-insert' ? 1 : 0)
         expect(proofAtDestroy).toBeUndefined()
+        expect(observed).toEqual(
+          (stage === 'before-post-hook' ? ['init', 'pre'] : ['init', 'pre', 'post']).map(
+            (phase) => `${phase}:${initializedSource.identity.incarnation}`,
+          ),
+        )
       }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer), Effect.scoped),
     )
   })

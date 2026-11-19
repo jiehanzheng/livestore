@@ -1,9 +1,26 @@
 import type { BootWarningReason } from '@livestore/common'
 import { UnknownError } from '@livestore/common'
 import { shouldNeverHappen } from '@livestore/utils'
-import { Effect, Schema } from '@livestore/utils/effect'
+import { Effect, Schema, Stream } from '@livestore/utils/effect'
 import { Opfs, WebError } from '@livestore/utils/effect/browser'
 import { nanoid } from '@livestore/utils/nanoid'
+
+import type { OpenSessionFrame } from './worker-schema.ts'
+
+export const confirmPersistedAdmission =
+  (required: boolean | undefined) =>
+  <E, R>(
+    stream: Stream.Stream<typeof OpenSessionFrame.Type, E, R>,
+  ): Stream.Stream<typeof OpenSessionFrame.Type, E | UnknownError, R> =>
+    required !== true
+      ? stream
+      : stream.pipe(
+          Stream.mapEffect((frame) =>
+            frame._tag === 'Pull' || frame.persisted === true
+              ? Effect.succeed(frame)
+              : Effect.fail(UnknownError.make({ cause: 'Leader did not confirm persistent LiveStore storage' })),
+          ),
+        )
 
 export const getPersistedId = (key: string, storageType: 'session' | 'local') => {
   const makeId = () => nanoid(5)

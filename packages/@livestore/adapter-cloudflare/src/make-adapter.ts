@@ -15,24 +15,13 @@ import {
   StateHead,
 } from '@livestore/common'
 import type { CfTypes } from '@livestore/common-cf'
-import {
-  type DevtoolsOptions,
-  LeaderThreadCtx,
-  makeLeaderThreadLayer,
-  streamEventsWithSyncState,
-} from '@livestore/common/leader-thread'
+import { type DevtoolsOptions, prepareLeaderThread, streamEventsWithSyncState } from '@livestore/common/leader-thread'
 import { getStateDbBaseName } from '@livestore/common/schema'
-import {
-  initializeSource,
-  makeHostedSource,
-  SourceEvents,
-  SourceIdentity,
-  type SourceOwner,
-} from '@livestore/common/source-db'
+import { initializeSource, makeHostedSource, SourceIdentity, type SourceOwner } from '@livestore/common/source-db'
 import { LiveStoreEvent } from '@livestore/livestore'
 import { CF_SQL_VFS_REQUIRED_PRAGMAS, sqliteDbFactory } from '@livestore/sqlite-wasm/cf'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
-import { Effect, FetchHttpClient, Layer, Queue, SubscriptionRef, Stream, WebChannel } from '@livestore/utils/effect'
+import { Effect, FetchHttpClient, Queue, SubscriptionRef, Stream, WebChannel } from '@livestore/utils/effect'
 
 import { makeSqliteDb as makeDoSqliteDb } from './make-sqlite-db.ts'
 import * as StateFiles from './state-files.ts'
@@ -96,7 +85,9 @@ export const makeAdapter =
       ).pipe(mapToAdapterError)
 
       const stateFileName = `${getStateDbBaseName(schema)}@${liveStoreStorageFormatVersion}.db`
-      const { leaderThread, initialSnapshot } = yield* transactionHost.runTransaction(
+      // Hosted SOURCE reads must stay on the fiber that owns the native rebuild transaction.
+      // Live sync can write to the same host, so start it only after that transaction commits.
+      const { start } = yield* transactionHost.runTransaction(
         Effect.gen(function* () {
           yield* StateFiles.register(storage, stateFileName).pipe(UnknownError.mapToUnknownError)
 
@@ -114,71 +105,60 @@ export const makeAdapter =
           dbState.transactionHost = transactionHost
 
           const shutdownChannel = yield* WebChannel.noopChannel<any, any>()
-          const sqliteDbLayer = Layer.mergeAll(StateSqliteDb.layer(dbState), EventlogSqliteDb.layer(dbEventlog))
-          const stateServicesLayer = Layer.mergeAll(StateHead.layer, MaterializationJournal.layer).pipe(
-            Layer.provide(sqliteDbLayer),
+          const stateHead = yield* StateHead.make.pipe(Effect.provideService(StateSqliteDb.StateSqliteDb, dbState))
+          const journal = yield* MaterializationJournal.make.pipe(
+            Effect.provideService(StateSqliteDb.StateSqliteDb, dbState),
           )
 
-          const layer = yield* Layer.build(
-            makeLeaderThreadLayer({
-              initializedSource,
-              schema,
-              storeId,
-              clientId,
-              makeSqliteDb,
-              syncOptions,
-              devtoolsOptions,
-              shutdownChannel,
-              syncPayloadEncoded,
-              syncPayloadSchema,
-              params,
-            }).pipe(Layer.provide(Layer.mergeAll(sqliteDbLayer, stateServicesLayer))),
+          return yield* prepareLeaderThread({
+            initializedSource,
+            schema,
+            storeId,
+            clientId,
+            makeSqliteDb,
+            syncOptions,
+            devtoolsOptions,
+            shutdownChannel,
+            syncPayloadEncoded,
+            syncPayloadSchema,
+            params,
+          }).pipe(
+            Effect.provideService(StateSqliteDb.StateSqliteDb, dbState),
+            Effect.provideService(EventlogSqliteDb.EventlogSqliteDb, dbEventlog),
+            Effect.provideService(StateHead.StateHead, stateHead),
+            Effect.provideService(MaterializationJournal.MaterializationJournal, journal),
           )
-
-          return yield* Effect.gen(function* () {
-            const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } =
-              yield* LeaderThreadCtx
-
-            const initialLeaderHead = yield* SourceEvents.readClientHead(dbEventlog.handle)
-
-            const leaderThread = ClientSessionLeaderThreadProxy.of(
-              {
-                events: {
-                  pull: ({ cursor }) => syncProcessor.pull({ cursor }),
-                  push: syncProcessor.push,
-                  stream: (options) =>
-                    streamEventsWithSyncState({
-                      dbEventlog,
-                      syncState: syncProcessor.syncState,
-                      options,
-                    }).pipe(Stream.mapError(toAdapterError)),
-                },
-                initialState: {
-                  leaderHead: initialLeaderHead,
-                  migrationsReport: initialState.migrationsReport,
-                  storageMode: 'persisted',
-                },
-                export: exportSnapshot,
-                getEventlogData: Effect.fail(
-                  new UnknownError({ cause: 'Native Durable Object SOURCE image export is unsupported' }),
-                ),
-                syncState: syncProcessor.syncState,
-                sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
-                networkStatus,
-              },
-              {
-                // overrides: testing?.overrides?.clientSession?.leaderThreadProxy
-              },
-            )
-
-            const initialSnapshot = yield* exportSnapshot
-
-            return { leaderThread, initialSnapshot }
-          }).pipe(Effect.provide(layer))
         }),
       )
 
-      syncInMemoryDb.import(initialSnapshot)
+      const { syncProcessor, extraIncomingMessagesQueue, initialState, networkStatus, exportSnapshot } = yield* start
+      syncInMemoryDb.import(yield* exportSnapshot)
+      // Live sync may advance SOURCE before the session subscribes. Its cursor must describe the imported bytes.
+      const initialLeaderHead = StateHead.readFromDb(syncInMemoryDb)
+      const leaderThread = ClientSessionLeaderThreadProxy.of({
+        events: {
+          pull: ({ cursor }) => syncProcessor.pull({ cursor }),
+          push: syncProcessor.push,
+          stream: (options) =>
+            streamEventsWithSyncState({
+              dbEventlog,
+              syncState: syncProcessor.syncState,
+              options,
+            }).pipe(Stream.mapError(toAdapterError)),
+        },
+        initialState: {
+          leaderHead: initialLeaderHead,
+          migrationsReport: initialState.migrationsReport,
+          storageMode: 'persisted',
+        },
+        export: exportSnapshot,
+        getEventlogData: Effect.fail(
+          new UnknownError({ cause: 'Native Durable Object SOURCE image export is unsupported' }),
+        ),
+        syncState: syncProcessor.syncState,
+        sendDevtoolsMessage: (message) => Queue.offer(extraIncomingMessagesQueue, message),
+        networkStatus,
+      })
 
       const lockStatus = yield* SubscriptionRef.make<LockStatus>('has-lock')
 

@@ -10,6 +10,7 @@ import { Schema } from '@livestore/utils/effect'
 import {
   consumerGraph,
   digest,
+  git,
   hash,
   packPayload,
   sourceState,
@@ -25,7 +26,7 @@ import {
   supportPaths,
 } from '../fork-qualification/qualification-recipe.mts'
 import { expectedSkippedCases } from '../fork-qualification/qualification-runtime.mts'
-import { assertQualificationSourceScope } from './qualification-source-contract.ts'
+import { assertQualificationSourceScope, verifyReviewedPatches } from './qualification-source-contract.ts'
 import {
   inspectQualification,
   producerPaths,
@@ -78,7 +79,9 @@ const coordinatorPaths = [
 
 // Synthetic receipts exercise the filesystem/receipt consumer, not SDK correctness.
 // Selection still uses the real pinned pnpm command, and Git/source inspection is real.
-const fixture = (absoluteLink = false, changedPaths = changed) => {
+const gitToolBase = () => git(repository, ['rev-parse', 'HEAD']).trim()
+
+const fixture = (absoluteLink = false, changedPaths = changed, separate = false) => {
   const home = fs.mkdtempSync(path.join(repository, 'temp_nocommit/qualification-producer-test-'))
   try {
     const root = path.join(home, 'source')
@@ -106,6 +109,8 @@ const fixture = (absoluteLink = false, changedPaths = changed) => {
       }),
     )(JSON.parse(toolsBytes.toString()))
     for (const name of producerPaths) write(name, fs.readFileSync(path.join(repository, name)))
+    if (separate === true) write('scripts/standalone/qualification-source-contract.ts', '// candidate producer\n')
+
     for (const name of names) {
       write(
         `packages/${name}/package.json`,
@@ -227,9 +232,18 @@ const fixture = (absoluteLink = false, changedPaths = changed) => {
       external: { root: 'repos/effect-utils', base: externalBase, tree: external.tree },
       baseInventory: json({ snapshotFiles: baseSnapshot }),
       baseChanges: sourceCompatibility(root, state.tree, baseSnapshot),
+      ...(separate === true
+        ? {
+            reviewedProducer: {
+              contract: 'livestore-fork-reviewed-source-producer-v1',
+              base: gitToolBase(),
+              sourceTreeSha256: digest(sourceState(repository, gitToolBase()).tree),
+            },
+          }
+        : {}),
       producerInputs: producerPaths.map((name) => ({
         path: name,
-        sha256: hash(fs.readFileSync(path.join(root, name))),
+        sha256: hash(fs.readFileSync(path.join(separate === true ? repository : root, name))),
       })),
       producerChecks: ['producer-typecheck', 'tests', 'source-format', 'type-aware-lint'].map((name) => ({
         name,
@@ -277,6 +291,136 @@ const fixture = (absoluteLink = false, changedPaths = changed) => {
     throw error
   }
 }
+
+const gitStoreSnapshot = (root: string) => {
+  const index = fs.readFileSync(path.join(root, '.git/index'))
+  const objects = path.join(root, '.git/objects')
+  const files = fs.readdirSync(objects, { recursive: true, withFileTypes: true })
+  return {
+    index: hash(index),
+    stagedEntries: git(root, ['ls-files', '--stage', '-z'], { encoding: 'buffer' }),
+    objects: files
+      .filter((file) => file.isFile())
+      .map((file) => path.join(file.parentPath, file.name))
+      .sort()
+      .map((file) => [path.relative(objects, file), hash(fs.readFileSync(file))]),
+  }
+}
+
+test('combined source requires disjoint exact product and producer postimages', () => {
+  const recovery = 'packages/@livestore/common/src/migration.ts'
+  const producer = 'scripts/standalone/qualification-source-contract.ts'
+  const f = fixture(false, [recovery, producer], true)
+  try {
+    const base = f.binding.base
+    const changed = sourceState(f.root, base).changed
+    const patch = (name: string) => Buffer.from(git(f.root, ['diff', '--binary', base, '--', name]))
+    const productPatch = patch(recovery)
+    const producerPatch = patch(producer)
+    const combined = Buffer.concat([productPatch, producerPatch])
+    const verify = (product: Buffer, tooling?: Buffer) => verifyReviewedPatches(f.root, base, product, changed, tooling)
+
+    verify(productPatch, producerPatch)
+    assert.throws(() => verify(productPatch), /Producer change requires its own reviewed patch/)
+    assert.throws(() => verify(combined, producerPatch), /Reviewed patch path set differs/)
+    assert.throws(() => verify(productPatch, combined), /Reviewed patch path set differs/)
+    assert.throws(() => verify(producerPatch, producerPatch), /Reviewed patch path set differs/)
+    const mutated = Buffer.from(
+      productPatch.toString().replace('+export const fixture = 1', '+export const fixture = 2'),
+    )
+    assert.throws(() => verify(mutated, producerPatch), /Reviewed patch bytes differ/)
+  } finally {
+    f.dispose()
+  }
+})
+
+test('reviewed source stages a product tree under a separately pinned producer', () => {
+  const f = fixture(false, ['packages/@livestore/common/src/migration.ts'], true)
+  try {
+    const pin = f.binding.reviewedProducer!
+    const unchanged = path.join(f.root, 'package.json')
+    git(f.root, ['config', 'diff.autoRefreshIndex', 'true'])
+    const original = gitStoreSnapshot(f.root)
+    fs.utimesSync(unchanged, 1, 1)
+    git(f.root, ['diff', '--no-ext-diff', '--name-only', '-z', f.binding.base])
+    const refreshed = gitStoreSnapshot(f.root)
+    assert.notEqual(refreshed.index, original.index)
+    assert.deepEqual(refreshed.stagedEntries, original.stagedEntries)
+    assert.deepEqual(refreshed.objects, original.objects)
+    fs.utimesSync(unchanged, 2, 2)
+    const gitBefore = gitStoreSnapshot(f.root)
+    const scratchDirectories = () =>
+      [path.join(repository, 'temp_nocommit'), path.join(f.root, 'temp_nocommit')].map((directory) =>
+        fs
+          .readdirSync(directory)
+          .filter((name) => /^(source-observation|reviewed-source-index)-/.test(name))
+          .sort(),
+      )
+    const scratchBefore = scratchDirectories()
+    const rebind = (binding: typeof f.binding) => {
+      const review = f.json({
+        contract: 'livestore-fork-qualification-source-review-v1',
+        bindingSha256: digest(binding),
+      })
+      f.args.sourceSnapshot = f.json({ ...binding, review }).path
+    }
+    rebind({ ...f.binding, reviewedProducer: { ...pin, base: '0'.repeat(40) } })
+    assert.throws(() => inspectQualification(f.args), /Source base changed/)
+    rebind({ ...f.binding, reviewedProducer: { ...pin, sourceTreeSha256: '0'.repeat(64) } })
+    assert.throws(() => inspectQualification(f.args), /Pinned producer source tree differs/)
+    const producerInputs = [...f.binding.producerInputs]
+    producerInputs[0] = { ...producerInputs[0]!, sha256: '0'.repeat(64) }
+    rebind({ ...f.binding, producerInputs })
+    assert.throws(() => inspectQualification(f.args), /Running producer recipe differs/)
+    const { reviewedProducer: _pin, ...legacy } = f.binding
+    rebind(legacy)
+    assert.throws(() => inspectQualification(f.args), /Undeclared source scope/)
+
+    const patch = path.join(f.home, 'wrong-mode.patch')
+    const bytes = fs
+      .readFileSync(f.patch, 'utf8')
+      .replace(/^(diff --git[^\n]+)\n/m, '$1\nold mode 100644\nnew mode 100755\n')
+    fs.writeFileSync(patch, bytes)
+    f.args.sourcePatch = patch
+    rebind({ ...f.binding, patch: { path: patch, sha256: hash(bytes) } })
+    assert.throws(() => inspectQualification(f.args), /Reviewed patch mode differs/)
+    f.args.sourcePatch = f.patch
+
+    const staleReview = f.json({
+      contract: 'livestore-fork-qualification-source-review-v1',
+      bindingSha256: '0'.repeat(64),
+    })
+    f.args.sourceSnapshot = f.json({ ...f.binding, review: staleReview }).path
+    assert.throws(() => inspectQualification(f.args), /Root-reviewed source\/recipe\/build binding differs/)
+    assert.deepEqual(scratchDirectories(), scratchBefore, 'Refused staging retained a scratch index')
+
+    rebind(f.binding)
+    const result = stageQualification(f.args)
+    assert.equal(result.qualificationOnly, true)
+    assert.equal(result.commitEligible, false)
+    const gitAfter = gitStoreSnapshot(f.root)
+    assert.deepEqual(gitAfter.stagedEntries, gitBefore.stagedEntries, 'Staging changed the index entries')
+    assert.deepEqual(gitAfter.objects, gitBefore.objects, 'Staging changed the Git object store')
+    assert.equal(gitAfter.index, gitBefore.index, 'Staging changed the index bytes')
+    assert.deepEqual(scratchDirectories(), scratchBefore, 'Successful staging retained a scratch index')
+    const producerFile = 'scripts/standalone/qualification-source-contract.ts'
+    assert.deepEqual(
+      fs.readFileSync(path.join(f.args.output, producerFile)),
+      fs.readFileSync(path.join(f.root, producerFile)),
+    )
+  } finally {
+    f.dispose()
+  }
+})
+
+test('reviewed source does not authorize shared dependency inputs', () => {
+  const f = fixture(false, ['pnpm-lock.yaml'], true)
+  try {
+    assert.throws(() => inspectQualification(f.args), /Excluded reviewed source: pnpm-lock.yaml/)
+  } finally {
+    f.dispose()
+  }
+})
 
 test('freezes normal-selected bytes and relocated source links, without claiming commit eligibility', () => {
   const f = fixture()

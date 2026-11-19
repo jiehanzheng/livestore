@@ -14,6 +14,7 @@ export interface OwnedCreationBoundary {
     | 'exclusive-indexed-db-creation'
     | 'exclusive-node-file-creation'
     | 'exclusive-opfs-source-association'
+    | 'exclusive-opfs-source-recovery'
     | 'exclusive-expo-source-namespace'
     | 'exclusive-native-source-namespace'
   readonly isHeld: () => boolean
@@ -49,7 +50,10 @@ export const invalidateFreshSource = (source: SourceHandle): void => {
 }
 
 /** Consume before waiting for initialization admission: cancellation/failure cannot recycle a creation receipt. */
-export const consumeFreshSource = (source: SourceHandle, fresh: FreshSource): Effect.Effect<void, SourceDbError> =>
+export const consumeFreshSource = (
+  source: SourceHandle,
+  fresh: FreshSource,
+): Effect.Effect<OwnedCreationBoundary['kind'], SourceDbError> =>
   Effect.try({
     try: () => {
       const binding = bindings.get(fresh)
@@ -65,6 +69,7 @@ export const consumeFreshSource = (source: SourceHandle, fresh: FreshSource): Ef
         binding.boundary.isHeld() === false
       )
         throw new Error('Missing, spent, foreign or unowned SOURCE creation receipt')
+      return binding.boundary.kind
     },
     catch: (cause) => new SourceDbError({ operation: 'initialize', cause }),
   })

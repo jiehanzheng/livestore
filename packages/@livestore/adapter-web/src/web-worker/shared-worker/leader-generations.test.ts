@@ -14,6 +14,36 @@ const publish = <A>(generations: Effect.Success<ReturnType<typeof makeLeaderGene
     return generation
   })
 
+it('refuses a SOURCE read across retirement of its admitted leader', () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const generations = yield* makeLeaderGenerations<string>()
+        const old = yield* publish(generations, 'original')
+        const opened = yield* Deferred.make<void>()
+        yield* generations
+          .openSession(() => Stream.concat(Stream.make('admitted'), Stream.never), admitted, 'old-store')
+          .pipe(
+            Stream.runForEach(() => Deferred.succeed(opened, undefined)),
+            Effect.forkScoped,
+          )
+        yield* Deferred.await(opened)
+        expect(yield* generations.runAdmittedRead('old-store', Effect.succeed)).toBe('original')
+        const started = yield* Deferred.make<void>()
+        const read = yield* generations
+          .runAdmittedRead('old-store', () => Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)))
+          .pipe(Effect.exit, Effect.forkScoped)
+        yield* Deferred.await(started)
+        yield* generations.retire(old)
+        yield* publish(generations, 'replacement')
+        expect(Exit.isFailure(yield* Fiber.join(read))).toBe(true)
+        expect(Exit.isFailure(yield* generations.runAdmittedRead('old-store', Effect.succeed).pipe(Effect.exit))).toBe(
+          true,
+        )
+      }),
+    ),
+  ))
+
 it('waits for the newer owner to admit a follower and ignores delayed retirement of the old owner', () =>
   Effect.runPromise(
     Effect.scoped(

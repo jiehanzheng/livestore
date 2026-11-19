@@ -78,15 +78,18 @@ This likely means the schema has changed in an incompatible way.
   })
 
   let processedEvents = 0
-  yield* Stream.paginate(EventSequenceNumber.Client.ROOT, (lastId) =>
+  const pages = Stream.paginate(EventSequenceNumber.Client.ROOT, (lastId) =>
     readPage(dbEventlog.handle, { since: lastId, limit: batchSize, includeClientOnly: true }).pipe(
       Effect.map((rows) => {
         const last = rows.at(-1)
         return [rows, last === undefined ? Option.none() : Option.some(last.event.seqNum)] as const
       }),
     ),
-  ).pipe(
-    Stream.bufferArray({ capacity: 2 }),
+  )
+  // Prefetch runs in another fiber, which cannot read SOURCE through the native rebuild transaction.
+  const replayPages =
+    dbEventlog.persistence.kind === 'native-shared-host' ? pages : pages.pipe(Stream.bufferArray({ capacity: 2 }))
+  yield* replayPages.pipe(
     Stream.runForEachArray((rows) =>
       Effect.forEach(
         rows,

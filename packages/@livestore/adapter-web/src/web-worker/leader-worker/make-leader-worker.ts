@@ -3,7 +3,7 @@ import type * as otel from '@opentelemetry/api'
 import { mapToAdapterError } from '@livestore/common'
 import type { BootStatus, BootWarningReason, LogConfig, SqliteDb, SyncOptions } from '@livestore/common'
 import { MaterializationJournal } from '@livestore/common'
-import { Devtools, EventlogSqliteDb, StateHead, StateSqliteDb, UnknownError } from '@livestore/common'
+import { Devtools, EventlogSqliteDb, SourceIdentity, StateHead, StateSqliteDb, UnknownError } from '@livestore/common'
 import type { DevtoolsOptions, StreamEventsOptions } from '@livestore/common/leader-thread'
 import {
   configureConnection,
@@ -13,7 +13,7 @@ import {
   streamEventsWithSyncState,
 } from '@livestore/common/leader-thread'
 import { LiveStoreEvent, type LiveStoreSchema } from '@livestore/common/schema'
-import { fromSyncSource, type SourceOwner } from '@livestore/common/source-db'
+import { fromSyncSource, SourceEvents, type SourceOwner } from '@livestore/common/source-db'
 import { sqliteDbFactory } from '@livestore/sqlite-wasm/browser'
 import { loadSqlite3Wasm } from '@livestore/sqlite-wasm/load-wasm'
 import { isDevEnv, LS_DEV } from '@livestore/utils'
@@ -23,6 +23,7 @@ import {
   FetchHttpClient,
   identity,
   Layer,
+  Option,
   OtelTracer,
   Queue,
   References,
@@ -171,6 +172,11 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
           // Check OPFS availability and determine storage mode
           const opfsCheck = yield* checkOpfsAvailability
           const useOpfs = opfsCheck === undefined
+          if (useOpfs === false && storageOptions.requirePersistence === true) {
+            return yield* UnknownError.make({
+              cause: 'Persistent LiveStore storage is required, but leader OPFS is unavailable',
+            })
+          }
 
           // Track boot warning to emit later
           let bootWarning: BootStatus | undefined
@@ -239,6 +245,7 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
           const dbEventlog = yield* fromSyncSource(nativeSource, creation, namespace?.isHeld)
           sourceOwner = dbEventlog
           const initializedSource = yield* Eventlog.initializeSource(dbEventlog)
+          if (discovery?.finishInitialization !== undefined) yield* discovery.finishInitialization
           const dbState = yield* useOpfs === true ? makeOpfsDb('state') : makeInMemoryDb()
 
           // Clean up old state database files after successful database creation
@@ -312,10 +319,22 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
           }).pipe(provideLeaderThread),
         OpenSession: (request) =>
           Effect.gen(function* () {
+            if (request.requirePersistence === true) {
+              const stateDb = yield* StateSqliteDb.StateSqliteDb
+              if (stateDb.metadata._tag !== 'opfs') {
+                return yield* UnknownError.make({
+                  cause: 'Persistent LiveStore storage is required, but the leader uses in-memory storage',
+                })
+              }
+            }
             const { syncProcessor, initialState } = yield* LeaderThreadCtx
             const { admission, queue } = yield* syncProcessor.openSession(request)
             return Stream.concat(
-              Stream.succeed({ ...admission, migrationsReport: initialState.migrationsReport }),
+              Stream.succeed({
+                ...admission,
+                migrationsReport: initialState.migrationsReport,
+                ...(request.requirePersistence === true ? { persisted: true as const } : {}),
+              }),
               Stream.fromQueue(queue).pipe(Stream.map((item) => ({ _tag: 'Pull' as const, item }))),
             )
           }).pipe(provideLeaderThread, Stream.unwrap),
@@ -351,6 +370,27 @@ const makeWorkerRunnerInner = ({ schema, sync: syncOptions, syncPayloadSchema }:
             provideLeaderThread,
             Effect.withSpan('@livestore/adapter-web:worker:Export'),
           ),
+        GetSourceIncarnation: () =>
+          Effect.gen(function* () {
+            const stateDb = yield* StateSqliteDb.StateSqliteDb
+            if (stateDb.metadata._tag !== 'opfs') {
+              return yield* UnknownError.make({ cause: 'This leader does not expose a persisted SOURCE incarnation' })
+            }
+            const { handle } = yield* EventlogSqliteDb.EventlogSqliteDb
+            const { incarnation } = yield* SourceIdentity.read(handle)
+            return incarnation
+          }).pipe(provideLeaderThread, mapToAdapterError),
+        GetSourceBackendId: () =>
+          Effect.gen(function* () {
+            const stateDb = yield* StateSqliteDb.StateSqliteDb
+            if (stateDb.metadata._tag !== 'opfs') {
+              return yield* UnknownError.make({
+                cause: 'This leader does not expose a persisted SOURCE backend identity',
+              })
+            }
+            const { handle } = yield* EventlogSqliteDb.EventlogSqliteDb
+            return Option.getOrNull(yield* SourceEvents.readBackendId(handle))
+          }).pipe(provideLeaderThread, mapToAdapterError),
         ExportEventlog: () =>
           EventlogSqliteDb.EventlogSqliteDb.pipe(
             Effect.flatMap((dbEventlog) =>

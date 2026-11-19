@@ -1193,6 +1193,37 @@ export class Store<TSchema extends LiveStoreSchema = LiveStoreSchema.Any, TConte
   }
 
   /**
+   * Reads the opaque incarnation of the persisted eventlog owned by this open Store.
+   * Rejects if the Store closes or its adapter does not expose a persisted SOURCE.
+   * After recovery, call this on the reopened Store to read the new owner.
+   */
+  async getSourceIncarnation(): Promise<string> {
+    const session = this[StoreInternalsSymbol]
+    if (session.isShutdown === true) throw new Error('Cannot read the SOURCE incarnation of a closed Store')
+    const read = session.clientSession.leaderThread.getSourceIncarnation
+    if (read === undefined) throw new Error('This adapter does not expose a persisted SOURCE incarnation')
+    const incarnation = await this.runEffectPromise(read)
+    if (this[StoreInternalsSymbol].isShutdown === true)
+      throw new Error('Store closed while reading the SOURCE incarnation')
+    return incarnation
+  }
+
+  /**
+   * Reads the persisted backend identity through this Store's admitted SOURCE owner.
+   * Returns null for a persisted SOURCE that has yet to bind to a backend.
+   */
+  async getSourceBackendId(): Promise<string | null> {
+    const session = this[StoreInternalsSymbol]
+    if (session.isShutdown === true) throw new Error('Cannot read the backend identity of a closed Store')
+    const read = session.clientSession.leaderThread.getSourceBackendId
+    if (read === undefined) throw new Error('This adapter does not expose a persisted SOURCE backend identity')
+    const backendId = await this.runEffectPromise(read)
+    if (this[StoreInternalsSymbol].isShutdown === true)
+      throw new Error('Store closed while reading the backend identity')
+    return backendId
+  }
+
+  /**
    * Requests shutdown of the Store and client session with a bounded wait.
    * Use shutdownAndWait for actual local teardown completion; remote owners are independent.
    *

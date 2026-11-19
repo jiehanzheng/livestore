@@ -62,30 +62,28 @@ import { LeaderThreadCtx } from './types.ts'
 
 export type { MakeLeaderThreadLayerParams } from './leader-thread-options.ts'
 
-export const makeLeaderThreadLayer = ({
-  initializedSource,
-  schema,
-  storeId,
-  clientId,
-  syncPayloadSchema = Schema.Json,
-  syncPayloadEncoded,
-  makeSqliteDb,
-  syncOptions,
-  devtoolsOptions,
-  shutdownChannel,
-  bootWarning,
-  params,
-  testing,
-}: MakeLeaderThreadLayerParams): Layer.Layer<
-  LeaderThreadCtx,
-  AdapterError,
-  | EventlogSqliteDb.EventlogSqliteDb
-  | HttpClient.HttpClient
-  | MaterializationJournal.MaterializationJournal
-  | Scope.Scope
-  | StateHead.StateHead
-  | StateSqliteDb.StateSqliteDb
-> =>
+/** Prepare the local projection on the caller fiber. The returned start effect can contact the sync backend. */
+export const prepareLeaderThread = (params: MakeLeaderThreadLayerParams) =>
+  prepareLeaderThreadBoot(params, { deferSync: true })
+
+const prepareLeaderThreadBoot = (
+  {
+    initializedSource,
+    schema,
+    storeId,
+    clientId,
+    syncPayloadSchema = Schema.Json,
+    syncPayloadEncoded,
+    makeSqliteDb,
+    syncOptions,
+    devtoolsOptions,
+    shutdownChannel,
+    bootWarning,
+    params,
+    testing,
+  }: MakeLeaderThreadLayerParams,
+  { deferSync }: { deferSync: boolean },
+) =>
   Effect.gen(function* () {
     const dbState = yield* StateSqliteDb.StateSqliteDb
     const dbEventlog = yield* EventlogSqliteDb.EventlogSqliteDb
@@ -128,14 +126,14 @@ export const makeLeaderThreadLayer = ({
             .backend({ storeId, clientId, payload: syncPayloadDecoded })
             .pipe(Effect.provide(Layer.succeed(KeyValueStore.KeyValueStore, makeBackendIdKeyValueStore(dbEventlog))))
 
-    if (syncBackend !== undefined) {
-      // We're already connecting to the sync backend concurrently
-      yield* syncBackend.connect.pipe(Effect.tapCauseLogPretty, Effect.forkScoped)
-    }
+    const connect = syncBackend?.connect.pipe(Effect.tapCauseLogPretty, Effect.forkScoped)
+    if (deferSync === false && connect !== undefined) yield* connect
 
+    const initialSyncOptions = syncOptions?.initialSyncOptions ?? { _tag: 'Skip' }
     const initialBlockingSyncContext = yield* makeInitialBlockingSyncContext({
-      initialSyncOptions: syncOptions?.initialSyncOptions ?? { _tag: 'Skip' },
+      initialSyncOptions,
       bootStatusQueue,
+      deferSync,
     })
 
     const materializeEvent = yield* makeMaterializeEvent({ schema })
@@ -223,18 +221,50 @@ export const makeLeaderThreadLayer = ({
     yield* SourceIdentity.assertInitialized(dbEventlog.handle, initializedSource)
     const layer = Layer.succeed(LeaderThreadCtx, LeaderThreadCtx.of(ctx))
 
-    ctx.initialState = yield* bootLeaderThread({
+    const boot = bootLeaderThread({
       migrationsReport,
       initialBlockingSyncContext,
+      deferredSyncTimeout:
+        deferSync === true && initialSyncOptions._tag === 'Blocking' ? initialSyncOptions.timeout : undefined,
       devtoolsOptions,
     }).pipe(Effect.provide(layer))
 
-    return layer
+    if (deferSync === false) {
+      ctx.initialState = yield* boot
+      return { layer, start: Effect.succeed(ctx) }
+    }
+
+    // A native host must release its write permit before starting backend I/O.
+    const services = yield* Effect.context<
+      EventlogSqliteDb.EventlogSqliteDb | StateSqliteDb.StateSqliteDb | HttpClient.HttpClient
+    >()
+    const start = Effect.gen(function* () {
+      if (connect !== undefined) yield* connect
+      ctx.initialState = yield* boot
+      return ctx
+    }).pipe(Effect.provide(services), mapToAdapterError, Effect.tapCauseLogPretty)
+    return { layer, start }
   }).pipe(
     Effect.withSpan('@livestore/common:leader-thread:boot'),
     Effect.withSpanScoped('@livestore/common:leader-thread'),
     mapToAdapterError,
     Effect.tapCauseLogPretty,
+  )
+
+export const makeLeaderThreadLayer = (
+  params: MakeLeaderThreadLayerParams,
+): Layer.Layer<
+  LeaderThreadCtx,
+  AdapterError,
+  | EventlogSqliteDb.EventlogSqliteDb
+  | HttpClient.HttpClient
+  | MaterializationJournal.MaterializationJournal
+  | Scope.Scope
+  | StateHead.StateHead
+  | StateSqliteDb.StateSqliteDb
+> =>
+  prepareLeaderThreadBoot(params, { deferSync: false }).pipe(
+    Effect.map(({ layer }) => layer),
     Layer.unwrap,
   )
 
@@ -294,9 +324,11 @@ const getInitialSyncState = ({
 const makeInitialBlockingSyncContext = ({
   initialSyncOptions,
   bootStatusQueue,
+  deferSync,
 }: {
   initialSyncOptions: InitialSyncOptions
   bootStatusQueue: Queue.Queue<BootStatus>
+  deferSync: boolean
 }) =>
   Effect.gen(function* () {
     const ctx = {
@@ -307,7 +339,7 @@ const makeInitialBlockingSyncContext = ({
 
     const blockingDeferred = initialSyncOptions._tag === 'Blocking' ? yield* Deferred.make<void>() : undefined
 
-    if (blockingDeferred !== undefined && initialSyncOptions._tag === 'Blocking') {
+    if (deferSync === false && blockingDeferred !== undefined && initialSyncOptions._tag === 'Blocking') {
       yield* Deferred.succeed(blockingDeferred, void 0).pipe(
         Effect.delay(initialSyncOptions.timeout),
         Effect.forkScoped,
@@ -345,10 +377,12 @@ const makeInitialBlockingSyncContext = ({
 const bootLeaderThread = ({
   migrationsReport,
   initialBlockingSyncContext,
+  deferredSyncTimeout,
   devtoolsOptions,
 }: {
   migrationsReport: MigrationsReport
   initialBlockingSyncContext: InitialBlockingSyncContext
+  deferredSyncTimeout: Extract<InitialSyncOptions, { _tag: 'Blocking' }>['timeout'] | undefined
   devtoolsOptions: DevtoolsOptions
 }): Effect.Effect<
   LeaderThreadCtx['Service']['initialState'],
@@ -372,9 +406,12 @@ const bootLeaderThread = ({
         progress: { done: 0, total: -1 },
       })
 
-      yield* Deferred.await(initialBlockingSyncContext.blockingDeferred).pipe(
-        Effect.withSpan('@livestore/common:leader-thread:initial-sync-blocking'),
-      )
+      const waitForInitialSync = Deferred.await(initialBlockingSyncContext.blockingDeferred)
+      yield* (
+        deferredSyncTimeout === undefined
+          ? waitForInitialSync
+          : waitForInitialSync.pipe(Effect.timeoutOrElse({ duration: deferredSyncTimeout, orElse: () => Effect.void }))
+      ).pipe(Effect.withSpan('@livestore/common:leader-thread:initial-sync-blocking'))
     }
 
     yield* Queue.offer(bootStatusQueue, { stage: 'done' })

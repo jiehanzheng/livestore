@@ -45,6 +45,10 @@ export interface ClientSessionLeaderThreadProxy {
   }
   export: Effect.Effect<Uint8Array<ArrayBuffer>, AdapterError>
   getEventlogData: Effect.Effect<Uint8Array<ArrayBuffer>, AdapterError>
+  /** Reads the canonical identity through the admitted persisted SOURCE owner. */
+  getSourceIncarnation?: Effect.Effect<string, AdapterError>
+  /** Reads the durable upstream identity from this persisted SOURCE. */
+  getSourceBackendId?: Effect.Effect<string | null, AdapterError>
   syncState: Subscribable.Subscribable<SyncState, AdapterError>
   /** For debugging purposes it can be useful to manually trigger devtools messages (e.g. to reset the database) */
   sendDevtoolsMessage: (message: Devtools.Leader.MessageToApp) => Effect.Effect<void, AdapterError>

@@ -21,6 +21,8 @@ import {
   readRef,
 } from './commit-files.mjs'
 import { assertRuntimeSummary } from './qualification-runtime.mjs'
+import { fullSetupInput, shared } from './qualification-source-policy.mts'
+export { fullSetupInput } from './qualification-source-policy.mts'
 
 export const decisionPath =
   'context/03-delivery/01-composition/01-developer-environment/.decisions/0004-focused-fork-qualification.md'
@@ -46,18 +48,6 @@ export const candidateCompatibilityPaths = [
   'scripts/standalone/tsconfig.json',
   'scripts/standalone/tsconfig.json.genie.ts',
 ]
-const generatedCatalogFixtureConfig = 'packages/@local/astro-twoslash-code/src/cli/test-fixtures/catalog/tsconfig.json'
-export const fullSetupInput = (name) =>
-  name.endsWith('.nix') ||
-  /^(Dockerfile|compose\.yaml|\.github\/)/.test(name) ||
-  /^packages\/@livestore\/wa-sqlite\/(src\/|dist\/|Makefile|build)/.test(name) ||
-  // This exact canonical compiler projection is shared metadata; its generator and renderer remain excluded.
-  (/^packages\/@local\/astro-(tldraw|twoslash-code)\/src\//.test(name) && name !== generatedCatalogFixtureConfig) ||
-  name === 'docs/astro.config.ts'
-const shared = (name) =>
-  /^(genie\/|pnpm-|package\.json|tsconfig\.|\.ox)/.test(name) ||
-  /\/(package|tsconfig)\.json(?:\.genie\.ts)?$/.test(name)
-
 export const scopeBinding = (manifest) =>
   digest({
     source: manifest.source,

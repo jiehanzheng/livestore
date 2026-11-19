@@ -111,6 +111,9 @@ row completeness contracted by LS.SYS.EVT-R09):
   `syncMetadataJson`; indexed on `seqNumGlobal` and the full triple.
 - **`__livestore_sync_status`** — the upstream head plus `backendId`, used
   to detect a changed backend identity (`BackendIdMismatchError` handling).
+  `Store.getSourceBackendId()` reads this field through the persisted SOURCE's
+  active leader and returns `null` until the backend is bound. A web shared
+  worker read fails if its leader admission retires before completion.
 
 Properties:
 

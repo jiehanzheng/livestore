@@ -18,7 +18,12 @@ import { Cause, Effect, Exit, Fiber, Queue, Schema, Stream, Subscribable } from 
 import { Opfs, WebLock } from '@livestore/utils/effect/browser'
 
 import { makeSingleTabAdapter } from '../../single-tab/single-tab-adapter.ts'
-import { checkOpfsAvailability, ensureBrowserRequirements, getPersistedId } from '../common/browser-environment.ts'
+import {
+  checkOpfsAvailability,
+  confirmPersistedAdmission,
+  ensureBrowserRequirements,
+  getPersistedId,
+} from '../common/browser-environment.ts'
 import {
   readPersistedStateDbFromClientSession,
   resetPersistedDataFromClientSession,
@@ -272,7 +277,14 @@ export const makePersistedAdapter =
             candidate: dataFromFile,
             makeSqliteDb,
             open: (request) =>
-              runInWorkerStream('OpenWriteSession', sharedWorker.OpenWriteSession({ ...request, writeSessionId })),
+              runInWorkerStream(
+                'OpenWriteSession',
+                sharedWorker.OpenWriteSession({
+                  ...request,
+                  writeSessionId,
+                  ...(storageOptions.requirePersistence === true ? { requirePersistence: true } : {}),
+                }),
+              ).pipe(confirmPersistedAdmission(storageOptions.requirePersistence)),
           })
 
           const numberOfTables =
@@ -347,9 +359,15 @@ export const makePersistedAdapter =
             initialState: {
               leaderHead: initialLeaderHead,
               migrationsReport,
-              storageMode: opfsWarning === undefined ? 'persisted' : 'in-memory',
+              storageMode:
+                storageOptions.requirePersistence === true || opfsWarning === undefined ? 'persisted' : 'in-memory',
             },
 
+            getSourceIncarnation: runInWorker(
+              'GetSourceIncarnation',
+              sharedWorker.GetSourceIncarnation({ writeSessionId }),
+            ),
+            getSourceBackendId: runInWorker('GetSourceBackendId', sharedWorker.GetSourceBackendId({ writeSessionId })),
             getEventlogData: runInWorker('ExportEventlog', sharedWorker.ExportEventlog({})).pipe(
               Effect.timeoutOrDie(10_000),
               Effect.withSpan('@livestore/adapter-web:client-session:getEventlogData'),

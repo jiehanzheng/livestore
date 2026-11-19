@@ -120,7 +120,8 @@ export const recreateDb = ({
     const dbState = yield* StateSqliteDb.StateSqliteDb
     const source = yield* EventlogSqliteDb.EventlogSqliteDb
     const sourceEpoch = source.handle[sourceLifecycle].epoch
-    yield* SourceIdentity.assertInitialized(source.handle, initializedSource)
+    const { incarnation } = yield* SourceIdentity.assertInitialized(source.handle, initializedSource)
+    const hookContext = Object.freeze({ sourceIncarnation: incarnation })
     const hooks = schema.state.sqlite.migrations.hooks
 
     yield* Effect.addFinalizer(
@@ -132,7 +133,9 @@ export const recreateDb = ({
     yield* configureConnection(dbState, { foreignKeys: true })
 
     // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
-    yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.init?.(dbState)).pipe(UnknownError.mapToUnknownError)
+    yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.init?.(dbState, hookContext)).pipe(
+      UnknownError.mapToUnknownError,
+    )
 
     const migrationsReport = yield* migrateDb({
       db: dbState,
@@ -141,7 +144,9 @@ export const recreateDb = ({
     })
 
     // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
-    yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.pre?.(dbState)).pipe(UnknownError.mapToUnknownError)
+    yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.pre?.(dbState, hookContext)).pipe(
+      UnknownError.mapToUnknownError,
+    )
 
     yield* rematerializeFromEventlog({
       dbState,
@@ -162,8 +167,16 @@ export const recreateDb = ({
       }),
     )
 
-    // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
-    yield* Effect.trySyncOrPromiseOrEffect(() => hooks?.post?.(dbState)).pipe(UnknownError.mapToUnknownError)
+    const post = hooks?.post
+    if (post !== undefined) {
+      // The post hook observes replay before publication. Its witness must
+      // still describe the initialized SOURCE that this leader holds.
+      yield* SourceIdentity.assertInitialized(source.handle, initializedSource)
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- user hook errors are immediately normalized to LiveStore UnknownError
+      yield* Effect.trySyncOrPromiseOrEffect(() => post.call(hooks, dbState, hookContext)).pipe(
+        UnknownError.mapToUnknownError,
+      )
+    }
 
     // Keep this out of finalizers, which also run on failure and interruption.
     yield* markStateAsCompleted(dbState, {

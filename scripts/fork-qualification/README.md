@@ -237,6 +237,18 @@ The frozen source manifest uses `livestore-fork-qualification-source-v1`:
   `digest(manifest without review)`. Root must independently review this expanded
   source and producer recipe; the original four-file review does not cover it.
 
+For a separately reviewed product patch, the manifest can include
+`reviewedProducer` with contract `livestore-fork-reviewed-source-producer-v1`,
+the executing producer's Git `base`, and `sourceTreeSha256` (the canonical
+digest of its entire authored source tree). The root review binds that pin
+and the candidate's exact patch, changed paths and postimage hashes. The
+producer replays the patch in a temporary index and compares paths, bytes
+and modes. This mode admits regular files in the reviewed candidate scope.
+Shared inputs, Full Setup inputs and changes to the producer recipe are
+excluded. The build, generator and installed package selection belong to
+the candidate checkout. Its export includes only its own authored and
+produced files. The existing fixed profiles use the original manifest form.
+
 `tools` is a hash reference to the actual source context's raw generated
 `temp_nocommit/fork-qualification/tools.json`. Its bytes join final reference
 revalidation, and the actual existing `toolInputs` digest is observed again at

@@ -4,8 +4,18 @@ import { type Adapter, OtelLiveDummy, UnknownError } from '@livestore/common'
 import { Vitest } from '@livestore/utils-dev/node-vitest'
 import { Effect } from '@livestore/utils/effect'
 
-import { schema } from '../utils/tests/fixture.ts'
+import { makeTodoMvc, schema } from '../utils/tests/fixture.ts'
 import { createStore } from './create-store.ts'
+
+Vitest.live('rejects a canonical SOURCE read when the adapter has no persisted owner', () =>
+  Effect.gen(function* () {
+    const store = yield* makeTodoMvc()
+    yield* Effect.promise(async () => {
+      await expect(store.getSourceIncarnation()).rejects.toThrow('does not expose a persisted SOURCE incarnation')
+      await expect(store.getSourceBackendId()).rejects.toThrow('does not expose a persisted SOURCE backend identity')
+    })
+  }).pipe(Effect.scoped),
+)
 
 Vitest.live('validates stateRebuildBatchSize before invoking the adapter', () =>
   Effect.gen(function* () {

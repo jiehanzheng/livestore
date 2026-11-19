@@ -25,11 +25,30 @@ AccessHandlePoolVFS (single connection per database):
   `liveStoreStorageFormatVersion` (see the schema-management node for the
   asymmetry).
 
+The first persisted owner records an initialization marker under the OPFS
+namespace lock before associating the eventlog file. After an interrupted open,
+the next owner may finish initialization only for a marked, empty SOURCE. A
+SOURCE with existing schema must pass normal identity validation. The leader
+removes the marker after the SOURCE transaction commits and before opening
+derived state. Unknown retained associations without an identity still fail
+closed.
+
 Old state-db files are archived/cleaned on leader boot
 (`cleanupOldStateDbFiles`, keeping at most `MAX_ARCHIVED_STATE_DBS_IN_DEV
 = 3` in dev) to avoid exhausting the OPFS access-handle pool.
 
 ## Storage Probes and Fallback
+
+Set `storage.requirePersistence: true` to require persisted storage in the
+shared-worker or single-tab adapter. The dedicated leader refuses startup when
+its OPFS probe fails. A strict client also requires confirmation from the leader
+before accepting a session, including when it joins a leader that was already
+running. A successful page probe only permits the page to try the fast path.
+
+`Store.getSourceIncarnation()` reads the canonical eventlog identity through
+the admitted persisted owner. A shared-worker read fails if its admitted
+generation retires. Open a new Store after recovery to observe the reopened
+SOURCE.
 
 Two independent OPFS probes run (`checkOpfsAvailability`): the client
 session probes before deciding the fast path and the app-visible
