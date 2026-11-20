@@ -10,7 +10,7 @@ When working on a LiveStore app you might end up in situations where you need to
 Here are a few things that LiveStore offers to help you debug your app:
 
 - [OpenTelemetry](/building-with-livestore/opentelemetry) integration for tracing / metrics
-- [Devtools](/building-with-livestore/devtools) for inspecting the state of the store
+- Platform debugging tools for inspecting the application and its store
 - Store helper methods
 
 ## Debugging helpers on the store
@@ -19,4 +19,22 @@ The `store` exposes a `_dev` property which contains a few helpers that can help
 
 ## Other recommended practices and tools
 
-- Use the step debugger
+### Expo
+
+Use Expo's development menu to open React Native DevTools, then inspect the
+component tree, console output and JavaScript breakpoints. The selected Expo
+adapter requires `disableDevtools: true` in store configuration. Follow the
+official debugging guide for the matching Expo development build. [Expo
+debugging tools](https://docs.expo.dev/debugging/tools/)
+
+### Node.js
+
+Start the application with `node --inspect-brk path/to/entry.mjs` to pause before
+executing its entry point. Attach a Node-compatible debugger, then place
+breakpoints in store setup or the event handler being investigated. Use a
+separate filesystem storage directory for a disposable debugging fixture and
+close its store with `await store.shutdownPromise()` before another process
+opens that directory. [Node.js debugger](https://nodejs.org/api/debugger.html)
+
+The selected Node adapter requires `disableDevtools: true`. Its eventlog and
+derived state belong to the calling process.

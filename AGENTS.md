@@ -55,13 +55,30 @@ installs tools globally. Bun 1.3.13 is the known-good Docker realization.
 The optional root `compose.yaml` supplies that toolchain in an exclusive
 bind-mounted checkout.
 
+### Supported maintained-owner qualification
+
+The human's November 19 option-B approval extends the normal declared Node/pnpm
+workflow to the named docs, renderers and demos in
+[decision 0004](context/03-delivery/01-composition/01-developer-environment/.decisions/0004-focused-fork-qualification.md).
+Run the fixed source-bound matrix in
+[`scripts/maintained-qualification/README.md`](scripts/maintained-qualification/README.md).
+Preserve generation ownership, strict peers/frozen locks, official compiler
+and diagnostic checks, renderer lifetime tests, production builds and actual
+journeys. Only unchanged relevant inputs/artifacts permit evidence reuse.
+This replaces the inherited Nix-only precommit/setup requirement **for those
+named owners only**, after the matrix and final lead source/index review pass.
+It does not change the SDK-only guard, authorize automatic commits/adoption, or
+claim cold Nix integration. Existing qualified SDK commit/export inputs stay
+immutable. No new parallel toolchain or machine configuration is needed.
+
 ### Full Setup (Nix + devenv)
 
-Run `devenv shell` for Playwright and full docs builds, generated-source or
-wa-sqlite changes, release and infrastructure work, or repository-wide parity.
-Before final handoff, escalate to this lane whenever the relevant validation
-extends beyond the finite Minimal Setup checks; setup success never substitutes
-for the full required CI bar.
+Outside the explicitly approved maintained-owner matrix above, run `devenv shell`
+for browser/full docs/generated-source work. Native wa-sqlite rebuilds, release,
+infrastructure and repository-wide parity remain in Full Setup.
+Before final handoff, use this lane when validation falls outside both the finite
+Minimal Setup checks and the approved maintained-owner matrix; setup success
+never substitutes for the owning required checks.
 The authoritative boundary is
 [`context/03-delivery/01-composition/01-developer-environment/spec.md`](./context/03-delivery/01-composition/01-developer-environment/spec.md).
 
@@ -76,7 +93,8 @@ The authoritative boundary is
 
 ## Tooling
 
-- If tools aren't directly in `$PATH`, enter the dev environment first with `devenv shell`.
+- For the approved maintained-owner matrix, use its declared local tool profile.
+  Outside that matrix, enter `devenv shell` when tools are not directly in `$PATH`.
 
 - For dependency management see ./context/03-delivery/02-release/dependency-management.md
 
@@ -114,7 +132,7 @@ Use GitHub issues or an issue checklist for non-trivial work.
 ## Git
 
 - The default branch of this repository is `main`.
-- Before committing, run `devenv tasks run lint:full:fix` to auto-fix most linting errors. Make sure there are no type check/lint errors.
+- Before committing, use the owning approved qualification path: the source-bound maintained-owner matrix and final lead review for its named scope, otherwise `devenv tasks run lint:full:fix`. Do not ignore type/lint diagnostics or use the SDK-only guard for expanded docs/renderer changes.
 
 ### Branch Naming Conventions
 
@@ -124,9 +142,9 @@ Use GitHub issues or an issue checklist for non-trivial work.
 
 ### Development Workflow
 
-- Run the full test suite before pushing: `devenv tasks run test:run`
-- Ensure TypeScript compilation passes: `devenv tasks run ts:check`
-- Use `devenv tasks run lint:full:fix` to automatically fix formatting issues
+- Run all tests required by the owning approved matrix before pushing; outside its named scope use `devenv tasks run test:run`.
+- Ensure the declared official compiler checks pass; outside the maintained matrix use `devenv tasks run ts:check`.
+- Use the owning declared formatter on authored inputs; regenerate generated outputs through their canonical generator.
 
 ### Issues
 

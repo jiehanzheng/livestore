@@ -11,7 +11,7 @@ import { FilterMenu } from './filter-menu.tsx'
 export const StatusFilter = () => {
   const [filterState, setFilterState] = useFilterState()
   const handleClear = useCallback(() => setFilterState({ status: null }), [setFilterState])
-  if (!filterState.status) return null
+  if (filterState.status == null) return null
   const selectedStatus = filterState.status.length === 1 ? filterState.status[0] : undefined
 
   return (

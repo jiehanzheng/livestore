@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { Effect, FileSystem, Queue, Schema } from '@livestore/utils/effect'
+import { Effect, Fiber, FileSystem, Queue, Schema } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
 import { type WatchSnippetsRebuildInfo, watchSnippets } from './snippets.ts'
@@ -41,7 +41,7 @@ const writeInitialProject = (fs: FileSystem.FileSystem, projectRoot: string): Ef
         module: 'ESNext',
         moduleResolution: 'Bundler',
         jsx: 'react-jsx',
-        types: ['node'],
+        types: [],
         skipLibCheck: true,
         allowImportingTsExtensions: true,
         noEmit: true,
@@ -67,21 +67,20 @@ describe('watchSnippets', () => {
         onRebuild: (info) => Queue.offer(rebuildEvents, info),
       })
 
-      yield* Effect.forkScoped(watchEffect)
+      const watcher = yield* Effect.forkScoped(watchEffect)
 
-      const initial = yield* Queue.take(rebuildEvents)
+      const initial = yield* Effect.raceFirst(Queue.take(rebuildEvents), Fiber.join(watcher))
+      if (initial === undefined) throw new Error('Watcher exited before its initial result.')
       expect(initial.reason).toBe('initial')
+      expect(initial.renderedCount).toBeGreaterThan(0)
 
       const snippetPath = path.join(projectRoot, 'src', 'content', '_assets', 'code', 'example.ts')
       yield* fs.writeFileString(snippetPath, 'export const value = 2\n').pipe(Effect.orDie)
 
-      const maybeUpdate = yield* Queue.take(rebuildEvents).pipe(Effect.timeout('2 seconds'), Effect.option)
-
-      if (maybeUpdate._tag === 'None') {
-        return
-      }
-
-      const update = maybeUpdate.value
+      const update = yield* Effect.raceFirst(Queue.take(rebuildEvents), Fiber.join(watcher)).pipe(
+        Effect.timeout('2 seconds'),
+      )
+      if (update === undefined) throw new Error('Watcher exited before its update result.')
       expect(update.reason).toBe('watch')
       expect(update.event?.relativePath).toContain('example.ts')
       expect(update.renderedCount).toBeGreaterThanOrEqual(0)

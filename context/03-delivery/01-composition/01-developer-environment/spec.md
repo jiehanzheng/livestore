@@ -10,45 +10,45 @@ Draft.
 
 ## Scope
 
-Defines: the two development setups, automatic full-shell setup, explicit
+Defines: normal JavaScript and Full Setup paths, automatic full-shell setup, explicit
 source-validation gates, setup profiling, and local trace handling. Does not
 define: individual example ports, the shared Effect-utils implementation, or
 production observability.
 
 ## Development Setups
 
-```text
-exclusive checkout
-  |
-  +-- Minimal Setup -- bootstrap -- host-native default
-  |                  `- Docker ---- finite oracle + optional Compose shell
-  |
-  `-- Full Setup (Nix + devenv) -- dependencies + generated sources
-                                  `- browsers, WASM, release, infrastructure
+```mermaid
+flowchart TD
+  C[Exclusive checkout] --> JS[Declared Node / pnpm / Bun toolchain]
+  JS --> M[Minimal dependency readiness]
+  JS --> F[Focused SDK guard]
+  JS --> B[Named maintained docs / renderer / demo matrix]
+  C --> N[Nix + devenv Full Setup]
+  N --> P[Full environment / native rebuild / release / parity]
 ```
 
 Minimal Setup targets the TypeScript-heavy majority of
 contributions. This is a design target informed by contributor experience, not
 a measured coverage percentage. Full Setup (Nix + devenv) remains the holistic authority
-for runtime, build and development dependencies, and the final CI bar. The two
+for its original complete runtime/build/tool integration and full parity bar. The
 setups share the committed pnpm lockfile and source tree; they do not claim
 identical tool closures
 ([decision 0003](./.decisions/0003-two-development-lanes.md)).
 
-| Capability | Minimal Setup | Full Setup (Nix + devenv) |
-| --- | --- | --- |
-| Frozen workspace install | Required | Required |
-| Reference-aware TypeScript build | Required | Required |
-| Stable core unit tests | Required | Required |
-| Vite application build | Required | Required |
-| Local Wrangler build | Required | Required |
-| Docs source check | Required | Required |
-| Use committed SQLite distribution | Required | Required |
-| Browser and Playwright tests | Not provided | Required |
-| Full docs build, including diagrams | Not provided | Required |
-| Genie regeneration | Not provided | Required |
-| wa-sqlite rebuild | Not provided | Required |
-| Release and infrastructure operations | Not provided | Required |
+| Capability                            | Minimal Setup | Full Setup (Nix + devenv) |
+| ------------------------------------- | ------------- | ------------------------- |
+| Frozen workspace install              | Required      | Required                  |
+| Reference-aware TypeScript build      | Required      | Required                  |
+| Stable core unit tests                | Required      | Required                  |
+| Vite application build                | Required      | Required                  |
+| Local Wrangler build                  | Required      | Required                  |
+| Docs source check                     | Required      | Required                  |
+| Use committed SQLite distribution     | Required      | Required                  |
+| Browser and Playwright tests          | Not provided  | Required                  |
+| Full docs build, including diagrams   | Not provided  | Required                  |
+| Genie regeneration                    | Not provided  | Required                  |
+| wa-sqlite rebuild                     | Not provided  | Required                  |
+| Release and infrastructure operations | Not provided  | Required                  |
 
 ## Minimal Setup
 
@@ -111,7 +111,8 @@ is evidence for revising the boundary rather than triggering ad hoc expansion
 
 ## Full Setup (Nix + devenv)
 
-Full Setup (Nix + devenv) begins with `devenv shell`. It owns browser installation, full
+Full Setup (Nix + devenv) begins with `devenv shell`. Outside the named approved
+maintained-owner workflow below, it owns browser installation, full
 docs rendering, Genie and other generated sources, wa-sqlite's Nix/Emscripten
 build, release workflows, infrastructure checks, and repository-wide parity.
 Failing a portable command because one of these capabilities is absent is an
@@ -180,3 +181,36 @@ observations; harmless later inode/time churn requires fresh content/resolution
 validation, not editing historical build evidence. Actual candidate and consumer
 bytes and modes must match. Immutable source/artifact directories are not
 rewritten when checker-only recipe inputs change.
+
+## Supported maintained docs, renderer and demo workflow
+
+The November 19 extension of [decision 0004](./.decisions/0004-focused-fork-qualification.md)
+supports the existing declared JavaScript toolchain for the named docs/snippet,
+`astro-twoslash-code`, `astro-tldraw`, maintained example-generation and seven
+maintained demo owners. This extends qualification policy; it neither recreates
+Nix nor introduces another package manager/tool closure.
+
+The fixed matrix and private evidence contract are documented in
+[`scripts/maintained-qualification/README.md`](../../../../scripts/maintained-qualification/README.md).
+Qualification binds the complete authored source, unchanged index observation,
+concrete tools, canonical generation and normal strict frozen installation.
+It includes official compiler diagnostics, format/type-aware lint, renderer
+cache/invalidation/import restoration/diagnostic/process-lifetime checks,
+production docs/demo builds and real maintained journeys. Tutorial starter's
+React-state behavior is intentional; it is not an SDK persistence test.
+
+An accepted result can be reused only when its actual source/tool/dependency
+projection and hashed artifact still match. A new whole-source identity must
+record such reuse explicitly; historical results never become contemporaneous
+full-source runs. Native/browser journeys retain their real proof epochs and
+limits. Exact index/source/artifact review is still required before a broader
+commit or adoption. The existing focused SDK-only guard remains unchanged and
+must continue to refuse broader docs/renderer inputs.
+
+The original cold Nix closure realization, its supplied compiler/browser
+integration, automatic `pnpm:install` / `genie:run` shell readiness and
+`otel:profile:setup` / `otel:verify:setup` native trace smoke are unverified.
+No direct Node test/build pass implies those results, full upstream parity or
+Darwin parity. Changes to native SQLite build inputs, release or infrastructure
+remain outside the named extension and require their owning checks. Machine
+settings, global installs and Docker daemon changes are not part of this path.

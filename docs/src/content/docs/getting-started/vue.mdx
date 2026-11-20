@@ -7,11 +7,13 @@ sidebar:
 ---
 
 import { Steps, Tabs, TabItem, Code } from '@astrojs/starlight/components';
-import { makeTiged, versionNpmSuffix } from '../../../data/data.ts'
+import ForkInstallNotice from '../../../components/ForkInstallNotice.astro'
+import { versionNpmSuffix } from '../../../data/data.ts'
 import { MIN_NODE_VERSION } from '@local/shared'
 import SchemaSnippet from '../../_assets/code/getting-started/vue/livestore/schema.ts?snippet'
 import WorkerSnippet from '../../_assets/code/getting-started/vue/livestore/livestore.worker.ts?snippet'
 import ViteConfigSnippet from '../../_assets/code/getting-started/vue/vite-config.ts?snippet'
+import StoreCompositionSnippet from '../../_assets/code/getting-started/vue/livestore/store.ts?snippet'
 import AppSnippet from '../../_assets/code/getting-started/vue/app.vue?snippet'
 import CommitEventsSnippet from '../../_assets/code/getting-started/vue/commit-events.vue?snippet'
 import QueriesSnippet from '../../_assets/code/getting-started/vue/queries.vue?snippet'
@@ -24,11 +26,12 @@ export const manualInstallDepsStr = [
   '@livestore/utils' + versionNpmSuffix,
   '@livestore/peer-deps' + versionNpmSuffix,
   '@livestore/devtools-vite' + versionNpmSuffix,
-  'slashv/vue-livestore' + versionNpmSuffix,
   'vue',
   '@vitejs/plugin-vue',
   'vite-plugin-vue-devtools',
 ].join(' ')
+
+<ForkInstallNotice />
 
 ## Prerequisites
 
@@ -37,13 +40,9 @@ export const manualInstallDepsStr = [
 
 ## About Vue integration
 
-Vue integration is still in beta and being incubated as a separate repository. Please direct any issues or contributions to [Vue LiveStore](https://github.com/slashv/vue-livestore)
+This guide uses a small application-owned Vue composition module over LiveStore's public APIs. It does not install a third-party LiveStore binding. The provider owns store boot and shutdown; each query subscription belongs to its Vue scope.
 
-## Option A: Quick start
-
-For a quick start, we recommend referencing the [playground](https://github.com/slashv/vue-livestore/tree/main/playground) folder in the Vue LiveStore repository.
-
-## Option B: Existing project setup \{#existing-project-setup\}
+## Existing project setup
 
 <Steps>
 
@@ -87,7 +86,11 @@ Create a file named `livestore.worker.ts` inside the `src/livestore` folder. Thi
 
 ### Add the LiveStore provider
 
-To make the LiveStore available throughout your app, wrap your app's root component with the `<LiveStoreProvider>` component from `vue-livestore`. This provider manages your app's data store, loading, and error states.
+Create `livestore/store.ts` for the injection key, query subscriptions and client-document computed values:
+
+<StoreCompositionSnippet />
+
+The provider below starts the store after mount, renders children only after boot, and closes the store when unmounted, including when boot finishes after unmount. Use it around your application's components.
 
 Here's an example:
 
@@ -103,7 +106,7 @@ Here's an example:
 
 ### Queries
 
-To retrieve data from the database, first define a query using `queryDb` from `@livestore/livestore`. Then, execute the query with the `useQuery()` hook from `vue-livestore`.
+To retrieve data from the database, first define a query using `queryDb` from `@livestore/livestore`. Then, execute the query with the `useQuery()` hook from the local `livestore/store.ts` module.
 
 Consider abstracting queries into a separate file to keep your code organized, though you can also define them directly within components if preferred.
 

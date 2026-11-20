@@ -12,7 +12,7 @@ export const KeyboardShortcuts = () => {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const element = e.target as HTMLElement
-      if (element.classList.contains('input')) return
+      if (element.classList.contains('input') === true) return
 
       if (e.key === 'c') {
         setNewIssueModalStatus(0)
@@ -20,7 +20,7 @@ export const KeyboardShortcuts = () => {
       }
 
       // We use '?' instead of '/' because Shift+/ is '?'
-      if (e.key === '?' && e.shiftKey) {
+      if (e.key === '?' && e.shiftKey === true) {
         router.navigate({ to: '/$storeId/search', params: { storeId: store.storeId } })
         e.preventDefault()
       }

@@ -29,7 +29,6 @@
     "@automerge/react": "2.5.0",
     "@cloudflare/workers-types": "5.20261030.1",
     "@effect/ai-openai": "4.1.4",
-    "@effect/atom-react": "4.1.4",
     "@effect/opentelemetry": "4.1.4",
     "@effect/platform-browser": "4.1.4",
     "@effect/platform-bun": "4.1.4",

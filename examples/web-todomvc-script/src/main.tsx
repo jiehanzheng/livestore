@@ -3,7 +3,8 @@ import LiveStoreSharedWorker from '@livestore/adapter-web/shared-worker?sharedwo
 import { createStorePromise, liveStoreVersion } from '@livestore/livestore'
 import { makeWsSync } from '@livestore/sync-cf/client'
 
-import { events, SyncPayload, schema, tables } from './livestore/schema.ts'
+import { SyncPayload, schema, tables } from './livestore/schema.ts'
+import { createInitialTodoEvents, createTodoEvent } from './todo-events.ts'
 
 // Or use makePersistedAdapter for OPFS storage
 const adapter = makeInMemoryAdapter({
@@ -62,9 +63,7 @@ versionBadge.style.cssText = `
 `
 document.body.appendChild(versionBadge)
 
-store.commit(events.todoCreated({ id: '1', text: 'Buy milk' }))
-store.commit(events.todoCreated({ id: '2', text: 'Buy bread' }))
-store.commit(events.todoCompleted({ id: '1' }))
+store.commit(...createInitialTodoEvents())
 
 const todos = store.query(tables.todos)
 console.table(todos)
@@ -73,12 +72,12 @@ store.subscribe(tables.todos, (todos) => {
   document.body.innerHTML = `
   <h1>Todos</h1>
   <ul>
-    ${todos.map((todo) => `<li>${todo.text} ${todo.completed ? '✅' : '❌'}</li>`).join('')}
+    ${todos.map((todo) => `<li>${todo.text} ${todo.completed === true ? '✅' : '❌'}</li>`).join('')}
   </ul>
 `
 })
 
 let i = 0
 setInterval(() => {
-  store.commit(events.todoCreated({ id: `3-${i++}`, text: `Do something ${i}` }))
+  store.commit(createTodoEvent(`Do something ${++i}`))
 }, 1000)

@@ -1,8 +1,14 @@
-import { baseTsconfigCompilerOptions, packageTsconfigExclude, tsconfigJson } from '../../../genie/repo.ts'
+import {
+  baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
+  packageTsconfigExclude,
+  tsconfigJson,
+} from '../../../genie/repo.ts'
 
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@local/astro-tldraw')],
     composite: true,
     rootDir: '.',
     outDir: 'dist',

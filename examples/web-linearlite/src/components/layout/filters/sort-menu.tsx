@@ -7,6 +7,8 @@ import { type SortingDirection, type SortingOption, sortingOptions } from '../..
 import { useFilterState } from '../../../livestore/queries.ts'
 import { Shortcut } from '../../common/shortcut.tsx'
 
+const emptyShortcutKeys: readonly string[] = []
+
 const shortcutKeysBySortingOption = Object.fromEntries(
   Object.entries(sortingOptions).map(([sortingOption, { shortcut }]) => [sortingOption, [shortcut]]),
 ) as Record<string, readonly string[]>
@@ -82,7 +84,10 @@ export const SortMenu = ({ type }: { type?: 'status' | 'priority' }) => {
                         {filterState.orderDirection === 'desc' && <BarsArrowUpIcon className="size-4" />}
                       </div>
                     )}
-                    <Shortcut keys={shortcutKeysBySortingOption[sortingOption] ?? []} className="absolute right-3" />
+                    <Shortcut
+                      keys={shortcutKeysBySortingOption[sortingOption] ?? emptyShortcutKeys}
+                      className="absolute right-3"
+                    />
                   </MenuItem>
                 )
               })}

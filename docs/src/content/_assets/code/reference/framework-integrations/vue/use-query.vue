@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { useQuery } from 'vue-livestore'
-
 import { queryDb } from '@livestore/livestore'
 
+import { useQuery } from '../../../getting-started/vue/livestore/store.ts'
 import { tables } from './schema.ts'
 
 const visibleTodos$ = queryDb(() => tables.todos.where({ completed: false }), { label: 'visibleTodos' })

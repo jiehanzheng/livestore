@@ -1,93 +1,52 @@
-import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import * as ts from 'typescript'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { toHtml } from 'hast-util-to-html'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { shouldNeverHappen } from '@livestore/utils'
 import { Effect } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
 import { resolveProjectPaths } from '../project-paths.ts'
+import { startRendererJob } from '../renderer-job.ts'
+import { createSnippetRenderer } from '../renderer.ts'
 import { buildSnippetBundle } from '../vite/snippet-graph.ts'
-import { __internal, buildSnippets } from './snippets.ts'
+import { renderSnippet } from './snippet-render.ts'
+import { assembleSnippet, guessLanguage, sanitizeSnippetContent } from './snippet-source.ts'
+import { createVirtualFiles, remapVirtualPathsForFocus, resolveFocusVirtualPath } from './snippet-virtual-files.ts'
 
-type TTwoslasher = (
-  code: string,
-  lang: string,
-  options: {
-    vfsRoot?: string
-    compilerOptions?: ts.CompilerOptions
-    tsModule?: typeof ts
-    tsLibDirectory?: string
-  },
-) => {
-  errors: Array<{ renderedMessage: string }>
-}
-
-const fixturesRoot = fileURLToPath(new URL('./test-fixtures/catalog', import.meta.url))
-const snippetRoot = fixturesRoot
-const tsconfigPath = path.join(fixturesRoot, 'tsconfig.json')
 const packageRoot = fileURLToPath(new URL('../..', import.meta.url))
 const workspaceRoot = process.env.WORKSPACE_ROOT ?? path.resolve(packageRoot, '../../..')
 const exampleProjectRoot = path.join(packageRoot, 'example')
-let twoslasher: TTwoslasher
-type TRenderer = Parameters<typeof __internal.renderSnippet>[0]
-let exampleRenderer: TRenderer
+type TRenderer = Parameters<typeof renderSnippet>[0]
+let exampleRenderer: TRenderer | undefined
 let examplePaths: ReturnType<typeof resolveProjectPaths>
-let docsRenderer: TRenderer
+let docsRenderer: TRenderer | undefined
 let docsPaths: ReturnType<typeof resolveProjectPaths>
 
-beforeAll(async () => {
-  // Resolve twoslash dynamically via expressive-code-twoslash's dependencies.
-  // Uses createRequire instead of import.meta.resolve for vite-node compatibility (vitest 3.x).
-  const require = createRequire(import.meta.url)
-  const twoslashPath = require.resolve('twoslash', { paths: [require.resolve('expressive-code-twoslash')] })
-  const module = await import(twoslashPath)
-  twoslasher = module.twoslasher as TTwoslasher
-
-  examplePaths = resolveProjectPaths(exampleProjectRoot)
-  const rendererResult = await Effect.runPromise(__internal.loadEcRenderer(examplePaths, {}))
-  exampleRenderer = rendererResult.renderer
-
-  const docsProjectRoot = path.join(workspaceRoot, 'docs')
-  docsPaths = resolveProjectPaths(docsProjectRoot)
-  const docsRendererResult = await Effect.runPromise(__internal.loadEcRenderer(docsPaths, {}))
-  docsRenderer = docsRendererResult.renderer
-})
-
-const loadCompilerOptions = () => {
-  const configSource = ts.readConfigFile(tsconfigPath, ts.sys.readFile)
-  if (configSource.error !== undefined) {
-    const message = ts.flattenDiagnosticMessageText(configSource.error.messageText, '\n')
-    throw new Error(`Unable to read test fixture tsconfig: ${message}`)
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configSource.config,
-    ts.sys,
-    path.dirname(tsconfigPath),
-    undefined,
-    tsconfigPath,
-  )
-
-  const {
-    incremental: _incremental,
-    composite: _composite,
-    tsBuildInfoFile: _tsBuildInfoFile,
-    ...options
-  } = parsed.options
-
-  return {
-    ...options,
-    noEmit: true,
-  }
+const requireRenderer = (renderer: TRenderer | undefined): TRenderer => {
+  if (renderer === undefined) throw new Error('Renderer fixture was not acquired.')
+  return renderer
 }
 
+// Register before setup: a failed second acquisition still owns the first.
+// Settle disposals independently so either failure cannot abandon the other.
+afterAll(async () => {
+  const disposed = await Promise.allSettled(
+    [exampleRenderer, docsRenderer].map(async (renderer) => renderer?.dispose()),
+  )
+  const failures = disposed.filter((result) => result.status === 'rejected').map((result) => result.reason)
+  if (failures.length > 0) throw new AggregateError(failures, 'Renderer fixture disposal failed.')
+})
+beforeAll(async () => {
+  examplePaths = resolveProjectPaths(exampleProjectRoot)
+  exampleRenderer = await createSnippetRenderer(examplePaths, {})
+  docsPaths = resolveProjectPaths(path.join(workspaceRoot, 'docs'))
+  docsRenderer = await createSnippetRenderer(docsPaths, {})
+})
+
 const stripTwoslashPopups = (input: string): string => {
-  const target = '<div class="twoslash-popup-container'
+  const target = '<span class="twoslash-popup-container'
   let result = ''
   let cursor = 0
 
@@ -103,19 +62,19 @@ const stripTwoslashPopups = (input: string): string => {
     let index = start
 
     while (index < input.length) {
-      const nextOpen = input.indexOf('<div', index)
-      const nextClose = input.indexOf('</div>', index)
+      const nextOpen = input.indexOf('<span', index)
+      const nextClose = input.indexOf('</span>', index)
       if (nextClose === -1) {
         index = input.length
         break
       }
       if (nextOpen !== -1 && nextOpen < nextClose) {
         depth += 1
-        index = nextOpen + 4
+        index = nextOpen + 5
         continue
       }
       depth -= 1
-      index = nextClose + 6
+      index = nextClose + 7
       if (depth <= 0) {
         break
       }
@@ -133,44 +92,94 @@ const stripMarkup = (input: string) =>
     .replace(/&[#0-9a-zA-Z]+;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-const runTwoslashOnFixture = (entryRelativePath: string) => {
-  const entryFilePath = path.join(snippetRoot, entryRelativePath)
-  const bundle = buildSnippetBundle({ entryFilePath, baseDir: snippetRoot })
-  const virtualFiles = __internal.createVirtualFiles(bundle.files, bundle.fileOrder)
-  const focusVirtualPath = __internal.resolveFocusVirtualPath(virtualFiles, bundle.mainFileRelativePath)
-  const assembled = __internal.assembleSnippet(
-    virtualFiles.map((file) => ({ virtualPath: file.virtualPath, content: file.content })),
-    focusVirtualPath,
-  )
-  const compilerOptions = loadCompilerOptions()
-  const tsLibDirectory = path.dirname(ts.getDefaultLibFilePath(compilerOptions))
-
-  return twoslasher(assembled.code, __internal.guessLanguage(entryRelativePath, 'ts'), {
-    vfsRoot: snippetRoot,
-    tsModule: ts,
-    tsLibDirectory,
-    compilerOptions,
-  })
-}
-
-describe('Twoslash renderer fixtures', () => {
-  it('successfully renders a basic bundle with local imports', async () => {
-    const result = runTwoslashOnFixture('basic/store.ts')
-    expect(result.errors).toHaveLength(0)
-  })
-
-  it('handles worker query imports present in docs snippets', async () => {
-    const result = runTwoslashOnFixture('worker-loader/app/store.ts')
-    expect(result.errors).toHaveLength(0)
-  })
-
-  it('resolves canonical LiveStore schema pattern without TypeScript diagnostics', () => {
-    const result = runTwoslashOnFixture('reference/solid-integration/app.tsx')
-    expect(result.errors.map((error) => error.renderedMessage)).toEqual([])
-  })
-})
-
 describe('renderSnippet integration', () => {
+  it('checks and renders the actual Vue provider and query templates', async () => {
+    for (const filename of ['getting-started/vue/app.vue', 'getting-started/vue/queries.vue']) {
+      const bundle = buildSnippetBundle({
+        entryFilePath: path.join(docsPaths.snippetAssetsRoot, filename),
+        baseDir: docsPaths.snippetAssetsRoot,
+      })
+      const rendered = await Effect.runPromise(renderSnippet(requireRenderer(docsRenderer), bundle, filename))
+      expect(rendered.diagnostics).toEqual([])
+      expect(rendered.html).toContain('<code>')
+      expect(rendered.html).not.toContain('__LS_FILE')
+    }
+  })
+
+  it('resolves real Vue imports after TypeScript rendered the same module virtually', async () => {
+    const inputs = [
+      'reference/framework-integrations/vue/schema.ts',
+      'reference/framework-integrations/vue/use-query.vue',
+    ].map((name) => {
+      const bundle = buildSnippetBundle({
+        entryFilePath: path.join(docsPaths.snippetAssetsRoot, name),
+        baseDir: docsPaths.snippetAssetsRoot,
+      })
+      const files = remapVirtualPathsForFocus(createVirtualFiles(bundle.files, bundle.fileOrder), name)
+      const { code, lines } = assembleSnippet(files, resolveFocusVirtualPath(files, name))
+      return { code, language: guessLanguage(name), lineOwners: lines.map(({ owner, marker }) => ({ owner, marker })) }
+    })
+    const job = startRendererJob({
+      mode: 'render',
+      projectRoot: docsPaths.projectRoot,
+      ownerRoot: docsPaths.snippetAssetsRoot,
+      runtime: {},
+      inputs,
+    })
+    await expect(job.result).resolves.toHaveLength(2)
+  })
+
+  it.each([
+    ['inline setup', 'const count = 1'],
+    ['a trailing setup comment', '\nconst count = 1 // comment'],
+  ])('renders Vue with %s', async (_layout, script) => {
+    const code = `<script setup lang="ts">${script}</script>\n<template>{{ count }}</template>`
+    const rendered = await requireRenderer(docsRenderer).render({
+      code,
+      language: 'vue',
+      lineOwners: code.split('\n').map(() => ({ owner: './app.vue', marker: null })),
+    })
+    expect(rendered.renderedGroupAst.type).toBe('element')
+  })
+
+  it('rejects a Vue template that reads a nonexistent property', async () => {
+    const code = '<script setup lang="ts">const count = 1</script>\n<template>{{ count.missing }}</template>'
+    await expect(
+      requireRenderer(docsRenderer).render({
+        code,
+        language: 'vue',
+        lineOwners: code.split('\n').map(() => ({ owner: './app.vue', marker: null })),
+      }),
+    ).rejects.toThrow(/\[2339\].*Property 'missing'/)
+  })
+
+  it('fails closed on unexpected type errors', async () => {
+    await expect(
+      requireRenderer(exampleRenderer).render({
+        code: 'const value: string = 1',
+        language: 'ts',
+        lineOwners: [{ owner: './main.ts', marker: null }],
+      }),
+    ).rejects.toThrow(/not assignable/)
+  })
+
+  it('renders expected diagnostics and Markdown links in type hovers', async () => {
+    const code = [
+      '// @errors: 2322',
+      '/** See [the guide](https://example.com/guide). */',
+      'const value: string = 1',
+      'console.log(value)',
+    ].join('\n')
+    const rendered = await requireRenderer(exampleRenderer).render({
+      code,
+      language: 'ts',
+      lineOwners: code.split('\n').map(() => ({ owner: './main.ts', marker: null })),
+    })
+    const html = toHtml(rendered.renderedGroupAst)
+    expect(html).toContain('twoslash-popup-error')
+    expect(html).toContain('not assignable to type')
+    expect(html).toContain('href="https://example.com/guide"')
+  })
   it('does not rewrite literal cut marker content', () => {
     const source = [
       "const message = '// ---cut--- should stay literal'",
@@ -178,7 +187,7 @@ describe('renderSnippet integration', () => {
       'const double = "// ---cut---"',
     ].join('\n')
 
-    const sanitized = __internal.sanitizeSnippetContent(source)
+    const sanitized = sanitizeSnippetContent(source)
 
     expect(sanitized).toBe(source)
   })
@@ -188,7 +197,7 @@ describe('renderSnippet integration', () => {
     const bundle = buildSnippetBundle({ entryFilePath, baseDir: examplePaths.snippetAssetsRoot })
 
     const renderFile = async (filename: string) =>
-      Effect.runPromise(__internal.renderSnippet(exampleRenderer, bundle, filename))
+      Effect.runPromise(renderSnippet(requireRenderer(exampleRenderer), bundle, filename))
 
     const renderedMain = await renderFile('main.ts')
     const renderedUtils = await renderFile('utils.ts')
@@ -228,14 +237,11 @@ describe('renderSnippet integration', () => {
 
   it('restarts focus ownership after cut markers', () => {
     const focusVirtualPath = './focus.ts'
-    const focusContent = __internal.sanitizeSnippetContent(
+    const focusContent = sanitizeSnippetContent(
       ['export const first = true', '// ---cut---', 'export const second = true'].join('\n'),
     )
 
-    const assembled = __internal.assembleSnippet(
-      [{ virtualPath: focusVirtualPath, content: focusContent }],
-      focusVirtualPath,
-    )
+    const assembled = assembleSnippet([{ virtualPath: focusVirtualPath, content: focusContent }], focusVirtualPath)
     const focusStarts = assembled.lines.filter(
       (line) => line.marker === 'start' && line.content.includes(focusVirtualPath),
     )
@@ -265,27 +271,28 @@ describe('renderSnippet integration', () => {
     }
 
     const rendered = await Effect.runPromise(
-      __internal.renderSnippet(exampleRenderer, paddedBundle, bundle.mainFileRelativePath),
+      renderSnippet(requireRenderer(exampleRenderer), paddedBundle, bundle.mainFileRelativePath),
     )
 
     const dataCode = rendered.html?.match(/data-code="([^"]*)"/)?.[1] ?? ''
     const decoded = dataCode.replace(/\u007f/g, '\n')
-    const blankLines = rendered.html?.match(/<div class="ec-line"><div class="code">\n<\/div><\/div>/g) ?? []
+    const blankLines = rendered.html?.match(/<div class="line"><\/div>/g) ?? []
 
     expect(decoded).toContain('\n\nexport const message')
     expect(decoded.endsWith('\n')).toBe(false)
     expect(blankLines.length).toBe(1)
   })
 
-  it('anchors tooltip helpers to document.body', () => {
-    const tooltipModule = exampleRenderer.jsModules.find((code) => code.includes('function setupTooltip'))
-    const moduleCode = tooltipModule ?? shouldNeverHappen('Tooltip helper module was not emitted')
-
-    expect(moduleCode).toContain('t=document.body')
-    expect(moduleCode).not.toContain('closest(".expressive-code")')
-    expect(moduleCode).not.toContain('window.scroll')
-    expect(moduleCode).toContain('if(!s)return;')
-    expect(moduleCode).toContain('s.style.position="absolute"')
+  it('renders type hovers while keeping copy text free of hover content', async () => {
+    const bundle = buildSnippetBundle({
+      entryFilePath: path.join(examplePaths.snippetAssetsRoot, 'main.ts'),
+      baseDir: examplePaths.snippetAssetsRoot,
+    })
+    const rendered = await Effect.runPromise(renderSnippet(requireRenderer(exampleRenderer), bundle, 'main.ts'))
+    expect(rendered.html).toContain('twoslash-popup-container')
+    const dataCode = rendered.html?.match(/data-code="([^"]*)"/)?.[1] ?? ''
+    expect(dataCode).not.toContain('twoslash-popup')
+    expect(dataCode).not.toContain('__LS_FILE')
   })
 
   it('renders the docs minimal example without leaking sentinel metadata', async () => {
@@ -293,7 +300,7 @@ describe('renderSnippet integration', () => {
     const bundle = buildSnippetBundle({ entryFilePath, baseDir: docsPaths.snippetAssetsRoot })
 
     const renderFile = async (filename: string) =>
-      Effect.runPromise(__internal.renderSnippet(docsRenderer, bundle, filename))
+      Effect.runPromise(renderSnippet(requireRenderer(docsRenderer), bundle, filename))
 
     const renderedMain = await renderFile('getting-started/node/minimal-example.ts')
     const renderedSchema = await renderFile('getting-started/node/livestore/schema.ts')
@@ -307,7 +314,7 @@ describe('renderSnippet integration', () => {
     expect(schemaHtml).not.toContain('data-ls-owner')
     expect(schemaHtml).not.toContain('data-ls-marker')
     expect(schemaHtml).toContain('defineMaterializer(')
-    expect(schemaHtml).toContain('export const schema = makeSchema({ events, state })')
+    expect(stripMarkup(schemaHtml)).toMatch(/export const schema = makeSchema/)
     expect(schemaHtml).not.toContain('const main = async () =>')
 
     const mainDataCode = mainHtml.match(/data-code="([^"]*)"/)?.[1] ?? ''
@@ -324,46 +331,22 @@ describe('renderSnippet integration', () => {
   }, 15000) // needs higher timeout to avoid renderer flake on CI
 
   it('retains focus boundaries when snippets use cut markers', async () => {
-    const entryFilePath = path.join(
-      docsPaths.snippetAssetsRoot,
-      'reference/platform-adapters/node-adapter/worker-main.ts',
-    )
+    const entryFilePath = path.join(docsPaths.snippetAssetsRoot, 'reference/platform-adapters/node-adapter/adapter.ts')
     const bundle = buildSnippetBundle({ entryFilePath, baseDir: docsPaths.snippetAssetsRoot })
 
     const rendered = await Effect.runPromise(
-      __internal.renderSnippet(docsRenderer, bundle, 'reference/platform-adapters/node-adapter/worker-main.ts'),
+      renderSnippet(requireRenderer(docsRenderer), bundle, 'reference/platform-adapters/node-adapter/adapter.ts'),
     )
 
     const html = rendered.html ?? ''
-    expect(html).toContain('const adapter = makeWorkerAdapter')
+    expect(stripMarkup(html)).toMatch(/const adapter = makeAdapter/)
     expect(html).not.toMatch(/__LS_FILE_(START|END)__/)
     expect(html).not.toContain('// ---cut---')
 
     const dataCodeMatch = html.match(/data-code="([^"]*)"/)
     const dataCode = dataCodeMatch?.[1] ?? ''
-    expect(dataCode).toContain('const adapter = makeWorkerAdapter')
+    expect(dataCode).toContain('const adapter = makeAdapter')
     expect(dataCode).not.toMatch(/__LS_FILE_(START|END)__/)
-  })
-})
-
-describe('buildSnippets cache reuse', () => {
-  const cacheRoot = path.join(exampleProjectRoot, 'node_modules', '.astro-twoslash-code')
-
-  const runBuild = () =>
-    Effect.runPromise(
-      buildSnippets({ projectRoot: exampleProjectRoot }).pipe(Effect.provide(PlatformNode.NodeFileSystem.layer)),
-    )
-
-  beforeAll(async () => {
-    fs.rmSync(cacheRoot, { recursive: true, force: true })
-  })
-
-  it('skips rendering when artefacts are fresh', async () => {
-    const firstRunCount = await runBuild()
-    expect(firstRunCount).toBeGreaterThan(0)
-
-    const secondRunCount = await runBuild()
-    expect(secondRunCount).toBe(0)
   })
 })
 
@@ -378,7 +361,7 @@ describe('Sentinel node removal regression', () => {
     const bundle = buildSnippetBundle({ entryFilePath, baseDir: docsPaths.snippetAssetsRoot })
 
     const rendered = await Effect.runPromise(
-      __internal.renderSnippet(docsRenderer, bundle, 'patterns/auth/store-with-auth.tsx'),
+      renderSnippet(requireRenderer(docsRenderer), bundle, 'patterns/auth/store-with-auth.tsx'),
     )
 
     const html = rendered.html ?? ''
@@ -406,7 +389,7 @@ describe('Sentinel node removal regression', () => {
     const bundle = buildSnippetBundle({ entryFilePath, baseDir: docsPaths.snippetAssetsRoot })
 
     const rendered = await Effect.runPromise(
-      __internal.renderSnippet(docsRenderer, bundle, 'patterns/auth/keep-payload-canonical.ts'),
+      renderSnippet(requireRenderer(docsRenderer), bundle, 'patterns/auth/keep-payload-canonical.ts'),
     )
 
     const html = rendered.html ?? ''

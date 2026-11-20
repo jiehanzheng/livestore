@@ -1,7 +1,8 @@
-import { queryDb } from '@livestore/livestore'
-import { useStore } from '@livestore/react'
 import type React from 'react'
 import { useCallback, useMemo, useState } from 'react'
+
+import { queryDb } from '@livestore/livestore'
+import { useStore } from '@livestore/react'
 
 import { useMailboxStore } from '../stores/mailbox/index.ts'
 import { mailboxTables } from '../stores/mailbox/schema.ts'
@@ -41,7 +42,7 @@ export const UserLabelPicker: React.FC<UserLabelPickerProps> = ({ threadId }) =>
 
   const toggleUserLabel = useCallback(
     (labelId: string) => {
-      if (isLabelApplied(labelId)) {
+      if (isLabelApplied(labelId) === true) {
         removeUserLabelFromThread(threadStore, { threadId, labelId })
       } else {
         applyUserLabelToThread(threadStore, { threadId, labelId })

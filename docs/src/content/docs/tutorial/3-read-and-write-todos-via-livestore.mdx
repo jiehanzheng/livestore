@@ -108,7 +108,7 @@ const materializers = State.SQLite.materializers(events, {
 })
 
 const state = State.SQLite.makeState({ tables, materializers })
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({ projectionRevision: 'tutorial-todos-v1', events, state })
 ```
 
 Here's a quick summary of the code:
@@ -121,7 +121,7 @@ The `tables`, `events` and `materializers` are packaged up into a `schema` objec
 :::note[Versioning events and materializers]
 You may have noticed that event and materializer names are prefixed with `v1`.
 
-It's good practice in LiveStore to version your events and materializers to ensure future compatibility between them as your app evolves.
+Event names identify immutable event contracts. `projectionRevision` separately identifies how retained events are materialized: keep it stable until tables or materializers change, then advance it so the derived state can be rebuilt.
 :::
 
 ## Configure your React/Vite app to use LiveStore

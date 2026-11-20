@@ -25,8 +25,13 @@ export const Search = () => {
 
   return (
     <>
-      <Filters filteredCount={filterState.query ? filteredIssueIds.length : 0} search />
-      <FilteredList filteredIssueIds={filterState.query ? filteredIssueIds : emptyIssueIds} />
+      <Filters
+        filteredCount={filterState.query !== null && filterState.query !== '' ? filteredIssueIds.length : 0}
+        search
+      />
+      <FilteredList
+        filteredIssueIds={filterState.query !== null && filterState.query !== '' ? filteredIssueIds : emptyIssueIds}
+      />
     </>
   )
 }

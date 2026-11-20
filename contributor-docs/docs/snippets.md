@@ -1,17 +1,18 @@
 # Code snippets
 
-We pre-render documentation examples with [Expressive Code Twoslash](https://twoslash.matthiesen.dev).
+We pre-render documentation examples with [Shiki Twoslash](https://shiki.style/packages/twoslash).
 Snippet sources live under `docs/src/content/_assets/code/` and are bundled by the
 `@local/astro-twoslash-code` toolkit before Astro renders the docs.
 
 > ❗️ The authoritative reference for path handling and virtual file rules is the
-> comment at the top of `packages/@local/astro-twoslash-code/src/cli/snippets.ts`. Update that
+> comment at the top of `packages/@local/astro-twoslash-code/src/cli/snippet-build.ts`. Update that
 > spec first if you touch the pipeline, and keep this document in sync with it.
 
 ## Authoring guidelines
 
-- Keep every snippet in the snippet workspace (`docs/src/content/_assets/code/**`). All imports
+- Keep every snippet in the snippet workspace (`docs/src/content/_assets/code/**`). Imports between snippet files
   must be relative (start with `./` or `../`) and include explicit extensions (`.ts`, `.tsx`, …).
+  Package imports resolve from the owning snippet workspace’s declared dependencies.
 - Organise larger examples as real files rather than MDX inline samples so they stay type-checked
   and easier to review.
 - Avoid TypeScript workarounds such as `// @ts-ignore`, `// @ts-expect-error`, `// @errors`, or
@@ -44,15 +45,20 @@ component always reflects the pre-rendered bundle stored in `docs/node_modules/.
   artefacts plus a manifest to `docs/node_modules/.astro-twoslash-code/` for ad-hoc or CI usage.
 - The cache format is stable: each artefact lists the bundle’s source files, their hashes, and the
   rendered HTML/diagnostics per file. The manifest aggregates bundle hashes and global styles
-  emitted by Expressive Code.
+  emitted by the Shiki renderer.
 
 ## Type checking & dependencies
 
-- The snippet workspace has its own `tsconfig.json` aligned with the Twoslash compiler options
-  (NodeNext modules/resolution, React JSX, `exactOptionalPropertyTypes`, etc.). Use it when
-  running targeted type checks.
-- Install snippet-only dependencies with `pnpm --filter docs-code-snippets add <pkg>` so the
-  regular docs app stays lean.
+- Browser and Node examples use the main snippet workspace’s `tsconfig.json` with NodeNext
+  modules/resolution. Expo examples live under `native/`, whose own configuration uses Bundler
+  resolution and whose dependencies provide the actual Expo, React Native and React types.
+  Run targeted type checks against the owning workspace; native declaration stubs cannot replace
+  those dependencies.
+- TypeScript checks do not cover Vue templates. Vue examples also require the actual SFC renderer
+  with strict template checking.
+- Declare snippet-only dependencies in the owning `package.json.genie.ts` so the
+  regular docs app stays lean. Regenerate manifests canonically, update the normal
+  pnpm lockfile, and verify a frozen strict-peer install.
 
 ## Testing
 

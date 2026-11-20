@@ -1,15 +1,7 @@
 <script setup lang="ts">
-import { useClientDocument } from 'vue-livestore'
+import { useUiState } from '../../../getting-started/vue/livestore/store.ts'
 
-import { tables } from './schema.ts'
-
-const { newTodoText, filter } = useClientDocument(tables.uiState)
-
-void newTodoText
-void filter
-
-void newTodoText
-void filter
+const { newTodoText, filter } = useUiState()
 </script>
 
 <template>

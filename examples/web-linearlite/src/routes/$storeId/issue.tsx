@@ -1,5 +1,6 @@
-import { shouldNeverHappen } from '@livestore/utils'
 import { createFileRoute } from '@tanstack/react-router'
+
+import { shouldNeverHappen } from '@livestore/utils'
 
 import { Issue } from '../../components/layout/issue/index.tsx'
 
@@ -13,7 +14,7 @@ const IssueRoute = () => {
 
   const numericId = Number(issueIdValue)
 
-  if (Number.isNaN(numericId)) {
+  if (Number.isNaN(numericId) === true) {
     return shouldNeverHappen('Issue route received invalid issueId param', issueIdValue)
   }
 

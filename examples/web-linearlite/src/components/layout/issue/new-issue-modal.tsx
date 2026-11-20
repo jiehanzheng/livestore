@@ -31,7 +31,7 @@ export const NewIssueModal = () => {
   }, [setNewIssueModalStatus])
 
   const createIssue = React.useCallback(() => {
-    if (!title) return
+    if (title === '') return
     const date = new Date()
     // TODO make this "merge safe"
     const highestIssueId = store.query(highestIssueId$)

@@ -5,8 +5,8 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { createExpressiveCodeConfig } from '../expressive-code.ts'
 import { resolveProjectPaths } from '../project-paths.ts'
+import { createRendererConfig } from '../renderer-config.ts'
 import { createTwoslashSnippetPlugin } from './vite-plugin-snippet.ts'
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -72,7 +72,7 @@ const createFixtureProject = (): FixtureContext => {
   fs.writeFileSync(path.join(cacheDir, 'main.ts.json'), JSON.stringify(artefact))
 
   const paths = resolveProjectPaths(projectRoot)
-  const { fingerprintHash } = createExpressiveCodeConfig(paths, {})
+  const { fingerprintHash } = createRendererConfig(paths, {})
 
   const manifest = {
     entries: [
@@ -177,7 +177,7 @@ const createMultiFileFixtureProject = (): FixtureContext => {
   fs.writeFileSync(path.join(cacheDir, 'main.ts.json'), JSON.stringify(artefact))
 
   const paths = resolveProjectPaths(projectRoot)
-  const { fingerprintHash } = createExpressiveCodeConfig(paths, {})
+  const { fingerprintHash } = createRendererConfig(paths, {})
 
   const manifest = {
     entries: [

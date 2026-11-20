@@ -2,6 +2,14 @@
 
 An email client using multi-store architecture to demonstrate partial sync and cross-store sync.
 
+Thread stores open from local data without waiting for the network. A mailbox index entry can arrive before the corresponding thread metadata reaches this device, so the thread view shows an availability notice until its live query returns the record. Retained thread metadata remains readable offline.
+
+Run the focused thread-view regression checks from the repository root:
+
+```sh
+pnpm exec vitest run --config examples/web-email-client/vitest.config.ts
+```
+
 ## Partial Synchronization
 
 We can only load so much data in the browser before hitting memory limits and making the initial load unbearably slow. A typical email mailbox with hundreds of thousands of threads would exceed this limit.

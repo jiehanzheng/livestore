@@ -38,3 +38,44 @@ acceptance gates. The scoped hook must refuse missing or stale evidence.
 - Full Setup remains required outside that scope and for full upstream parity.
 - V7/V8 immutable snapshots remain evidence; future projection invalidation
   work is a separate design decision and is not authorized by this workflow.
+
+## November 19, 2026 — Named maintained owners
+
+The human approved **“Extend Node/pnpm qualification (Recommended)”** in the
+coordinating chat (answer to `call_4e2609aa0eef498391bd00ddbe6ab6b8`). The
+reviewed Full Setup checkpoint proposal has SHA-256
+`380ed5c640184f4197f66f9190e809246637b9ed37705ed10762ae913101cbbf`;
+option B is the approved change. The earlier October approval and compiler
+profile above remain historical, not descriptions of today's installed tools.
+
+Support the normal Node/pnpm workflow for these named owners: the docs site and
+snippet workspaces, `astro-twoslash-code`, `astro-tldraw`, maintained example
+commands/generation, and the Cloudflare TodoMVC, web TodoMVC, script TodoMVC,
+Sync-CF TodoMVC, email, tutorial starter and LinearLite demos. Standalone Expo
+and platform application journeys retain their separately bound native proofs.
+Use the existing declared tool profile: Node 24, pnpm 12.16.0, Bun 1.4.2,
+official `@effect/tsgo` 0.64.1 / TypeScript 7.0.2, Oxfmt 0.61.0, Oxlint 1.82.0
+and pinned canonical Genie. No alternative compiler or parallel toolchain is
+introduced.
+
+Canonical generation, strict frozen installation, compiler diagnostics,
+format/type-aware lint, renderer/cache/import-restoration/diagnostic/process
+lifetime tests, production builds and real maintained journeys remain required.
+Reuse requires identical relevant source/tool/dependency inputs and actual
+hashed artifacts; an older summary or a successful setup is insufficient.
+The source-bound fixed check matrix in
+[`scripts/maintained-qualification/README.md`](../../../../../scripts/maintained-qualification/README.md)
+records the whole source/index, current tools, exact reused input projections,
+joined checks and artifact evidence for lead review. It never commits or grants
+application adoption. The SDK-only guard and its refusal behavior are unchanged;
+this extension is not an arbitrary SDK scope mode or permission to put renderer
+changes through that finite guard. Commit review remains conditional on the
+actual final source/index and complete named-owner evidence.
+
+Original cold Nix closure realization, Nix-supplied tool/browser integration,
+automatic devenv shell readiness and native setup-trace smoke remain explicitly
+**unverified**. This supported workflow is not a Full Setup pass or upstream /
+Darwin parity claim. Native SQLite distribution rebuilds, release and
+infrastructure changes remain outside this extension and require their owning
+qualification. No machine/Docker settings, global installations, registry or
+upstream writes, workflow dispatch or deployment are authorized.

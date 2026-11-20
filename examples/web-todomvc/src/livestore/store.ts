@@ -1,14 +1,15 @@
+import { unstable_batchedUpdates as batchUpdates } from 'react-dom'
+
 import { makePersistedAdapter } from '@livestore/adapter-web'
 import LiveStoreSharedWorker from '@livestore/adapter-web/shared-worker?sharedworker'
 import { useStore } from '@livestore/react'
-import { unstable_batchedUpdates as batchUpdates } from 'react-dom'
 
 import LiveStoreWorker from '../livestore.worker.ts?worker'
 import { schema } from './schema.ts'
 
 const resetPersistence = import.meta.env.DEV && new URLSearchParams(window.location.search).get('reset') !== null
 
-if (resetPersistence) {
+if (resetPersistence === true) {
   const searchParams = new URLSearchParams(window.location.search)
   searchParams.delete('reset')
   window.history.replaceState(null, '', `${window.location.pathname}?${searchParams.toString()}`)

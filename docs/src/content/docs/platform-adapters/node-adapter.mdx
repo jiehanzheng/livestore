@@ -5,45 +5,34 @@ sidebar:
 ---
 
 import NodeAdapterSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/adapter.ts?snippet'
-import NodeResetPersistenceSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/reset-persistence.ts?snippet'
-import NodeWorkerMainSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/worker-main.ts?snippet'
-import NodeWorkerWorkerSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/worker-worker.ts?snippet'
-import NodeWorkerLoggingSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/worker-logging.ts?snippet'
+import DevelopmentStorageSnippet from '../../_assets/code/reference/platform-adapters/node-adapter/development-storage.ts?snippet'
 
-Works with Node.js, Bun and Deno.
+The selected Node adapter runs persistence and synchronization in the calling Node.js process. It requires an explicit stable `clientId` and either in-memory storage or a filesystem `baseDirectory`. Set `disableDevtools: true` when creating the store.
+
+Give each installation its own stable client ID and retain it when reopening its local data. The fixed ID in this example assumes one local installation.
 
 ## Example
 
 <NodeAdapterSnippet />
 
-## Resetting local persistence
+The filesystem directory contains the authoritative event log as well as derived state. Keep the same directory and client identity when reopening a store. Close the store with `await store.shutdownPromise()` when its owner finishes.
 
-During development you can instruct the adapter to wipe the locally persisted state and eventlog databases on startup:
+## Development storage
 
-<NodeResetPersistenceSnippet />
+Use a separate directory to keep development data apart from other local stores:
 
-:::caution
-This will delete all local data for the given `storeId` and `clientId`. It only clears local persistence and does not reset any connected sync backend. Only enable it for debugging scenarios.
-:::
+<DevelopmentStorageSnippet />
 
-### Worker adapter
+This creates a separate local store; it does not reset existing data or any connected sync backend. The selected adapter has no `resetPersistence` option.
 
-The worker adapter can be used for more advanced scenarios where it's preferable to reduce the load of the main thread and run persistence/syncing in a worker thread.
+## Debugging
 
-<NodeWorkerMainSnippet />
+Launch your entry point with `node --inspect-brk path/to/entry.mjs` and attach a
+Node-compatible debugger. Breakpoints run in the process that owns the adapter,
+including its persistence and synchronization. Use a disposable storage
+directory for test writes and close the store before inspecting its database
+from another process. [Node.js debugger](https://nodejs.org/api/debugger.html)
 
-<NodeWorkerWorkerSnippet />
+## Supported surface
 
-#### Logging
-
-You can control what the Node worker logs and how it's formatted.
-Pass two optional options to `makeWorker`:
-
-- `logger` — where/format of logs (e.g. pretty console output)
-- `logLevel` — how verbose logs are (`"None"` silences logs)
-
-<NodeWorkerLoggingSnippet />
-
-Tips:
-- Use `"None"` to keep test output quiet.
-- Keep the default (Debug) when diagnosing issues.
+This adapter exposes `makeAdapter` for Node.js. SDK worker adapters, worker logging options and LiveStore DevTools are not available. Bun and Deno compatibility have not been qualified for this selected adapter.

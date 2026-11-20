@@ -15,4 +15,4 @@ const tables = {
 
 const state = State.SQLite.makeState({ tables, materializers: {} })
 
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({ projectionRevision: 'docs-reference-cli-v1', events, state })

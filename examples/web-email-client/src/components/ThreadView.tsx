@@ -1,7 +1,8 @@
-import { queryDb } from '@livestore/livestore'
-import { useStore } from '@livestore/react'
 import type React from 'react'
 import { useMemo } from 'react'
+
+import { queryDb } from '@livestore/livestore'
+import { useStore } from '@livestore/react'
 
 import { useMailboxStore } from '../stores/mailbox/index.ts'
 import { mailboxTables } from '../stores/mailbox/schema.ts'
@@ -44,13 +45,26 @@ export const ThreadView: React.FC<ThreadViewProps> = ({ threadId }) => {
         threadUserLabels.map((label) => [
           label.id,
           {
-            backgroundColor: label.color ? `${label.color}20` : undefined,
+            backgroundColor:
+              label.color !== undefined && label.color !== null && label.color !== '' ? `${label.color}20` : undefined,
             color: label.color ?? undefined,
           },
         ]),
       ),
     [threadUserLabels],
   )
+  // Mailbox and thread stores sync independently; opening a store does not imply
+  // its domain record has arrived. Keep cached reads available without waiting for the network.
+  if (thread === undefined) {
+    return (
+      <div className="grid place-items-center h-full">
+        <p className="text-gray-500" role="status">
+          This thread is not available on this device. It will appear when its data syncs.
+        </p>
+      </div>
+    )
+  }
+
   const participants: string[] = JSON.parse(thread.participants)
 
   return (

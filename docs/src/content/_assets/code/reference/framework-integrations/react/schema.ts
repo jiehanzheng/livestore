@@ -39,4 +39,8 @@ const materializers = State.SQLite.materializers(events, {
 
 const state = State.SQLite.makeState({ tables, materializers })
 
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({
+  projectionRevision: 'docs-reference-framework-integrations-react-v1',
+  events,
+  state,
+})

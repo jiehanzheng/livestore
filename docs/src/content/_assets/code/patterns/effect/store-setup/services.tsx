@@ -1,51 +1,44 @@
-import { useAtomSet } from '@effect-atom/atom-react'
-import { Context, Effect } from 'effect'
-import { useCallback } from 'react'
+import { Effect } from 'effect'
+import { type ChangeEvent, type FormEvent, useCallback, useState, useTransition } from 'react'
 
-import { StoreTag } from './atoms.ts'
-import { events } from './schema.ts'
+import { useStore } from '@livestore/react'
 
-// Example service definition
-export class MyService extends Context.Service<
-  MyService,
-  {
-    processItem: (name: string) => Effect.Effect<{
-      name: string
-      metadata: Record<string, unknown>
-    }>
-  }
->()('MyService') {}
+import { todoStoreOptions } from './store.ts'
+import { makeTodoEvent } from './todo-input.ts'
 
-// Use the commit hook for event handling
-export const useCommit = () => useAtomSet(StoreTag.commit)
+export const CreateTodo = () => {
+  const store = useStore(todoStoreOptions)
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
 
-// Simple commit example
-export const createItemAtom = StoreTag.runtime.fn<string>()((itemName, get) => {
-  return Effect.sync(() => {
-    const store = get(StoreTag.storeUnsafe)
-    if (store !== undefined) {
-      store.commit(
-        events.itemCreated({
-          id: crypto.randomUUID(),
-          name: itemName,
-          metadata: { createdAt: new Date().toISOString() },
-        }),
-      )
-    }
-  })
-})
-
-// Use in a React component
-export const CreateItemButton = () => {
-  const createItem = useAtomSet(createItemAtom)
-
-  const handleClick = useCallback(() => {
-    createItem('New Item')
-  }, [createItem])
+  const submitTodo = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      startTransition(async () => {
+        setError(null)
+        try {
+          const todoCreated = await Effect.runPromise(makeTodoEvent(draft))
+          store.commit(todoCreated)
+          setDraft('')
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : 'Could not save the todo.')
+        }
+      })
+    },
+    [draft, store, startTransition],
+  )
+  const changeDraft = useCallback((event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value), [])
 
   return (
-    <button type="button" onClick={handleClick}>
-      Create Item
-    </button>
+    <form onSubmit={submitTodo}>
+      <label>
+        New todo <input value={draft} disabled={pending} onChange={changeDraft} />
+      </label>
+      <button type="submit" disabled={pending}>
+        {pending === true ? 'Saving…' : 'Save todo'}
+      </button>
+      {error === null ? null : <p role="alert">{error}</p>}
+    </form>
   )
 }

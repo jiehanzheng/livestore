@@ -35,13 +35,13 @@ export interface TldrawDiagramPayload {
   generatedAt: string
 }
 
-export class CachedDiagramMissingError extends Schema.TaggedError<CachedDiagramMissingError>()(
-  'Tldraw.CachedDiagramMissingError',
-  {
-    entryRelative: Schema.String,
-    rebuildInstruction: Schema.String,
-  },
-) {}
+export class CachedDiagramMissingError extends Schema.TaggedError<
+  CachedDiagramMissingError,
+  { readonly brand: unique symbol }
+>()('Tldraw.CachedDiagramMissingError', {
+  entryRelative: Schema.String,
+  rebuildInstruction: Schema.String,
+}) {}
 
 const diagramComponentSpecifier = (() => {
   const filePath = fileURLToPath(new URL('./components/TldrawDiagram.astro', import.meta.url))

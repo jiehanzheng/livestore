@@ -27,19 +27,32 @@ export const getBranchName = () => {
 
 export const versionNpmSuffix = liveStoreVersion.includes('dev') === true ? `@${liveStoreVersion}` : ''
 
-export const npmTagSuffix = liveStoreVersion.includes('dev') === true ? '@dev' : ''
-
 export const IS_MAIN_BRANCH = getBranchName() === 'main'
 
-export const makeTiged = (example: string, approach: 'bunx' | 'pnpm dlx' | 'npx') => {
-  const hashSuffix = `#${getBranchName()}`
-  // The quotes around the github URI are necessary for certain shells (e.g. zsh) to parse correctly
-  return `${approach} tiged "github:livestorejs/livestore/examples/${example}${hashSuffix}" livestore-app`
-}
+export const docsRepository = 'jiehanzheng/livestore'
+// A preview's build branch does not establish a published source or template.
+export const docsPublicationRef = process.env.LIVESTORE_DOCS_PUBLICATION_REF || undefined
+const repositoryUrl = `https://github.com/${docsRepository}`
+export const docsSourceUrl =
+  docsPublicationRef !== undefined ? `${repositoryUrl}/tree/${docsPublicationRef}` : repositoryUrl
+export const docsEditLink =
+  docsPublicationRef !== undefined ? { baseUrl: `${repositoryUrl}/edit/${docsPublicationRef}/docs/` } : undefined
 
-export const makeCreate = (example: string, approach: 'bunx' | 'pnpm dlx' | 'npx' | 'yarn dlx') => {
-  const branch = getBranchName()
-  const branchFlag = branch !== 'main' ? ` --branch ${branch}` : ''
-  const packageName = `@livestore/cli${npmTagSuffix}`
-  return `${approach} ${packageName} create --example ${example}${branchFlag} livestore-app`
+const maintainedTemplates = new Set([
+  'cloudflare-todomvc',
+  'tutorial-starter',
+  'web-email-client',
+  'web-linearlite',
+  'web-todomvc',
+  'web-todomvc-script',
+  'web-todomvc-sync-cf',
+])
+
+export const hasPublishedTemplate = (example: string) =>
+  docsPublicationRef !== undefined && maintainedTemplates.has(example)
+
+export const makeTiged = (example: string, approach: 'bunx' | 'pnpm dlx' | 'npx' | 'yarn dlx') => {
+  if (hasPublishedTemplate(example) === false) throw new Error(`No qualified published template: ${example}`)
+  // The quotes around the github URI are necessary for certain shells (e.g. zsh) to parse correctly
+  return `${approach} tiged "github:${docsRepository}/examples/${example}#${docsPublicationRef}" livestore-app`
 }

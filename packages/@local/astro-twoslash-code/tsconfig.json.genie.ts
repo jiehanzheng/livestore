@@ -1,8 +1,15 @@
-import { baseTsconfigCompilerOptions, domLib, packageTsconfigExclude, tsconfigJson } from '../../../genie/repo.ts'
+import {
+  baseTsconfigCompilerOptions,
+  effectTsgoPluginFor,
+  domLib,
+  packageTsconfigExclude,
+  tsconfigJson,
+} from '../../../genie/repo.ts'
 
 export default tsconfigJson({
   compilerOptions: {
     ...baseTsconfigCompilerOptions,
+    plugins: [effectTsgoPluginFor('packages/@local/astro-twoslash-code')],
     lib: [...domLib],
     composite: true,
     rootDir: '.',

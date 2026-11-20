@@ -28,7 +28,10 @@ export interface BuildDiagramsOptions {
   verbose?: boolean
 }
 
-export class DiagramDiscoveryError extends Schema.TaggedError<DiagramDiscoveryError>()('Tldraw.DiagramDiscoveryError', {
+export class DiagramDiscoveryError extends Schema.TaggedError<
+  DiagramDiscoveryError,
+  { readonly brand: unique symbol }
+>()('Tldraw.DiagramDiscoveryError', {
   path: Schema.String,
   cause: Schema.Any,
 }) {}

@@ -40,6 +40,36 @@
         },
         "allowedDuplicatedPackages": [
           "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "@effect/platform-node/NodeFileSystem#layer",
+          "effect/FileSystem#FileSystem",
+          "effect/FileSystem#WatchEvent",
+          "effect/PlatformError#PlatformError",
+          "effect/cli/Command#make",
+          "effect/cli/Command#withSubcommands"
+        ],
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.test.ts",
+              "src/**/*.spec.ts",
+              "src/**/*.test.tsx",
+              "src/**/*.spec.tsx"
+            ],
+            "options": {
+              "allowedUnstableApis": [
+                "@effect/platform-node/NodeFileSystem#layer",
+                "effect/FileSystem#FileSystem",
+                "effect/FileSystem#WatchEvent",
+                "effect/PlatformError#PlatformError",
+                "effect/cli/Command#make",
+                "effect/cli/Command#withSubcommands",
+                "effect/FileSystem#makeNoop",
+                "effect/PlatformError#systemError"
+              ]
+            }
+          }
         ]
       }
     ],

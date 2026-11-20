@@ -15,9 +15,9 @@ export const FilterMenu = ({ type, children }: { type?: 'status' | 'priority'; c
   const toggleFilter = React.useCallback(
     ({ type, value }: { type: 'status'; value: Status } | { type: 'priority'; value: Priority }) => {
       let filters: Status[] | undefined = [...(filterState[type] ?? [])]
-      if (filters.includes(value)) filters.splice(filters.indexOf(value), 1)
+      if (filters.includes(value) === true) filters.splice(filters.indexOf(value), 1)
       else filters.push(value)
-      if (!filters.length) filters = undefined
+      if (filters.length === 0) filters = undefined
       setFilterState({ [type]: filters })
     },
     [filterState, setFilterState],
@@ -54,7 +54,7 @@ export const FilterMenu = ({ type, children }: { type?: 'status' | 'priority'; c
                     className="group/item p-2 pl-9 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 focus:outline-none focus:bg-neutral-100 dark:focus:bg-neutral-700 cursor-pointer flex items-center gap-2"
                   >
                     <div
-                      className={`absolute left-4 size-4 rounded ${active ? 'bg-indigo-500' : 'hidden group-hover/item:block group-focus/item:block border border-neutral-300 dark:border-neutral-600'}`}
+                      className={`absolute left-4 size-4 rounded ${active === true ? 'bg-indigo-500' : 'hidden group-hover/item:block group-focus/item:block border border-neutral-300 dark:border-neutral-600'}`}
                     >
                       {active && <CheckIcon className="size-4 text-white" />}
                     </div>
@@ -77,7 +77,7 @@ export const FilterMenu = ({ type, children }: { type?: 'status' | 'priority'; c
                     className="group/item p-2 pl-9 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 focus:outline-none focus:bg-neutral-100 dark:focus:bg-neutral-700 cursor-pointer flex items-center gap-2"
                   >
                     <div
-                      className={`absolute left-4 size-4 rounded ${active ? 'bg-indigo-500' : 'hidden group-hover/item:block group-focus/item:block border border-neutral-300 dark:border-neutral-600'}`}
+                      className={`absolute left-4 size-4 rounded ${active === true ? 'bg-indigo-500' : 'hidden group-hover/item:block group-focus/item:block border border-neutral-300 dark:border-neutral-600'}`}
                     >
                       {active && <CheckIcon className="size-4 text-white" />}
                     </div>

@@ -4,7 +4,7 @@ test.setTimeout(60_000)
 
 test.describe('TodoMVC (sync-cf)', () => {
   test('adds and toggles todos', async ({ baseURL, page }) => {
-    if (!baseURL) throw new Error('baseURL is required')
+    if (baseURL === undefined || baseURL === '') throw new Error('baseURL is required')
 
     await page.goto(baseURL)
 

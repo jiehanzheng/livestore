@@ -6,8 +6,11 @@ sidebar:
 ---
 
 import { Steps, Tabs, TabItem, Code } from '@astrojs/starlight/components';
-import { makeCreate } from '../../../data/data.ts'
+import ForkInstallNotice from '../../../components/ForkInstallNotice.astro'
+import { hasPublishedTemplate, makeTiged } from '../../../data/data.ts'
 import NodeMinimalExampleSnippet from '../../_assets/code/getting-started/node/minimal-example.ts?snippet'
+
+<ForkInstallNotice />
 
 ## Minimal example
 
@@ -23,17 +26,21 @@ For a quick start, we recommend using our template app following the steps below
 
 1. **Set up project from template**
 
-   <Tabs syncKey="package-manager">
-     <TabItem label="bun">
-       <Code code={makeCreate('node-todomvc-sync-cf', 'bunx')} lang="sh" />
-     </TabItem>
-     <TabItem label="pnpm">
-       <Code code={makeCreate('node-todomvc-sync-cf', 'pnpm dlx')} lang="sh" />
-     </TabItem>
-     <TabItem label="npm">
-       <Code code={makeCreate('node-todomvc-sync-cf', 'npx')} lang="sh" />
-     </TabItem>
-   </Tabs>
+   {hasPublishedTemplate('node-todomvc-sync-cf') ? (
+     <Tabs syncKey="package-manager">
+       <TabItem label="bun">
+         <Code code={makeTiged('node-todomvc-sync-cf', 'bunx')} lang="sh" />
+       </TabItem>
+       <TabItem label="pnpm">
+         <Code code={makeTiged('node-todomvc-sync-cf', 'pnpm dlx')} lang="sh" />
+       </TabItem>
+       <TabItem label="npm">
+         <Code code={makeTiged('node-todomvc-sync-cf', 'npx')} lang="sh" />
+       </TabItem>
+     </Tabs>
+   ) : (
+     <p>A qualified, published template is not available for this guide. Use the setup instructions below in an existing project.</p>
+   )}
 
    Replace `livestore-app` with your desired app name.
 

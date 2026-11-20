@@ -1,7 +1,8 @@
-import { queryDb } from '@livestore/livestore'
-import { useStoreRegistry } from '@livestore/react'
 import type React from 'react'
 import { useCallback } from 'react'
+
+import { queryDb } from '@livestore/livestore'
+import { useStoreRegistry } from '@livestore/react'
 
 import { useMailboxStore } from '../stores/mailbox/index.ts'
 import { mailboxTables } from '../stores/mailbox/schema.ts'
@@ -32,13 +33,15 @@ export const ThreadList: React.FC = () => {
   )
 
   const selectedLabel = labels.find((l) => l.id === uiState.selectedLabelId)
-  if (!selectedLabel) throw new Error('ThreadList rendered without a selected label or selected label not found')
+  if (selectedLabel === undefined)
+    throw new Error('ThreadList rendered without a selected label or selected label not found')
 
-  const threadsForSelectedLabel = uiState.selectedLabelId
-    ? threadLabelsForLabel
-        .map((tl) => threadIndex.find((t) => t.id === tl.threadId))
-        .filter((t): t is NonNullable<typeof t> => t !== undefined)
-    : undefined
+  const threadsForSelectedLabel =
+    uiState.selectedLabelId !== undefined && uiState.selectedLabelId !== null && uiState.selectedLabelId !== ''
+      ? threadLabelsForLabel
+          .map((tl) => threadIndex.find((t) => t.id === tl.threadId))
+          .filter((t): t is NonNullable<typeof t> => t !== undefined)
+      : undefined
 
   const selectThread = useCallback(
     (threadId: string) => {
@@ -74,7 +77,7 @@ export const ThreadList: React.FC = () => {
     [selectThread],
   )
 
-  if (!threadsForSelectedLabel || threadsForSelectedLabel.length === 0) {
+  if (threadsForSelectedLabel === undefined || threadsForSelectedLabel.length === 0) {
     return (
       <div className="grid place-items-center h-full">
         <p className="text-gray-500">

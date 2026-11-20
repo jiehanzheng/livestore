@@ -1,7 +1,8 @@
-import { StoreInternalsSymbol } from '@livestore/livestore'
-import { Effect, Stream } from '@livestore/utils/effect'
 import React from 'react'
 import { Switch } from 'react-aria-components'
+
+import { StoreInternalsSymbol } from '@livestore/livestore'
+import { Effect, Stream } from '@livestore/utils/effect'
 
 import { useAppStore } from '../../../livestore/store.ts'
 
@@ -9,7 +10,7 @@ export const SyncToggle = ({ className }: { className?: string }) => {
   // TODO hook up actual sync/network state
   const [sync, setSync] = React.useState(false)
   const hasPendingSyncEvents = usePendingSyncEvents()
-  const statusText = hasPendingSyncEvents ? 'Pending sync events' : 'No pending sync events'
+  const statusText = hasPendingSyncEvents === true ? 'Pending sync events' : 'No pending sync events'
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -23,7 +24,7 @@ export const SyncToggle = ({ className }: { className?: string }) => {
         <span
           aria-hidden="true"
           className={`size-3 rounded-full border-2 ${
-            hasPendingSyncEvents
+            hasPendingSyncEvents === true
               ? 'animate-spin border-orange-500 border-t-transparent'
               : 'border-transparent opacity-0'
           }`}
@@ -49,75 +50,57 @@ export const SyncToggle = ({ className }: { className?: string }) => {
   )
 }
 
+const subscribeToPendingSyncEvents = (
+  store: ReturnType<typeof useAppStore>,
+  setHasPendingEvents: React.Dispatch<React.SetStateAction<boolean>>,
+) => {
+  const syncProcessor = store[StoreInternalsSymbol].syncProcessor
+  const leaderSyncState = store[StoreInternalsSymbol].clientSession.leaderThread.syncState
+  let sessionPending = false
+  let leaderPending = false
+  const applyState = () => {
+    const next = sessionPending || leaderPending
+    setHasPendingEvents((previous) => (previous === next ? previous : next))
+  }
+  const setSessionPending = (pending: boolean) => {
+    sessionPending = pending
+    applyState()
+  }
+  const setLeaderPending = (pending: boolean) => {
+    leaderPending = pending
+    applyState()
+  }
+
+  // Both streams belong to this subscription; cancellation closes their shared scope.
+  return Effect.gen(function* () {
+    applyState()
+    const sessionState = yield* syncProcessor.syncState
+    const leaderState = yield* leaderSyncState
+    setSessionPending(sessionState.pending.length > 0)
+    setLeaderPending(leaderState.pending.filter((event) => event.seqNum.client === 0).length > 0)
+    yield* syncProcessor.syncState.changes.pipe(
+      Stream.tap((state) => Effect.sync(() => setSessionPending(state.pending.length > 0))),
+      Stream.runDrain,
+      Effect.interruptible,
+      Effect.tapCauseLogPretty,
+      Effect.forkScoped,
+    )
+    yield* leaderSyncState.changes.pipe(
+      Stream.tap((state) =>
+        Effect.sync(() => setLeaderPending(state.pending.filter((event) => event.seqNum.client === 0).length > 0)),
+      ),
+      Stream.runDrain,
+      Effect.interruptible,
+      Effect.tapCauseLogPretty,
+      Effect.forkScoped,
+    )
+    return yield* Effect.never
+  }).pipe(Effect.scoped, Effect.tapCauseLogPretty, Effect.runCallback)
+}
+
 const usePendingSyncEvents = () => {
   const store = useAppStore()
   const [hasPendingEvents, setHasPendingEvents] = React.useState(false)
-  const sessionPendingRef = React.useRef(false)
-  const leaderPendingRef = React.useRef(false)
-
-  React.useEffect(
-    () =>
-      Effect.gen(function* () {
-        const isActive = true
-        const leaderSyncState = store[StoreInternalsSymbol].clientSession.leaderThread.syncState
-
-        const applyState = () => {
-          if (!isActive) return
-          setHasPendingEvents((prev) => {
-            const next = sessionPendingRef.current || leaderPendingRef.current
-            return prev === next ? prev : next
-          })
-        }
-
-        const setSessionPending = (pending: boolean) => {
-          if (sessionPendingRef.current !== pending) {
-            sessionPendingRef.current = pending
-          }
-
-          applyState()
-        }
-
-        const setLeaderPending = (pending: boolean) => {
-          if (leaderPendingRef.current !== pending) {
-            leaderPendingRef.current = pending
-          }
-
-          applyState()
-        }
-
-        sessionPendingRef.current = false
-        leaderPendingRef.current = false
-
-        applyState()
-
-        const sessionState = yield* store[StoreInternalsSymbol].syncProcessor.syncState
-        const leaderState = yield* leaderSyncState
-
-        setSessionPending(sessionState.pending.length > 0)
-        setLeaderPending(leaderState.pending.filter((_) => _.seqNum.client === 0).length > 0)
-
-        yield* store[StoreInternalsSymbol].syncProcessor.syncState.changes.pipe(
-          Stream.tap((sessionState) => Effect.sync(() => setSessionPending(sessionState.pending.length > 0))),
-          Stream.runDrain,
-          Effect.interruptible,
-          Effect.tapCauseLogPretty,
-          Effect.forkScoped,
-        )
-
-        yield* leaderSyncState.changes.pipe(
-          Stream.tap((leaderState) =>
-            Effect.sync(() => setLeaderPending(leaderState.pending.filter((_) => _.seqNum.client === 0).length > 0)),
-          ),
-          Stream.runDrain,
-          Effect.interruptible,
-          Effect.tapCauseLogPretty,
-          Effect.forkScoped,
-        )
-
-        return yield* Effect.never
-      }).pipe(Effect.scoped, Effect.tapCauseLogPretty, Effect.runCallback),
-    [store],
-  )
-
+  React.useEffect(() => subscribeToPendingSyncEvents(store, setHasPendingEvents), [store])
   return hasPendingEvents
 }

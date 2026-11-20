@@ -19,8 +19,8 @@ export const TitleInput = ({
 
   const handleTitleChange = useCallback(
     (title: string) => {
-      if (issue) store.commit(events.updateIssueTitle({ id: issue.id, title, modified: new Date() }))
-      if (setTitle) setTitle(title)
+      if (issue !== undefined) store.commit(events.updateIssueTitle({ id: issue.id, title, modified: new Date() }))
+      if (setTitle !== undefined) setTitle(title)
     },
     [issue, setTitle, store],
   )

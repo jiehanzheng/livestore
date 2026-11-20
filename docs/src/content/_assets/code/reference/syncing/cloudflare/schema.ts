@@ -48,4 +48,4 @@ const materializers = State.SQLite.materializers(events, {
 
 const state = State.SQLite.makeState({ tables, materializers })
 
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({ projectionRevision: 'docs-reference-syncing-cloudflare-v1', events, state })

@@ -1,5 +1,6 @@
-import { queryDb } from '@livestore/livestore'
 import React from 'react'
+
+import { queryDb } from '@livestore/livestore'
 
 import { uiState$ } from '../livestore/queries.ts'
 import { events, tables } from '../livestore/schema.ts'
@@ -21,7 +22,7 @@ export const MainSection: React.FC = () => {
 
   const toggleTodo = React.useCallback(
     ({ id, completed }: typeof tables.todos.Type) =>
-      store.commit(completed ? events.todoUncompleted({ id }) : events.todoCompleted({ id })),
+      store.commit(completed === true ? events.todoUncompleted({ id }) : events.todoCompleted({ id })),
     [store],
   )
 
@@ -30,9 +31,9 @@ export const MainSection: React.FC = () => {
   const handleTodoToggle = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const id = e.currentTarget.dataset.todoId
-      if (!id) return
+      if (id === undefined || id === '') return
       const todo = visibleTodos.find((item) => item.id === id)
-      if (todo) {
+      if (todo !== undefined) {
         toggleTodo(todo)
       }
     },
@@ -42,7 +43,7 @@ export const MainSection: React.FC = () => {
   const handleTodoDelete = React.useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       const id = e.currentTarget.dataset.todoId
-      if (!id) return
+      if (id === undefined || id === '') return
       store.commit(events.todoDeleted({ id, deletedAt: new Date() }))
     },
     [store],

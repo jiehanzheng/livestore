@@ -54,6 +54,7 @@ import {
   livestoreWorkspaceCatalog,
   nativeExpoQualificationCatalog,
 } from './external.ts'
+import { maintainedEffectApiPolicy } from './maintained-effect-api-policy.ts'
 import { livestoreCurrentPackageNames, type LivestorePackageName } from './repo-topology.ts'
 
 export { baseTsconfigCompilerOptions, reactJsx }
@@ -131,6 +132,7 @@ const baseTsconfigCompilerOptions = {
  * inherit their allowance.
  */
 const effectUnstableApiPolicy = {
+  ...maintainedEffectApiPolicy,
   'docs/src/content/_assets/code': docsEffectApiPolicy,
   'packages/@livestore/adapter-expo': {
     runtime: ['effect/http/FetchHttpClient#layer'],

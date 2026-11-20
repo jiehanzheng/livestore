@@ -6,6 +6,7 @@ import { makeWsSync } from '@livestore/sync-cf/client'
 import { schema, tables } from './schema.ts'
 
 const adapter = makeAdapter({
+  clientId: 'server-side-client',
   storage: { type: 'fs', baseDirectory: 'tmp' },
   sync: { backend: makeWsSync({ url: 'ws://localhost:8787' }), onSyncError: 'shutdown' },
 })
@@ -14,6 +15,7 @@ const store = await createStorePromise({
   adapter,
   schema,
   storeId: 'test',
+  disableDevtools: true,
   syncPayload: { authToken: 'insecure-token-change-me' },
 })
 

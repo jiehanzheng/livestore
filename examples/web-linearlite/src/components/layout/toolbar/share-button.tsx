@@ -28,7 +28,7 @@ export const ShareButton = ({ className }: { className?: string }) => {
           onPress={copyUrl}
           className="h-6 px-1.5 flex items-center gap-1 bg-neutral-800 rounded hover:bg-neutral-700 focus:bg-neutral-700 focus:outline-none whitespace-nowrap"
         >
-          {copied ? (
+          {copied === true ? (
             <>
               <CheckIcon className="size-3 shrink-0" />
               <span>

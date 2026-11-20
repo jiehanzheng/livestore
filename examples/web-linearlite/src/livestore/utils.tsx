@@ -6,10 +6,10 @@ export const filterStateToWhere = (filterState: FilterState) => {
   const { status, priority, query } = filterState
 
   return {
-    status: status ? { op: 'IN', value: status } : undefined,
-    priority: priority ? { op: 'IN', value: priority } : undefined,
+    status: status != null ? { op: 'IN', value: status } : undefined,
+    priority: priority != null ? { op: 'IN', value: priority } : undefined,
     // TODO treat query as `OR` in
-    title: query ? { op: 'LIKE', value: `%${query}%` } : undefined,
+    title: query !== null && query !== '' ? { op: 'LIKE', value: `%${query}%` } : undefined,
   } satisfies QueryBuilder.WhereParams<typeof tables.issue>
 }
 

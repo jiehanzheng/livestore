@@ -9,29 +9,22 @@ import { ShareButton } from './share-button.tsx'
 import { SyncToggle } from './sync-toggle.tsx'
 import { UserInput } from './user-input.tsx'
 
-const useClientFPSMeter = () => {
-  const [Component, setComponent] = React.useState<React.ComponentType<{ height?: number; className?: string }>>(
-    () => () => null,
-  )
+const FPSMeter = React.lazy(() => import('@overengineering/fps-meter').then(({ FPSMeter }) => ({ default: FPSMeter })))
 
+const ClientFPSMeter = () => {
+  const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => {
-    let active = true
-    void import('@overengineering/fps-meter').then(({ FPSMeter }) => {
-      if (active) {
-        setComponent(() => FPSMeter)
-      }
-    })
-
-    return () => {
-      active = false
-    }
+    setMounted(true)
   }, [])
-
-  return Component
+  // The meter reads browser APIs; keep its lazy import out of server rendering.
+  return mounted === false ? null : (
+    <React.Suspense fallback={null}>
+      <FPSMeter height={28} className="hidden lg:block" />
+    </React.Suspense>
+  )
 }
 
 export const Toolbar = () => {
-  const FPSMeter = useClientFPSMeter()
   return (
     <div className="w-screen h-10 bg-neutral-950 border-t border-neutral-700 text-neutral-400 flex items-center justify-between pl-1 pr-2">
       <div className="flex items-center gap-1">
@@ -57,7 +50,7 @@ export const Toolbar = () => {
         <DownloadButton />
         {import.meta.env.DEV && <DevtoolsButton />}
       </div>
-      <FPSMeter height={28} className="hidden lg:block" />
+      <ClientFPSMeter />
     </div>
   )
 }

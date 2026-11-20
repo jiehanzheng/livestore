@@ -26,6 +26,8 @@
     "@volar/typescript": "2.4.30",
     "@vue/language-core": "3.3.14",
     "hast-util-to-html": "9.0.4",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-to-hast": "13.2.1",
     "shiki": "4.5.0",
     "twoslash-vue": "0.3.9",
     "typescript": "6.0.3"

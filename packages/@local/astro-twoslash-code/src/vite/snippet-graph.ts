@@ -15,7 +15,7 @@ const resolveBaseDir = (entryFilePath: string): string => {
   return path.dirname(entryDir)
 }
 
-const extractRelativeImports = (content: string): string[] => {
+export const extractRelativeImports = (content: string): string[] => {
   const matches: string[] = []
 
   let importMatch = importRegex.exec(content)

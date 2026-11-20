@@ -4,7 +4,8 @@ import { createStorePromise } from '@livestore/livestore'
 import { schema } from './schema.ts'
 
 const adapter = makeAdapter({
-  storage: { type: 'fs' },
+  storage: { type: 'fs', baseDirectory: './livestore-data' },
+  clientId: 'node-store-client',
   // sync: { backend: makeWsSync({ url: '...' }) },
 })
 
@@ -13,6 +14,7 @@ export const bootstrap = async () => {
     schema,
     adapter,
     storeId: 'some-store-id',
+    disableDevtools: true,
   })
 
   return store

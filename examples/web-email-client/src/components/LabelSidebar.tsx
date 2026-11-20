@@ -1,6 +1,7 @@
-import { queryDb } from '@livestore/livestore'
 import type React from 'react'
 import { useCallback, useMemo } from 'react'
+
+import { queryDb } from '@livestore/livestore'
 
 import { useMailboxStore } from '../stores/mailbox/index.ts'
 import { mailboxTables } from '../stores/mailbox/schema.ts'
@@ -60,7 +61,7 @@ export const LabelSidebar: React.FC = () => {
             type="button"
             data-label-id={label.id}
             onClick={handleSelectLabel}
-            className={`w-full text-left px-3 py-2 rounded text-sm font-medium flex items-center text-gray-700 justify-between ${isActive ? 'bg-gray-200' : ' hover:bg-gray-100'}`}
+            className={`w-full text-left px-3 py-2 rounded text-sm font-medium flex items-center text-gray-700 justify-between ${isActive === true ? 'bg-gray-200' : ' hover:bg-gray-100'}`}
           >
             <div className="flex items-center gap-2">
               <div className="w-3 flex-shrink-0">
@@ -70,7 +71,7 @@ export const LabelSidebar: React.FC = () => {
             </div>
 
             {label.threadCount > 0 && (
-              <span className={`text-xs px-2 py-1 rounded ${isActive ? 'bg-gray-300' : 'bg-gray-200'}`}>
+              <span className={`text-xs px-2 py-1 rounded ${isActive === true ? 'bg-gray-300' : 'bg-gray-200'}`}>
                 {label.threadCount}
               </span>
             )}

@@ -10,7 +10,7 @@ const App = () => {
   const [input, setInput] = useState('')
 
   const addTodo = useCallback(() => {
-    if (input.trim()) {
+    if (input.trim() !== '') {
       const newTodo: Todo = {
         id: Date.now(),
         text: input,
@@ -43,7 +43,7 @@ const App = () => {
   const handleDeleteTodo = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       const id = Number(e.currentTarget.dataset.todoId)
-      if (!Number.isNaN(id)) {
+      if (Number.isNaN(id) === false) {
         deleteTodo(id)
       }
     },

@@ -44,4 +44,8 @@ const materializers = State.SQLite.materializers(userEvents, {
 
 const state = State.SQLite.makeState({ tables: userTables, materializers })
 
-export const schema = makeSchema({ events: userEvents, state })
+export const schema = makeSchema({
+  projectionRevision: 'docs-data-modeling-todo-workspaces-user-schema-v1',
+  events: userEvents,
+  state,
+})

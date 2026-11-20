@@ -2,11 +2,11 @@ import { fileURLToPath } from 'node:url'
 
 import type { AstroIntegration } from 'astro'
 
-import { Effect, Fiber } from '@livestore/utils/effect'
+import { Effect, Fiber, type PlatformError } from '@livestore/utils/effect'
 import { PlatformNode } from '@livestore/utils/node'
 
 import { type BuildSnippetsOptions, buildSnippets, watchSnippets } from '../cli/snippets.ts'
-import type { TwoslashRuntimeOptions } from '../expressive-code.ts'
+import type { TwoslashRuntimeOptions } from '../renderer-config.ts'
 import { createTwoslashSnippetPlugin } from '../vite/vite-plugin-snippet.ts'
 
 export type AstroTwoslashCodeOptions = {
@@ -26,7 +26,7 @@ const shouldSkipSnippetAutoBuildAndWatch = () => process.env.LS_SKIP_SNIPPET_AUT
 export const createAstroTwoslashCodeIntegration = (options: AstroTwoslashCodeOptions = {}): AstroIntegration => {
   const autoBuild = options.autoBuild ?? true
   let resolvedBuildOptions: BuildSnippetsOptions | undefined
-  let watchFiber: Fiber.Fiber<void> | null = null
+  let watchFiber: Fiber.Fiber<void, PlatformError.PlatformError> | null = null
 
   const runSnippetBuild = () => {
     if (resolvedBuildOptions == null) {

@@ -16,14 +16,14 @@ export const CommentInput = ({ issueId, className }: { issueId: number; classNam
 
   const { keyboardProps } = useKeyboard({
     onKeyDown: (e) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (e.key === 'Enter' && (e.ctrlKey === true || e.metaKey === true)) {
         submitComment()
       }
     },
   })
 
   const submitComment = React.useCallback(() => {
-    if (!commentDraft) return
+    if (commentDraft === '') return
     store.commit(
       events.createComment({
         id: crypto.randomUUID(),

@@ -34,24 +34,26 @@ const Editor = ({
       },
     },
     content: value || undefined,
-    onBlur: onBlur
-      ? ({ editor }) => {
-          markdownValue.current = editor.getHTML()
-          onBlur(markdownValue.current || '')
-        }
-      : undefined,
-    onUpdate: onChange
-      ? ({ editor }) => {
-          markdownValue.current = editor.getHTML()
-          onChange(markdownValue.current || '')
-        }
-      : undefined,
+    onBlur:
+      onBlur !== undefined
+        ? ({ editor }) => {
+            markdownValue.current = editor.getHTML()
+            onBlur(markdownValue.current || '')
+          }
+        : undefined,
+    onUpdate:
+      onChange !== undefined
+        ? ({ editor }) => {
+            markdownValue.current = editor.getHTML()
+            onChange(markdownValue.current || '')
+          }
+        : undefined,
   })
 
-  if (placeholder) extensions.push(Placeholder.configure({ placeholder }))
+  if (placeholder !== undefined && placeholder !== '') extensions.push(Placeholder.configure({ placeholder }))
 
   useEffect(() => {
-    if (editor && markdownValue.current !== value) editor.commands.setContent(value)
+    if (editor !== null && markdownValue.current !== value) editor.commands.setContent(value)
   }, [value, editor])
 
   return (

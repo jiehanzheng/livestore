@@ -61,7 +61,7 @@ export const archiveThread = (
 
   // Find archive label
   const archiveLabel = systemLabels.find((l) => l.name === 'ARCHIVE')
-  if (!archiveLabel) throw new Error('ARCHIVE label not found')
+  if (archiveLabel === undefined) throw new Error('ARCHIVE label not found')
 
   const now = new Date()
   try {
@@ -100,7 +100,7 @@ export const trashThread = (
 
   // Find trash label
   const trashLabel = systemLabels.find((l) => l.name === 'TRASH')
-  if (!trashLabel) throw new Error('TRASH label not found')
+  if (trashLabel === undefined) throw new Error('TRASH label not found')
 
   const now = new Date()
   try {

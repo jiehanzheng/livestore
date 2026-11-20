@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useStore } from 'vue-livestore'
 
 import { events } from './livestore/schema.ts'
+import { useStore } from './livestore/store.ts'
 
-const { store } = useStore()
+const store = useStore()
 
 const newTodoText = ref('')
 

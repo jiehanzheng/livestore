@@ -7,7 +7,7 @@ export const useDebounce = (func: (...args: any[]) => void, delay = 1000) => {
 
   useEffect(() => {
     return () => {
-      if (!timer.current) return
+      if (timer.current === undefined) return
       clearTimeout(timer.current)
     }
   }, [])

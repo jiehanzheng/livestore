@@ -1,0 +1,98 @@
+// Generated file - DO NOT EDIT
+// Source: tsconfig.json.genie.ts
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": [
+      "ES2024"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "outDir": "dist",
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "ignoreEffectWarningsInTscExitCode": false,
+        "ignoreEffectSuggestionsInTscExitCode": false,
+        "ignoreEffectErrorsInTscExitCode": false,
+        "includeSuggestionsInTsc": true,
+        "pipeableMinArgCount": 2,
+        "diagnosticSeverity": {
+          "missedPipeableOpportunity": "warning",
+          "schemaUnionOfLiterals": "warning",
+          "anyUnknownInErrorContext": "warning",
+          "globalJsonInEffect": "warning"
+        },
+        "allowedDuplicatedPackages": [
+          "@livestore/utils"
+        ],
+        "allowedUnstableApis": [
+          "effect/cli/Flag#Boolean",
+          "effect/cli/Flag#Literals",
+          "effect/cli/Flag#String",
+          "effect/cli/Flag#optional",
+          "effect/cli/Flag#withDefault",
+          "effect/cli/Flag#withDescription",
+          "effect/http/HttpClient#HttpClient",
+          "effect/http/HttpClient#execute",
+          "effect/http/HttpClient#filterStatusOk",
+          "effect/http/HttpClientRequest#get",
+          "effect/http/HttpClientRequest#post",
+          "effect/http/HttpClientRequest#schemaBodyJson",
+          "effect/http/HttpClientRequest#setHeader",
+          "effect/http/HttpClientRequest#setHeaders",
+          "effect/process/ChildProcess#make",
+          "effect/FileSystem#FileSystem",
+          "effect/PlatformError#PlatformError",
+          "effect/cli/Command#make",
+          "effect/cli/Command#withDescription",
+          "effect/cli/Command#withSubcommands"
+        ]
+      }
+    ],
+    "rootDir": "../..",
+    "noEmit": true
+  },
+  "files": [
+    "../src/commands/docs.ts",
+    "../src/commands/docs-export.ts"
+  ],
+  "include": [],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "**/node_modules/.pnpm",
+    "**/*.genie.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/@livestore/utils"
+    },
+    {
+      "path": "../../packages/@livestore/utils-dev"
+    },
+    {
+      "path": "../../packages/@local/shared"
+    },
+    {
+      "path": "../../packages/@local/astro-tldraw"
+    },
+    {
+      "path": "../../packages/@local/astro-twoslash-code"
+    }
+  ]
+}

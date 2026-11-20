@@ -17,6 +17,8 @@ const runtimeDeps = catalog.compose({
       ),
       // Twoslash requires TypeScript's legacy runtime API, which is absent from TypeScript 7.
       typescript: '6.0.3',
+      'mdast-util-from-markdown': '2.0.3',
+      'mdast-util-to-hast': '13.2.1',
     },
   },
   devDependencies: {

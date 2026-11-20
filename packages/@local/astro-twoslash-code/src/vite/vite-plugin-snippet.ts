@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url'
 
 import { shouldNeverHappen } from '@livestore/utils'
 
-import { createExpressiveCodeConfig, normalizeRuntimeOptions, type TwoslashRuntimeOptions } from '../expressive-code.ts'
 import { formatRebuildInstruction, resolveProjectPaths, type TwoslashProjectPaths } from '../project-paths.ts'
+import { createRendererConfig, normalizeRuntimeOptions, type TwoslashRuntimeOptions } from '../renderer-config.ts'
 import { buildSnippetBundle, type SnippetBundle } from './snippet-graph.ts'
 
 const hashString = (value: string): string => crypto.createHash('sha256').update(value).digest('hex')
@@ -337,7 +337,7 @@ export const createTwoslashSnippetPlugin = (options: TwoslashSnippetPluginOption
         return expectedConfigHash
       }
       try {
-        const { fingerprintHash } = createExpressiveCodeConfig(paths, runtimeOptions)
+        const { fingerprintHash } = createRendererConfig(paths, runtimeOptions)
         expectedConfigHash = fingerprintHash
         return fingerprintHash
       } catch (cause) {

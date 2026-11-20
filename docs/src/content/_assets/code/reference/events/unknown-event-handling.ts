@@ -28,6 +28,7 @@ const state = State.SQLite.makeState({ tables, materializers })
 // ---cut---
 
 const _schema = makeSchema({
+  projectionRevision: 'docs-reference-events-unknown-event-handling-v1',
   events,
   state,
   unknownEventHandling: {

@@ -5,15 +5,23 @@ import { createStorePromise } from '@livestore/livestore'
 import { schema, tables } from './livestore/schema.ts'
 
 const adapter = makeAdapter({
-  storage: { type: 'fs' },
+  storage: { type: 'fs', baseDirectory: './livestore-data' },
+  clientId: 'node-demo-client',
   // sync: { backend: makeWsSync({ url: 'ws://localhost:8787' }) },
 })
 
 const main = async () => {
-  const store = await createStorePromise({ adapter, schema, storeId: 'demo-store' })
+  const store = await createStorePromise({ adapter, schema, storeId: 'demo-store', disableDevtools: true })
 
-  const todos = store.query(tables.todos)
-  console.log(todos)
+  try {
+    const todos = store.query(tables.todos)
+    console.log(todos)
+  } finally {
+    await store.shutdownPromise()
+  }
 }
 
-main().catch(() => undefined)
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

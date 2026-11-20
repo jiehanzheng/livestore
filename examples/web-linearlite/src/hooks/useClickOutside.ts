@@ -7,10 +7,10 @@ export const useClickOutside = (
 ): void => {
   const handleClick = useCallback(
     (event: MouseEvent | TouchEvent) => {
-      if (!event.target || outerRef?.current?.contains(event.target as Node)) {
+      if (event.target === null || outerRef?.current?.contains(event.target as Node) === true) {
         return
       }
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+      if (ref.current !== null && ref.current.contains(event.target as Node) === false) {
         callback(event)
       }
     },

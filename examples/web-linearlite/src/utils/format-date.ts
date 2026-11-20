@@ -1,5 +1,5 @@
 export const formatDate = (date?: Date): string => {
-  if (!date) return ''
+  if (date === undefined) return ''
 
   // Get the day of the month (without any leading zero)
   const day = date.getDate()

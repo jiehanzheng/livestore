@@ -18,7 +18,7 @@ export const DeleteButton = ({
   const [confirm, setConfirm] = React.useState(false)
 
   const onClick = React.useCallback(() => {
-    if (confirm) {
+    if (confirm === true) {
       const deleted = new Date()
       store.commit(
         events.deleteIssue({ id: issueId, deleted }),

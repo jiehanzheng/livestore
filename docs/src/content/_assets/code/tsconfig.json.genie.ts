@@ -1,4 +1,10 @@
-import { baseTsconfigCompilerOptions, domLib, effectTsgoPluginFor, reactJsx, tsconfigJson } from '../../../../../genie/repo.ts'
+import {
+  baseTsconfigCompilerOptions,
+  domLib,
+  effectTsgoPluginFor,
+  reactJsx,
+  tsconfigJson,
+} from '../../../../../genie/repo.ts'
 
 /**
  * Docs code snippets tsconfig.

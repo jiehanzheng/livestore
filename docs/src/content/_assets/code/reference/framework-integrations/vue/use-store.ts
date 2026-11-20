@@ -1,9 +1,8 @@
-import { useStore } from 'vue-livestore'
-
+import { useStore } from '../../../getting-started/vue/livestore/store.ts'
 import { events } from './schema.ts'
 
-export const createTodo = () => {
-  const { store } = useStore()
+export const useCreateTodo = () => {
+  const store = useStore()
 
-  store.commit(events.todoCreated({ id: crypto.randomUUID(), text: 'Eat broccoli', createdAt: new Date() }))
+  return () => store.commit(events.todoCreated({ id: crypto.randomUUID(), text: 'Eat broccoli' }))
 }

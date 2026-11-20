@@ -1,7 +1,8 @@
-import { queryDb } from '@livestore/livestore'
 import type React from 'react'
 import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
+
+import { queryDb } from '@livestore/livestore'
 
 import { useMailboxStore } from '../stores/mailbox/index.ts'
 import { mailboxTables } from '../stores/mailbox/schema.ts'
@@ -43,7 +44,9 @@ export const AppLayout: React.FC = () => {
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        {!uiState.selectedThreadId ? (
+        {uiState.selectedThreadId === undefined ||
+        uiState.selectedThreadId === null ||
+        uiState.selectedThreadId === '' ? (
           <div className="bg-white border-b border-gray-200 px-6 py-4">
             <h2 className="text-lg font-medium capitalize">{selectedLabel?.name.toLocaleLowerCase() ?? 'Home'}</h2>
           </div>
@@ -51,13 +54,15 @@ export const AppLayout: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-hidden">
-          {uiState.selectedThreadId ? (
+          {uiState.selectedThreadId !== undefined &&
+          uiState.selectedThreadId !== null &&
+          uiState.selectedThreadId !== '' ? (
             <ErrorBoundary fallback={threadErrorFallback}>
               <Suspense fallback={threadLoadingFallback}>
                 <ThreadView threadId={uiState.selectedThreadId} />
               </Suspense>
             </ErrorBoundary>
-          ) : selectedLabel ? (
+          ) : selectedLabel !== undefined ? (
             <ThreadList />
           ) : (
             <div className="grid place-items-center h-full">

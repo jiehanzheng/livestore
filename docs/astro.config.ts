@@ -19,7 +19,7 @@ import { createAstroTldrawIntegration } from '@local/astro-tldraw'
 import { createAstroTwoslashCodeIntegration } from '@local/astro-twoslash-code/integration'
 import { DISCORD_INVITE_URL } from '@local/shared'
 
-import { getBranchName } from './src/data/data.ts'
+import { docsEditLink, docsSourceUrl } from './src/data/data.ts'
 import { rehypeExternalLinks } from './src/plugins/rehype/externalLinks.js'
 import { remarkGithubIssueLinks } from './src/plugins/remark/githubIssueLinks.js'
 import { createCopyPageClipboardFallbackIntegration } from './src/plugins/starlight/contextual-menu-fallback/plugin.ts'
@@ -28,8 +28,6 @@ import starlightMarkdown from './src/plugins/starlight/markdown/index.js'
 import { starlightMixedbread } from './src/plugins/starlight/mixedbread/plugin.js'
 
 const port = 5252
-
-const branch = getBranchName()
 
 const docsRedirect = (from: string, to: string) => [[from, to]] as const
 
@@ -160,7 +158,7 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: `https://github.com/livestorejs/livestore/tree/${branch}`,
+          href: docsSourceUrl,
         },
         { icon: 'discord', label: 'Discord', href: DISCORD_INVITE_URL },
         { icon: 'x.com', label: 'X', href: 'https://x.com/livestoredev' },
@@ -176,9 +174,7 @@ export default defineConfig({
       components: {
         SocialIcons: './src/components/SocialIcons.astro',
       },
-      editLink: {
-        baseUrl: `https://github.com/livestorejs/livestore/edit/${getBranchName()}/docs/`,
-      },
+      editLink: docsEditLink,
       routeMiddleware: './src/routeMiddleware.ts',
       plugins: [
         // Generate Markdown versions of pages for contextual menu "View as Markdown".
@@ -404,8 +400,9 @@ export default defineConfig({
               }),
               starlightTypeDoc({
                 entryPoints: [
-                  '../packages/@livestore/sync-cf/src/sync-impl/mod.ts',
                   '../packages/@livestore/sync-cf/src/cf-worker/mod.ts',
+                  '../packages/@livestore/sync-cf/src/client/mod.ts',
+                  '../packages/@livestore/sync-cf/src/common/mod.ts',
                 ],
                 tsconfig: '../packages/@livestore/sync-cf/tsconfig.json',
                 output: 'api/sync-cf',

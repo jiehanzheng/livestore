@@ -10,11 +10,14 @@ const jsonParse = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown)
 
 const hashString = (value: string): string => crypto.createHash('sha256').update(value).digest('hex')
 
-export class FileSystemError extends Schema.TaggedError<FileSystemError>()('Tldraw.FileSystemError', {
-  path: Schema.String,
-  operation: Schema.String,
-  cause: Schema.Any,
-}) {}
+export class FileSystemError extends Schema.TaggedError<FileSystemError, { readonly brand: unique symbol }>()(
+  'Tldraw.FileSystemError',
+  {
+    path: Schema.String,
+    operation: Schema.String,
+    cause: Schema.Any,
+  },
+) {}
 
 export interface DiagramCacheEntry {
   /** Relative path from diagrams root (e.g., "architecture.tldr") */

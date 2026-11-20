@@ -8,6 +8,8 @@ import type { Priority } from '../../types/priority.ts'
 import { Icon } from '../icons/index.tsx'
 import { Shortcut } from './shortcut.tsx'
 
+const emptyShortcutKeys: readonly string[] = []
+
 const shortcutKeysByPriorityName = Object.fromEntries(
   priorityOptions.map(({ name, shortcut }) => [name, [shortcut]]),
 ) as Record<string, readonly string[]>
@@ -79,7 +81,7 @@ export const PriorityMenu = ({
               <Icon name={icon} className={`size-3.5 ${style}`} />
               <span>{name}</span>
               {priorityOption === priority && <CheckIcon className="size-4 absolute right-9" />}
-              <Shortcut keys={shortcutKeysByPriorityName[name] ?? []} className="absolute right-3" />
+              <Shortcut keys={shortcutKeysByPriorityName[name] ?? emptyShortcutKeys} className="absolute right-3" />
             </MenuItem>
           ))}
         </Menu>

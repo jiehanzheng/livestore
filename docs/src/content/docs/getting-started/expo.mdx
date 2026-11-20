@@ -6,13 +6,13 @@ sidebar:
 ---
 
 import { Code, Steps, Tabs, TabItem } from '@astrojs/starlight/components'
-import { makeCreate, versionNpmSuffix } from '../../../data/data.ts'
 import { MIN_NODE_VERSION } from '@local/shared'
-import SchemaSnippet from '../../_assets/code/getting-started/expo/livestore/schema.ts?snippet'
-import StoreSnippet from '../../_assets/code/getting-started/expo/livestore/store.ts?snippet'
-import RootSnippet from '../../_assets/code/getting-started/expo/Root.tsx?snippet'
-import NewTodoSnippet from '../../_assets/code/getting-started/expo/components/NewTodo.tsx?snippet'
-import ListTodosSnippet from '../../_assets/code/getting-started/expo/components/ListTodos.tsx?snippet'
+import ForkInstallNotice from '../../../components/ForkInstallNotice.astro'
+import SchemaSnippet from '../../_assets/code/native/getting-started/expo/livestore/schema.ts?snippet'
+import StoreSnippet from '../../_assets/code/native/getting-started/expo/livestore/store.ts?snippet'
+import RootSnippet from '../../_assets/code/native/getting-started/expo/Root.tsx?snippet'
+import NewTodoSnippet from '../../_assets/code/native/getting-started/expo/components/NewTodo.tsx?snippet'
+import ListTodosSnippet from '../../_assets/code/native/getting-started/expo/components/ListTodos.tsx?snippet'
 
 export const CODE = {
   babelConfig: `module.exports = (api) => {
@@ -25,29 +25,35 @@ export const CODE = {
 `,
   metroConfig: `// Learn more https://docs.expo.io/guides/customizing-metro
 const { getDefaultConfig } = require('expo/metro-config')
-const { addLiveStoreDevtoolsMiddleware } = require('@livestore/devtools-expo')
 const path = require('node:path')
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname)
+
+// Nano ID's export map has browser/default entries; native must not load Node crypto.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'nanoid' && (platform === 'ios' || platform === 'android')) {
+    return context.resolveRequest({ ...context, unstable_conditionNames: ['browser'] }, moduleName, platform)
+  }
+  return context.resolveRequest(context, moduleName, platform)
+}
 
 // Needed for monorepo setup (can be removed in standalone projects)
 if (process.env.MONOREPO_ROOT) {
   config.watchFolders = [path.resolve(process.env.MONOREPO_ROOT)]
 }
 
-addLiveStoreDevtoolsMiddleware(config, {
-  schemaPath: './src/livestore/schema.ts',
-  viteConfig: (viteConfig) => {
-    viteConfig.server.fs ??= {}
-    viteConfig.server.fs.strict = false
-    viteConfig.optimizeDeps ??= {}
-    viteConfig.optimizeDeps.force = true
-    return viteConfig
-  },
-})
 
 module.exports = config
+`,
+  bootstrap: `// Hermes needs this standard-library operation during schema initialization.
+import 'core-js/actual/array/to-sorted'
+import { getRandomValues } from 'expo-crypto'
+
+// Provide integer-array entropy for Nano ID, without claiming full Web Crypto support.
+type NativeEntropyHost = { crypto?: { getRandomValues?: typeof getRandomValues } }
+const nativeGlobals: NativeEntropyHost = globalThis
+;(nativeGlobals.crypto ??= {}).getRandomValues ??= getRandomValues
 `,
 }
 
@@ -59,164 +65,53 @@ export const SNIPPETS = {
   listTodos: ListTodosSnippet,
 }
 
-{/* We're adjusting package versions when the docs are built from a dev prerelease */}
-export const manualInstallDepsStr = [
-  '@livestore/devtools-expo' + versionNpmSuffix,
-  '@livestore/adapter-expo' + versionNpmSuffix,
-  '@livestore/livestore' + versionNpmSuffix,
-  '@livestore/react' + versionNpmSuffix,
-  '@livestore/sync-cf' + versionNpmSuffix,
-  '@livestore/peer-deps' + versionNpmSuffix,
-  'expo-sqlite',
-].join(' ')
+#<ForkInstallNotice />
 
-### Prerequisites
+## Prerequisites
 
 - Recommended: Bun 1.2 or higher
 - Node.js {MIN_NODE_VERSION} or higher
 
 To use [LiveStore](/) with [Expo](https://docs.expo.dev/), ensure your project has the [New Architecture](https://docs.expo.dev/guides/new-architecture/) enabled. This is required for transactional state updates.
 
-### Option A: Quick start
+## Existing project setup \{#existing-project-setup\}
 
-For a quick start we recommend using our template app following the steps below.
-
-For existing projects see [Existing project setup](#existing-project-setup).
+This guide configures an existing native Expo app. There is no qualified published template for this fork.
 
 <Steps>
 
-1.  **Set up project from template**
+1.  **Install the maintained fork SDK and native dependencies**
 
-    <Tabs syncKey="package-manager">
-      <TabItem label="bun">
-        <Code code={makeCreate('expo-todomvc-sync-cf', 'bunx')} lang="sh" />
-      </TabItem>
-      <TabItem label="pnpm">
-        <Code code={makeCreate('expo-todomvc-sync-cf', 'pnpm dlx')} lang="sh" />
-      </TabItem>
-      <TabItem label="npm">
-        <Code code={makeCreate('expo-todomvc-sync-cf', 'npx')} lang="sh" />
-      </TabItem>
-      <TabItem label="yarn">
-        <Code code={makeCreate('expo-todomvc-sync-cf', 'yarn dlx')} lang="sh" />
-      </TabItem>
-    </Tabs>
+    Start with the [maintained fork SDK export recipe](https://github.com/jiehanzheng/livestore/blob/d0896db1049f71670e72e211be3232baeca3eb4c/scripts/fork-qualification/README.md#export-the-sdk-from-a-clean-commit). Select the intended qualified fork commit, produce its SDK export, and pass that directory to your application's SDK staging tool. Verify the export inventory against the application's committed SDK pin, then install its local package dependencies with the frozen lockfile and strict peer checks. Registry packages named `@livestore/*` do not install this fork.
 
-    Replace `livestore-app` with your desired app name.
+    The native app needs the exported `@livestore/adapter-expo`, `@livestore/livestore` and `@livestore/react` packages and their exported dependency closure. The optional `@livestore/sync-cf` transport in the store example must be selected and qualified separately; it is not part of the twelve-package SDK export. Configure its URL for your own backend.
 
-2.  **Install dependencies**
+    In the Expo app, use Expo's compatibility checker to select the native modules for its installed SDK:
 
-    It's strongly recommended to use `bun` or `pnpm` for the simplest and most reliable dependency setup (see [note on package management](/misc/package-management) for more details).
+    ```sh
+    npx expo install expo-sqlite expo-file-system expo-crypto
+    pnpm add core-js@3.51.0
+    npx expo install --check
+    ```
 
-    <Tabs syncKey="package-manager">
-      <TabItem label="bun">
-        ```bash
-        bun install
-        ```
-      </TabItem>
-      <TabItem label="pnpm">
-        ```bash
-        pnpm install --node-linker=hoisted
-        ```
-
-        Make sure to use `--node-linker=hoisted` when installing dependencies in your project or add it to your `.npmrc` file.
-        ```
-        # .npmrc
-        nodeLinker=hoisted
-        ```
-
-        Hopefully Expo will also support non-hoisted setups in the future.
-      </TabItem>
-      <TabItem label="npm">
-        ```bash
-        npm install
-        ```
-      </TabItem>
-      <TabItem label="yarn">
-        When using `yarn`, make sure you're using Yarn 4 or higher with the `node-modules` linker.
-
-        ```bash
-        yarn set version stable
-        yarn config set nodeLinker node-modules
-        yarn install
-        ```
-      </TabItem>
-    </Tabs>
-
-    Pro tip: You can use [direnv](https://direnv.net/) to manage environment variables.
-
-3.  **Run the app**
-
-    <Tabs syncKey="package-manager">
-      <TabItem label="bun">
-        <Code code="bun start" lang="sh" />
-      </TabItem>
-      <TabItem label="pnpm">
-        <Code code="pnpm start" lang="sh" />
-      </TabItem>
-      <TabItem label="npm">
-        <Code code="npm run start" lang="sh" />
-      </TabItem>
-      <TabItem label="yarn">
-        <Code code="yarn start" lang="sh" />
-      </TabItem>
-    </Tabs>
-
-    In a new terminal, start the Cloudflare Worker (for the sync backend):
-
-    <Tabs syncKey="package-manager">
-      <TabItem label="bun">
-        <Code code="bun wrangler:dev" lang="sh" />
-      </TabItem>
-      <TabItem label="pnpm">
-        <Code code="pnpm wrangler:dev" lang="sh" />
-      </TabItem>
-      <TabItem label="npm">
-        <Code code="npm run wrangler:dev" lang="sh" />
-      </TabItem>
-      <TabItem label="yarn">
-        <Code code="yarn wrangler:dev" lang="sh" />
-      </TabItem>
-    </Tabs>
-</Steps>
-
-### Option B: Existing project setup \{#existing-project-setup\}
-
-<Steps>
-
-1.  **Install dependencies**
-
-    <Tabs syncKey="package-manager">
-      <TabItem label="bun">
-        <Code code={'bun install ' + manualInstallDepsStr} lang="sh" />
-      </TabItem>
-      <TabItem label="pnpm">
-        <Code code={'pnpm install ' + manualInstallDepsStr} lang="sh" />
-      </TabItem>
-      <TabItem label="npm">
-        <Code code={'npm install ' + manualInstallDepsStr} lang="sh" />
-      </TabItem>
-      <TabItem label="yarn">
-        <Code code={'yarn add ' + manualInstallDepsStr} lang="sh" />
-      </TabItem>
-    </Tabs>
+    These commands install Expo/runtime dependencies, not LiveStore packages. Preserve the compatible React/React Native versions selected by Expo and commit the resulting application lockfile. The runtime configuration below was exercised with Expo SDK 58.
 
 2.  **Add Vite meta plugin to babel config file**
 
-    LiveStore Devtools uses Vite. This plugin emulates Vite's `import.meta.env` functionality.
+    LiveStore's shared modules use `import.meta.env`. These plugins transform those references for Metro. Declare the preset directly so isolated dependency layouts can resolve it. The preset version below matches Expo SDK 58; use the preset corresponding to your installed Expo SDK.
 
     <Tabs syncKey="package-manager">
       <TabItem label="bun">
-        <Code code="bun add -d babel-plugin-transform-vite-meta-env" lang="sh" />
+        <Code code="bun add -d babel-preset-expo@~58.0.26 babel-plugin-transform-vite-meta-env @babel/plugin-syntax-import-attributes" lang="sh" />
       </TabItem>
       <TabItem label="pnpm">
-        <Code code="pnpm add -D babel-plugin-transform-vite-meta-env" lang="sh" />
+        <Code code="pnpm add -D babel-preset-expo@~58.0.26 babel-plugin-transform-vite-meta-env @babel/plugin-syntax-import-attributes" lang="sh" />
       </TabItem>
       <TabItem label="yarn">
-        <Code code="yarn add -D babel-plugin-transform-vite-meta-env" lang="sh" />
+        <Code code="yarn add -D babel-preset-expo@~58.0.26 babel-plugin-transform-vite-meta-env @babel/plugin-syntax-import-attributes" lang="sh" />
       </TabItem>
       <TabItem label="npm">
-        <Code code="npm install --save-dev babel-plugin-transform-vite-meta-env" lang="sh" />
+        <Code code="npm install --save-dev babel-preset-expo@~58.0.26 babel-plugin-transform-vite-meta-env @babel/plugin-syntax-import-attributes" lang="sh" />
       </TabItem>
     </Tabs>
 
@@ -229,6 +124,12 @@ For existing projects see [Existing project setup](#existing-project-setup).
     Add the following code to your `metro.config.js` file:
 
     <Code code={CODE.metroConfig} lang="js" title="metro.config.js" />
+
+4.  **Initialize native runtime capabilities**
+
+    Create `src/bootstrap.ts` with the following code. Import it as the first import in your app's entry file, before importing components that use LiveStore. This provides secure randomness and the standard array operation required during schema initialization on Hermes.
+
+    <Code code={CODE.bootstrap} lang="ts" title="src/bootstrap.ts" />
 
 </Steps>
 
@@ -270,34 +171,18 @@ Consider abstracting queries into a separate file to keep your code organized, t
 
 <SNIPPETS.listTodos />
 
-## Devtools
+## Debugging
 
-To open the devtools, run the app and from your terminal press `shift + m`, then select LiveStore Devtools and press `Enter`.
-
-![Expo Terminal Screenshot](../../../assets/devtools-terminal-expo.png)
-
-This will open the devtools in a new tab in your default browser.
-
-![Devtools Browser Screenshot](../../../assets/devtools-browser-view.png)
-
-Use the devtools to inspect the state of your LiveStore database, execute events, track performance, and more.
+Use [Expo's debugging tools](https://docs.expo.dev/debugging/tools/) and React Native DevTools to inspect the application. The selected LiveStore Expo adapter does not expose the retired browser inspector. Its store options must include `disableDevtools: true`, as in the example above.
 
 ## Database location
 
-### With Expo Go
-
-To open the database in Finder, run the following command in your terminal:
-
-```bash
-open $(find $(xcrun simctl get_app_container booted host.exp.Exponent data) -path "*/Documents/ExponentExperienceData/*livestore-expo*" -print -quit)/SQLite
-```
-
 ### With development builds
 
-For development builds, the app SQLite database is stored in the app's Library directory.
+The adapter uses `expo-sqlite`'s `defaultDatabaseDirectory` unless you supply `storage.directory`. On iOS development builds, that default is the app's `Documents/SQLite` directory. LiveStore appends any configured `storage.subDirectory`, then the store ID, and keeps the state and event-log databases there.
 
 Example:
-`/Users/<USERNAME>/Library/Developer/CoreSimulator/Devices/<DEVICE_ID>/data/Containers/Data/Application/<APP_ID>/Documents/SQLite/app.db`
+`/Users/<USERNAME>/Library/Developer/CoreSimulator/Devices/<DEVICE_ID>/data/Containers/Data/Application/<APP_ID>/Documents/SQLite/expo-todomvc/livestore-eventlog@<storage-format-version>.db`
 
 To open the database in Finder, run the following command in your terminal:
 
@@ -309,4 +194,4 @@ Replace `[APP_BUNDLE_ID]` with your app's bundle ID. e.g. `dev.livestore.livesto
 
 ## Further notes
 
-- LiveStore doesn't yet support Expo Web (see [#130](https://github.com/livestorejs/livestore/issues/130))
+This guide configures `@livestore/adapter-expo` for native iOS and Android; it does not configure Expo Web. For a web target, select and configure the separate [web adapter](/platform-adapters/web-adapter). Use platform-specific adapter entry points rather than assuming one adapter works on both native and web.

@@ -4,128 +4,76 @@ sidebar:
   order: 21
 ---
 
-import AtomsSnippet from '../../_assets/code/patterns/effect/store-setup/atoms.ts?snippet';
+import StoreSnippet from '../../_assets/code/patterns/effect/store-setup/store.ts?snippet';
+import AppSnippet from '../../_assets/code/patterns/effect/store-setup/app.tsx?snippet';
 import QueriesSnippet from '../../_assets/code/patterns/effect/store-setup/queries.ts?snippet';
-import UserListSnippet from '../../_assets/code/patterns/effect/store-setup/user-list.tsx?snippet';
+import TodoListSnippet from '../../_assets/code/patterns/effect/store-setup/todo-list.tsx?snippet';
+import InputSnippet from '../../_assets/code/patterns/effect/store-setup/todo-input.ts?snippet';
 import ServicesSnippet from '../../_assets/code/patterns/effect/store-setup/services.tsx?snippet';
-import OptimisticSnippet from '../../_assets/code/patterns/effect/optimistic-example/optimistic.ts?snippet';
-import DerivedSnippet from '../../_assets/code/patterns/effect/derived-example/derived.ts?snippet';
-import BatchSnippet from '../../_assets/code/patterns/effect/batch-example/batch.ts?snippet';
+import EffectStoreSnippet from '../../_assets/code/patterns/effect/store-setup/effect-store.ts?snippet';
+import DerivedSnippet from '../../_assets/code/patterns/effect/derived-example/derived.tsx?snippet';
+import BatchSnippet from '../../_assets/code/patterns/effect/batch-example/batch.tsx?snippet';
 
-export const SNIPPETS = {
-  atoms: AtomsSnippet,
-  queries: QueriesSnippet,
-  userList: UserListSnippet,
-  services: ServicesSnippet,
-  optimistic: OptimisticSnippet,
-  derived: DerivedSnippet,
-  batch: BatchSnippet,
-}
+LiveStore uses [Effect](https://effect.website) internally. Application code can use Effect services alongside LiveStore's public store and React APIs. Give each store one lifetime owner: a `StoreRegistry` for a React application, or `Store.Tag` for an Effect-managed application.
 
-LiveStore itself is built on top of [Effect](https://effect.website) which is a powerful library to write production-grade TypeScript code. It's also possible (and recommended) to use Effect directly in your application code.
+## Schema, equality and hashing
 
-## Store context for Effect
+LiveStore uses Effect Schema for event payloads, table-column codecs and query result decoding. `Schema` is available from `@livestore/livestore` and from `effect`.
 
-For applications built with Effect, LiveStore provides `makeStoreContext()` - a factory that creates typed store contexts for the Effect layer system. This preserves your schema types through Effect's dependency injection and supports multiple stores.
+LiveStore's query and signal definitions implement Effect's `Equal` and `Hash` traits. Keep reusable query definitions outside components so consumers can share the same reactive query.
 
-See the [Store Effect integration](/building-with-livestore/store#effect-integration) section for details on:
-- Creating typed store contexts
-- Using stores in Effect services
-- Layer composition patterns
-- Multiple stores in the same app
+## A persistent React store
 
-## Schema
+Declare a persisted web adapter with its actual worker and shared worker. These options select OPFS storage and a stable example store ID:
 
-LiveStore uses the [Effect Schema](https://effect.website/docs/schema/introduction/) library to define schemas for the following:
+<StoreSnippet />
 
-- Read model table column definitions
-- Event event payloads definitions
-- Query response types
+One registry supplies the components. `useStore` suspends while the store opens; the Suspense fallback handles boot loading and the error boundary surfaces boot failures. The registry manages store retention, and native query hooks release their subscriptions on unmount.
 
-For convenience, LiveStore re-exports the `Schema` module from the `effect` package, which is the same as if you'd import it via `import { Schema } from 'effect'` directly.
+<AppSnippet />
 
-## `Equal` and `Hash` Traits
+See [React integration](/framework-integrations/react-integration) for registry lifetime and store configuration.
 
-LiveStore's reactive primitives (`LiveQueryDef` and `SignalDef`) implement Effect's `Equal` and `Hash` traits, enabling efficient integration with Effect's data structures and collections.
+## Reactive reads and tracing
 
-## Effect atom integration
+Define queries with `queryDb`:
 
-LiveStore integrates seamlessly with [Effect Atom](https://github.com/effect-atom/effect-atom) for reactive state management in React applications. This provides a powerful combination of Effect's functional programming capabilities with LiveStore's event sourcing and CQRS patterns.
+<QueriesSnippet />
 
-Effect Atom is an external package developed by [Tim Smart](https://github.com/tim-smart) that provides a more Effect-idiomatic alternative to the `@livestore/react` package. While `@livestore/react` offers a straightforward React integration, Effect Atom leverages Effect API/patterns throughout, making it a natural choice for applications already using Effect.
+Read them through the store's public `useQuery` hook. It returns decoded query values and updates the component when the result changes. Query labels identify the native query spans in the store's existing tracing setup.
 
-### Installation
+<TodoListSnippet />
 
-```bash
-pnpm install @effect-atom/atom-livestore @effect-atom/atom-react
-```
+The checkbox commits an event to the same store. LiveStore materializes the local update immediately and persists it through the adapter. A local commit does not acknowledge delivery to a remote server. Configure a sync backend for shared data and use the [sync status API](/building-with-livestore/syncing) to present synchronization state.
 
-### Store creation
+## Effect services at the event boundary
 
-Create a LiveStore-backed atom store with persistence and worker support using the `AtomLivestore.Tag` pattern:
+Use Effect for application operations such as input validation. This service returns a typed failure for empty text and records IDs and timestamps in the event, keeping materialization deterministic:
 
-<SNIPPETS.atoms />
+<InputSnippet />
 
-The `StoreTag` class provides the following static methods:
-- `StoreTag.runtime` - Access to Effect runtime
-- `StoreTag.commit` - Commit events to the store
-- `StoreTag.store` - Access store with Effect
-- `StoreTag.storeUnsafe` - Direct store access when store is already loaded (synchronous)
-- `StoreTag.makeQuery` - Create query atoms with Effect
-- `StoreTag.makeQueryUnsafe` - Create query atoms without Effect
+A React handler runs the service and commits its event through the actual store from `useStore`. The form exposes pending and failure states and preserves the draft on failure:
 
-### Defining query atoms
+<ServicesSnippet />
 
-Create reactive query atoms that automatically update when the underlying data changes:
+The draft stays in local React state until a successful commit. It is uncommitted input, while a saved todo is already part of LiveStore's local state. This keeps drafts, local-first updates and remote synchronization distinct.
 
-<SNIPPETS.queries />
+## Derived values and bulk commits
 
-### Using queries in React components
+Derive display values from a native query result during rendering:
 
-Access query results in React components with the `useAtomValue()` hook. When using `StoreTag.makeQuery` (non-unsafe API), the result is wrapped in a Result type for proper loading and error handling:
+<DerivedSnippet />
 
-<SNIPPETS.userList />
+For a bulk change, pass all events to one `store.commit` call:
 
-### Integrating Effect services
+<BatchSnippet />
 
-Combine Effect services with LiveStore operations using the store's runtime:
+## When Effect owns the store
 
-<SNIPPETS.services />
+For an Effect-managed application, define a typed `Store.Tag` and its store layer. The operations retain the store requirement in their Effect types:
 
-### Advanced patterns
+<EffectStoreSnippet />
 
-#### Optimistic updates
+Provide that layer at the Effect application's composition root, including the tracing service required by its layer type. Its scope owns store startup and shutdown. This is an alternative to the React registry owner shown above. Run operations through the chosen owner's runtime and handle their failures at the application boundary; creating another store layer around a registry-owned store introduces a second lifetime owner.
 
-Combine local state with LiveStore for optimistic UI updates. When using `StoreTag.makeQueryUnsafe`, the data is directly available:
-
-<SNIPPETS.optimistic />
-
-#### Derived state
-
-Create computed atoms based on LiveStore queries. When using the non-unsafe API, handle the Result type:
-
-<SNIPPETS.derived />
-
-#### Batch operations
-
-Perform multiple commits efficiently (commits are synchronous):
-
-<SNIPPETS.batch />
-
-### Best practices
-
-1. **Use `StoreTag.makeQuery` for queries**: This ensures proper Effect integration and error handling
-2. **Leverage Effect services**: Integrate business logic through Effect services for better testability
-3. **Handle loading states**: Use `Result.builder` pattern for consistent loading/error UI
-4. **Batch React updates**: Always provide `batchUpdates` for better performance
-5. **Label queries**: Add descriptive labels to queries for better debugging
-6. **Type safety**: Let TypeScript infer types from schemas rather than manual annotations
-
-### Real-World Example
-
-For a comprehensive example of LiveStore with Effect Atom in action, check out [Cheffect](https://github.com/tim-smart/cheffect) - a recipe management application that demonstrates:
-- Complete Effect service integration
-- AI-powered recipe extraction using Effect services
-- Complex query patterns with search and filtering
-- Worker-based persistence with OPFS
-- Production-ready error handling and logging
+See [Store Effect integration](/building-with-livestore/store#effect-integration) for layer composition and multiple typed stores.

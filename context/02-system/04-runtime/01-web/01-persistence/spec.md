@@ -25,14 +25,6 @@ AccessHandlePoolVFS (single connection per database):
   `liveStoreStorageFormatVersion` (see the schema-management node for the
   asymmetry).
 
-The first persisted owner records an initialization marker under the OPFS
-namespace lock before associating the eventlog file. After an interrupted open,
-the next owner may finish initialization only for a marked, empty SOURCE. A
-SOURCE with existing schema must pass normal identity validation. The leader
-removes the marker after the SOURCE transaction commits and before opening
-derived state. Unknown retained associations without an identity still fail
-closed.
-
 Old state-db files are archived/cleaned on leader boot
 (`cleanupOldStateDbFiles`, keeping at most `MAX_ARCHIVED_STATE_DBS_IN_DEV
 = 3` in dev) to avoid exhausting the OPFS access-handle pool.

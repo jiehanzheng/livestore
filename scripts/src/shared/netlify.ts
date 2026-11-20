@@ -17,13 +17,16 @@ import {
   Stream,
 } from '@livestore/utils/effect'
 
-export class NetlifyError extends Schema.TaggedError<NetlifyError>()('NetlifyError', {
-  reason: Schema.Literals(['auth', 'timeout', 'unknown']),
-  message: Schema.String,
-  cause: Schema.optional(Schema.Unknown),
-}) {}
+export class NetlifyError extends Schema.TaggedError<NetlifyError, { readonly brand: unique symbol }>()(
+  'NetlifyError',
+  {
+    reason: Schema.Literals(['auth', 'timeout', 'unknown']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
 
-class FileReadError extends Schema.TaggedError<FileReadError>()('FileReadError', {
+class FileReadError extends Schema.TaggedError<FileReadError, { readonly brand: unique symbol }>()('FileReadError', {
   cause: Schema.Defect(),
   path: Schema.String,
 }) {}

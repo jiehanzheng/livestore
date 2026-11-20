@@ -14,10 +14,13 @@ const MainStore = Store.Tag(mainSchema, 'main')
 const SettingsStore = Store.Tag(settingsSchema, 'settings')
 
 // Each store has its own layer
-const adapter = makeAdapter({ storage: { type: 'fs' } })
+const adapter = makeAdapter({
+  storage: { type: 'fs', baseDirectory: './livestore-data' },
+  clientId: 'node-effect-client',
+})
 
-const MainStoreLayer = MainStore.layer({ adapter, batchUpdates: (cb) => cb() })
-const SettingsStoreLayer = SettingsStore.layer({ adapter, batchUpdates: (cb) => cb() })
+const MainStoreLayer = MainStore.layer({ adapter, disableDevtools: true, batchUpdates: (cb) => cb() })
+const SettingsStoreLayer = SettingsStore.layer({ adapter, disableDevtools: true, batchUpdates: (cb) => cb() })
 
 // Compose layers together
 const _AllStoresLayer = Layer.mergeAll(MainStoreLayer, SettingsStoreLayer)

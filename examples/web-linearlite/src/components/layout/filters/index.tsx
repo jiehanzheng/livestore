@@ -29,7 +29,7 @@ export const Filters = ({
 
   return (
     <>
-      {search ? (
+      {search === true ? (
         <SearchBar />
       ) : (
         <Header
@@ -47,13 +47,17 @@ export const Filters = ({
               <span> Issues</span>
             </div>
           )}
-          <FilterMenu type={hideStatusFilter ? 'priority' : undefined}>
+          <FilterMenu type={hideStatusFilter === true ? 'priority' : undefined}>
             <Button
               aria-label="Select filters"
               className="group h-6 min-w-6 rounded-lg flex gap-1.5 px-1.5 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none focus:bg-neutral-100 dark:focus:bg-neutral-800 text-xs font-medium"
             >
               <Icon name="filter" className="size-3.5" />
-              <span className={filterState.status?.length || filterState.priority?.length ? 'lg:hidden' : ''}>
+              <span
+                className={
+                  (filterState.status?.length ?? 0) > 0 || (filterState.priority?.length ?? 0) > 0 ? 'lg:hidden' : ''
+                }
+              >
                 Filter
               </span>
             </Button>
@@ -66,7 +70,7 @@ export const Filters = ({
         {/* TODO add clear filters/sorting button */}
         {!hideSorting && <SortMenu />}
       </div>
-      {filterState.status?.length || filterState.priority?.length ? (
+      {(filterState.status?.length ?? 0) > 0 || (filterState.priority?.length ?? 0) > 0 ? (
         <div className="lg:hidden h-12 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
           <div className="flex items-center h-full pl-2">
             {!hideStatusFilter && <StatusFilter />}

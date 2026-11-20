@@ -1,4 +1,9 @@
-import { baseTsconfigCompilerOptions, domLib, packageTsconfigExclude, tsconfigJsonForNodeModules } from '../genie/repo.ts'
+import {
+  baseTsconfigCompilerOptions,
+  domLib,
+  packageTsconfigExclude,
+  tsconfigJsonForNodeModules,
+} from '../genie/repo.ts'
 
 /**
  * Astro docs site tsconfig.

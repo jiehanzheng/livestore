@@ -15,6 +15,6 @@ const tables = {
 
 const state = State.SQLite.makeState({ tables, materializers: {} })
 
-export const schema = makeSchema({ events, state })
+export const schema = makeSchema({ projectionRevision: 'docs-reference-syncing-server-side-clients-v1', events, state })
 
 export { tables }

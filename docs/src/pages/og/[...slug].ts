@@ -20,7 +20,6 @@ const pages = Object.fromEntries(docs.map(({ data, id }) => [id, { data }]))
 // astro-og-canvas >=0.10 made `OGImageRoute` async; it now returns a Promise.
 const ogRoute = await OGImageRoute({
   pages,
-  param: 'slug',
   getImageOptions: (_id: string, page: (typeof pages)[string]) => ({
     title: page.data.title,
     description: page.data.description ?? '',

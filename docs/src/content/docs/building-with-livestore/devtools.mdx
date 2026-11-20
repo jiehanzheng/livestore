@@ -5,7 +5,6 @@ sidebar:
 ---
 
 import ViteConfigSnippet from '../../_assets/code/reference/devtools/vite-config.ts?snippet'
-import MetroConfigSnippet from '../../_assets/code/reference/devtools/metro-config.ts?snippet'
 
 NOTE: Once LiveStore is open source, the devtools will be a [sponsor-only benefit](/sustainable-open-source/sponsoring).
 
@@ -34,7 +33,7 @@ Requires the `@livestore/devtools-vite` package to be installed and configured i
 
 <ViteConfigSnippet />
 
-The devtools can be opened in a separate tab (via e.g. `localhost:3000/_livestore/web). You should see the Devtools URL logged in the browser console when running the app.
+The devtools can be opened in a separate tab (via e.g. `localhost:3000/_livestore/web`). You should see the Devtools URL logged in the browser console when running the app.
 
 #### Chrome extension
 
@@ -52,14 +51,8 @@ To install the extension:
 
 ### `@livestore/adapter-expo`:
 
-Requires the `@livestore/devtools-expo` package to be installed and configured in your metro config:
-
-<MetroConfigSnippet />
-
-You can open the devtools by pressing `Shift+m` in the Expo CLI process and then selecting `@livestore/devtools-expo` which will open the devtools in a new tab.
+The selected Expo adapter does not expose the retired LiveStore Metro/browser inspector. Set `disableDevtools: true` in the store options and use [Expo's debugging tools](https://docs.expo.dev/debugging/tools/) and React Native DevTools. See the [Expo guide](/getting-started/expo) for the current setup.
   
 ### `@livestore/adapter-node`:
 
-Devtools are configured out of the box for the `makePersistedAdapter` variant (note currently not supported for the `makeInMemoryAdapter` variant).
-
-You should see the Devtools URL logged when running the app.
+The selected inline Node adapter does not expose LiveStore DevTools. Set `disableDevtools: true` when creating the store. See the [Node adapter reference](/platform-adapters/node-adapter) for its supported public surface.

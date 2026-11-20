@@ -10,7 +10,7 @@ import { FilterMenu } from './filter-menu.tsx'
 export const PriorityFilter = () => {
   const [filterState, setFilterState] = useFilterState()
   const handleClear = useCallback(() => setFilterState({ priority: null }), [setFilterState])
-  if (!filterState.priority) return null
+  if (filterState.priority == null) return null
   const selectedPriority = filterState.priority.length === 1 ? filterState.priority[0] : undefined
 
   return (

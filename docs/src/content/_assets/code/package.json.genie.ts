@@ -12,7 +12,16 @@ import utilsPkg from '../../../../../packages/@livestore/utils/package.json.geni
 const runtimeDeps = catalog.compose({
   workspace: workspaceMember('docs/src/content/_assets/code'),
   dependencies: {
-    workspace: [adapterCloudflarePkg, adapterNodePkg, adapterWebPkg, livestorePkg, reactPkg, sqliteWasmPkg, syncCfPkg, utilsPkg],
+    workspace: [
+      adapterCloudflarePkg,
+      adapterNodePkg,
+      adapterWebPkg,
+      livestorePkg,
+      reactPkg,
+      sqliteWasmPkg,
+      syncCfPkg,
+      utilsPkg,
+    ],
     external: {
       ...Object.fromEntries(
         Object.entries(livestoreContribPackageVersions).filter(
@@ -22,7 +31,6 @@ const runtimeDeps = catalog.compose({
       ...catalog.pick(
         ...utilsEffectPeerDeps,
         'svelte',
-        '@effect/atom-react',
         '@effect/ai-openai',
         'vue',
         '@vue/compiler-sfc',

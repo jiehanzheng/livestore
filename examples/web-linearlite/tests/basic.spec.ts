@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test.describe('LinearLite', () => {
   test('serves home page markup', async ({ baseURL, page }) => {
-    if (!baseURL) throw new Error('baseURL is required')
+    if (baseURL === undefined || baseURL === '') throw new Error('baseURL is required')
 
     // Navigate with page to follow redirects from / to /:storeId/
     await page.goto(baseURL)
@@ -20,7 +20,7 @@ test.describe('LinearLite', () => {
 
 test.describe('LinearLite UI', () => {
   test('create, open, and edit an issue', async ({ baseURL, page }) => {
-    if (!baseURL) throw new Error('baseURL is required')
+    if (baseURL === undefined || baseURL === '') throw new Error('baseURL is required')
 
     // Navigate to base URL - will redirect to /:storeId/
     await page.goto(baseURL)
@@ -72,7 +72,7 @@ test.describe('LinearLite UI', () => {
 
 test.describe('DevTools UI', () => {
   test('opens LiveStore DevTools in a new tab', async ({ baseURL, context }) => {
-    if (!baseURL) throw new Error('baseURL is required')
+    if (baseURL === undefined || baseURL === '') throw new Error('baseURL is required')
 
     const devtools = await context.newPage()
     await devtools.goto(new URL('/_livestore', baseURL).toString(), { waitUntil: 'domcontentloaded' })

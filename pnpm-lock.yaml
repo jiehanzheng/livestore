@@ -278,9 +278,6 @@ importers:
       '@effect/ai-openai':
         specifier: 4.1.4
         version: 4.1.4(effect@4.1.4)
-      '@effect/atom-react':
-        specifier: 4.1.4
-        version: 4.1.4(effect@4.1.4)(react@19.3.1)(scheduler@0.28.0)
       '@effect/opentelemetry':
         specifier: 4.1.4
         version: 4.1.4(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.4)
@@ -2000,6 +1997,12 @@ importers:
       hast-util-to-html:
         specifier: 9.0.4
         version: 9.0.4
+      mdast-util-from-markdown:
+        specifier: 2.0.3
+        version: 2.0.3(supports-color@10.2.2)
+      mdast-util-to-hast:
+        specifier: 13.2.1
+        version: 13.2.1
       shiki:
         specifier: 4.5.0
         version: 4.5.0
@@ -3613,13 +3616,6 @@ packages:
     resolution: {integrity: sha512-xodZLHmt1N7Ziw94jr0nTfG/fgyMZioYKS85fyy2L1kscNurWGllaDaTQyHUSYd8wghqMoc8vV3XPei0+c9NIQ==}
     peerDependencies:
       effect: ^4.1.4
-
-  '@effect/atom-react@4.1.4':
-    resolution: {integrity: sha512-Xj58DcAzKsysHhzBCPaz2v1QAJq6NvMdGVmG7SV4zkw1RMiTZv8gaOXA1VqIRlpmvdspMwRe/BQ4eayuzRZTpQ==}
-    peerDependencies:
-      effect: ^4.1.4
-      react: '>=19.0.0 <20.0.0'
-      scheduler: '>=0.25.0 <0.29.0'
 
   '@effect/opentelemetry@4.1.4':
     resolution: {integrity: sha512-VJnookNrIWk0ZHl51DYMTRHXZrogR13kSSOJzcDxGhyUNDHvgWg217OY4R6bOrtdgM3mrPQiLRGNZ0a7bGyAJg==}
@@ -15368,12 +15364,6 @@ snapshots:
   '@effect/ai-openai@4.1.4(effect@4.1.4)':
     dependencies:
       effect: 4.1.4
-
-  '@effect/atom-react@4.1.4(effect@4.1.4)(react@19.3.1)(scheduler@0.28.0)':
-    dependencies:
-      effect: 4.1.4
-      react: 19.3.1
-      scheduler: 0.28.0
 
   '@effect/opentelemetry@4.1.4(@opentelemetry/api-logs@0.217.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.41.1)(effect@4.1.4)':
     dependencies:

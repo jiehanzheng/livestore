@@ -1,5 +1,6 @@
-import { queryDb } from '@livestore/livestore'
 import React from 'react'
+
+import { queryDb } from '@livestore/livestore'
 
 import { tables } from './schema/index.ts'
 import { useAppStore } from './store.ts'
@@ -18,7 +19,7 @@ export const useDebouncedScrollState = (id: string, { debounce = 100 }: { deboun
 
   const setState = React.useCallback(
     (state: typeof initialState) => {
-      if (debounceTimeoutRef.current) {
+      if (debounceTimeoutRef.current !== null) {
         clearTimeout(debounceTimeoutRef.current)
       }
 

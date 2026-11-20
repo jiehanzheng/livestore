@@ -1,4 +1,3 @@
-import { queryDb } from '@livestore/livestore'
 import { generateKeyBetween } from 'fractional-indexing'
 import React from 'react'
 import {
@@ -13,6 +12,8 @@ import {
   Virtualizer,
 } from 'react-aria-components'
 import { AutoSizer } from 'react-virtualized-auto-sizer'
+
+import { queryDb } from '@livestore/livestore'
 
 import type { StatusDetails } from '../../../data/status-options.ts'
 import { filterState$, useDebouncedScrollState, useFilterState } from '../../../livestore/queries.ts'
@@ -56,7 +57,7 @@ const ColumnGridList = ({
       style={listStyle}
       onScroll={handleScroll}
     >
-      {(issue: (typeof tables.issue.Type)) => (
+      {(issue: typeof tables.issue.Type) => (
         <GridListItem
           textValue={issue.id.toString()}
           aria-label={`Issue ${issue.id}: ${issue.title}`}
@@ -98,15 +99,15 @@ export const Column = ({ status, statusDetails }: { status: Status; statusDetail
         .select('kanbanorder')
         .where({
           status,
-          priority: filterState.priority ? { op: 'IN', value: filterState.priority } : undefined,
-          kanbanorder: { op: before ? '>' : '<', value: targetKanbanOrder },
+          priority: filterState.priority != null ? { op: 'IN', value: filterState.priority } : undefined,
+          kanbanorder: { op: before === true ? '>' : '<', value: targetKanbanOrder },
         })
-        .orderBy('kanbanorder', before ? 'asc' : 'desc')
+        .orderBy('kanbanorder', before === true ? 'asc' : 'desc')
         .limit(1),
     )[0]
     return generateKeyBetween(
-      before ? targetKanbanOrder : nearestKanbanOrder,
-      before ? nearestKanbanOrder : targetKanbanOrder,
+      before === true ? targetKanbanOrder : nearestKanbanOrder,
+      before === true ? nearestKanbanOrder : targetKanbanOrder,
     )
   }
 
@@ -131,7 +132,8 @@ export const Column = ({ status, statusDetails }: { status: Status; statusDetail
       const lowestKanbanOrder = store.query(
         tables.issue.select('kanbanorder').where({ status }).orderBy('kanbanorder', 'asc').limit(1),
       )[0]
-      const kanbanorder = lowestKanbanOrder ? generateKeyBetween(null, lowestKanbanOrder) : 'a1'
+      const kanbanorder =
+        lowestKanbanOrder != null && lowestKanbanOrder !== '' ? generateKeyBetween(null, lowestKanbanOrder) : 'a1'
       store.commit(events.updateIssueKanbanOrder({ id: Number(items[0]), status, kanbanorder, modified: new Date() }))
     },
     renderDropIndicator: (target) => {
@@ -149,6 +151,22 @@ export const Column = ({ status, statusDetails }: { status: Status; statusDetail
     [],
   )
 
+  const renderColumn = React.useCallback<NonNullable<React.ComponentProps<typeof AutoSizer>['renderProp']>>(
+    ({ width = 0, height = 0 }) => (
+      <Virtualizer layout={layout}>
+        <ColumnGridList
+          width={width}
+          height={height}
+          filteredIssues={filteredIssues}
+          statusName={statusDetails.name}
+          dragAndDropHooks={dragAndDropHooks}
+          setScrollState={setScrollState}
+        />
+      </Virtualizer>
+    ),
+    [layout, filteredIssues, statusDetails.name, dragAndDropHooks, setScrollState],
+  )
+
   return (
     <div className="bg-neutral-50 border border-neutral-100 dark:bg-neutral-800 dark:border-neutral-700/50 rounded-lg w-64 lg:w-80 shrink-0 h-full flex flex-col">
       <div className="flex items-center justify-between p-2 pb-0 pl-4 gap-4">
@@ -159,20 +177,7 @@ export const Column = ({ status, statusDetails }: { status: Status; statusDetail
         <NewIssueButton status={status} />
       </div>
       <div className="grow">
-        <AutoSizer
-          renderProp={({ width = 0, height = 0 }) => (
-            <Virtualizer layout={layout}>
-              <ColumnGridList
-                width={width}
-                height={height}
-                filteredIssues={filteredIssues}
-                statusName={statusDetails.name}
-                dragAndDropHooks={dragAndDropHooks}
-                setScrollState={setScrollState}
-              />
-            </Virtualizer>
-          )}
-        />
+        <AutoSizer renderProp={renderColumn} />
       </div>
     </div>
   )
